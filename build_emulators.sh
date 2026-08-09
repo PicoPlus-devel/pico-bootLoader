@@ -212,8 +212,16 @@ declare -A HW_DESC=(
 PIOUSB_CONFIGS=(7 8 9 14)
 
 # prog_name -> space-separated HW_CONFIGs it must NOT be built for.
+#
+# picosnesPlus supports only the four HSTX boards (2, 8, 13, 14): it needs 8 MB
+# of PSRAM and a framebuffer, so on the others the link fails outright —
+# SCRATCH_X overflows and pico_shared's !HSTX screensaver asset
+# (DefaultSS160_444, see pico_shared/DefaultSS.h) is never linked in. Listing
+# them here turns four noisy FAILs into clean SKIPs and keeps an unsupported
+# binary off the card.
 declare -A EXCLUDE_HWCONFIGS=(
     [picogenesisPlus]="7"
+    [picosnesPlus]="1 5 6 7 9"
 )
 
 die()  { echo "ERROR: $*" >&2; exit 1; }

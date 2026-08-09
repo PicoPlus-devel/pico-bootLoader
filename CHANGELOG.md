@@ -11,10 +11,13 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 A release about the hardware around the bootloader rather than the bootloader
 itself. Nothing in the loader's behaviour changed since v0.2.
 
-> **Do you need to update?** The firmware is functionally identical to v0.2 —
-> the only difference in the `.uf2`s is the version shown in the menu title and
-> on the help screen, so re-flashing is optional. The SD-card archive *is* new:
-> it ships a rebuilt *Duke Nukem 3D*, so replace `/emu` on the card.
+> **Do you need to update?** Nothing here changes what the board does. The
+> loader `.uf2`s differ from v0.2 only in the version shown in the menu title
+> and on the help screen, and the SD-card archive is a rebuild of the same
+> emulators from their current release tags — they behave as before, they just
+> report a version instead of an older one. Re-flashing and replacing `/emu`
+> are both optional; the interesting part of this release is the documentation
+> and the PCB gerbers below.
 
 ### Added
 
@@ -43,6 +46,14 @@ itself. Nothing in the loader's behaviour changed since v0.2.
 ### Changed
 
 - **`duke3d_game` is built from pico-duke3D's first release tag, `v0.1`.**  The game itself is unchanged — relative to what  v0.2 shipped, the tag adds only a build fix for gcc 14 and a controller diagnostic that is compiled out by default.
+- **`piconesPlus` is built from pico-infonesPlus `v0.45`.** That release carries
+  the PCB v2.6 design and nothing else: its emulator binaries are the ones
+  `v0.44` shipped, which is what was on the v0.2 card.
+- **The SNES emulator is no longer shipped for a board that cannot run it.**
+  pico-snesPlus needs 8 MB of PSRAM and supports only HW_CONFIG 2, 8, 13 and 14,
+  but the v0.2 archive also carried a `picosnesPlus.uf2` for the Adafruit Metro
+  RP2350 (HW_CONFIG 5). That build cannot work on the board, so `emu/5/` no
+  longer contains one and the entry disappears from the picker there.
 
 ## v0.2
 

@@ -7,13 +7,13 @@
 #   pico_shared  the shared-framework revision it was built against.
 #                Not the revision the tag pins: bld.sh gained -b only
 #                in f2c8be9, which the emulator tags predate.
-piconesPlus;pico-infonesPlus;v0.44;c0971c5
-picopcePlus;pico-pcePlus;v0.3;c0971c5
-PicoPeanutGB;pico-peanutGB;v0.11;c0971c5
-picosmsPlus;pico-smsplus;v0.26;c0971c5
-picogenesisPlus;pico-genesisPlus;v0.13;c0971c5
-picoPacPlus;pico-pacPlus;v0.2;c0971c5
+piconesPlus;pico-infonesPlus;v0.45;ed6d94e
+picopcePlus;pico-pcePlus;v0.3;ed6d94e
+PicoPeanutGB;pico-peanutGB;v0.11;ed6d94e
+picosmsPlus;pico-smsplus;v0.26;ed6d94e
+picogenesisPlus;pico-genesisPlus;v0.13;ed6d94e
+picoPacPlus;pico-pacPlus;v0.2;ed6d94e
 doom_tiny;pico-doom;v0.1;
 doom_tiny_full;pico-doom;v0.1;
-picosnesPlus;pico-snesPlus;v0.2;c0971c5
-duke3d_game;pico-duke3D;fix/audio-production-rate@1700c41;
+picosnesPlus;pico-snesPlus;v0.2;ed6d94e
+duke3d_game;pico-duke3D;v0.1;
