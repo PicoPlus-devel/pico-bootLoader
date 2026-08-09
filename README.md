@@ -59,6 +59,7 @@ its own repository and identified by the program name embedded in its `.uf2`.
 | System | Program name | Source repository | Menu artwork |
 |---|---|---|---|
 | Nintendo Entertainment System | `piconesPlus` | [pico-infonesPlus](https://github.com/fhoedemakers/pico-infonesPlus) | <img width="280" alt="Nintendo Entertainment System menu artwork" src="https://github.com/user-attachments/assets/95c8eab1-02ed-4b29-8339-087f9db04726" />|
+| Super Nintendo Entertainment System | `picosnesPlus` | [pico-snesPlus](https://github.com/fhoedemakers/pico-snesPlus) | <img width="280" alt="Super Nintendo Entertainment System" src="https://github.com/user-attachments/assets/d7e64b3d-b0e2-4811-a31b-2536b0245a3f" /> |
 | Sega Genesis / Mega Drive | `picogenesisPlus` | [pico-genesisPlus](https://github.com/fhoedemakers/pico-genesisPlus) | <img width="280" alt="Sega Genesis / Mega Drive menu artwork" src="https://github.com/user-attachments/assets/9ad3f11b-6f4f-44fc-abbd-908a9aed4326" /> |
 | NEC PC Engine / PCEngine CD | `picopcePlus` | [pico-pcePlus](https://github.com/fhoedemakers/pico-pcePlus) | <img width="280" alt="NEC PC Engine menu artwork" src="https://github.com/user-attachments/assets/558b9d3b-d0c7-455e-b16a-6c1b30b0fa08" /> |
 | Nintendo Game Boy / Game Boy Color | `PicoPeanutGB` | [pico-peanutGB](https://github.com/fhoedemakers/pico-peanutGB) | <img width="280" alt="Nintendo Game Boy menu artwork" src="https://github.com/user-attachments/assets/4954bcba-9e51-4ef1-a45e-02ecc408dbc2" /> |
