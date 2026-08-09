@@ -1,12 +1,13 @@
 # Releasing
 
-Maintainer checklist for publishing pico-bootLoader. Two artifacts ship, and they
-have different lifecycles:
+Maintainer checklist for publishing pico-bootLoader. Three artifacts ship, and
+they have different lifecycles:
 
 | Artifact | Built by | How it gets onto the release |
 | --- | --- | --- |
 | `pico-bootLoader_<board>_arm[_piousb].uf2` (11 files) | CI, on the self-hosted runner | attached automatically by the workflow |
 | `pico-bootLoader_sdcard.zip` | **locally**, by `build_emulators.sh -c all -z` | `gh release upload`, by hand |
+| PCB gerbers (3 zips: PicoNES v2.6, Mini v2.0, Micro v1.2) | nobody — vendored in the `pico_shared` submodule | attached automatically by the workflow |
 
 The archive is not built in CI because it needs all nine emulator toolchains and
 takes hours; the loader builds take minutes. That split is why step 4 below is
@@ -133,6 +134,10 @@ gh release view v0.2.1
 - **11 loader `.uf2` assets** — one per board, plus the two `_pico2_w_` variants
   for HW_CONFIG 1 and 2.
 - `pico-bootLoader_sdcard.zip` present, unless this is a Scenario A release.
+- **3 PCB gerber assets** — `pico_nesPCB_v2.6.zip`,
+  `Gerber_PicoNES_Mini_PCB_v2.0.zip` and `Gerber_PicoNES_Micro_v1.2.zip`,
+  attached by the workflow from the `pico_shared` submodule. See
+  [Custom PCBs](README.md#custom-pcbs).
 - Notes open with the "SD-card content update" banner for a `v0.N.M` tag.
 - The version table lists every emulator with a real tag — no `VX.X`, no blanks
   in the Version column.
