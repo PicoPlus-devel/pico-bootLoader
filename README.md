@@ -7,6 +7,27 @@ host a collection of retro-game emulators and native ports of *Doom* and
 *Duke Nukem 3D* on a single board and to let the user choose which one to run
 from an on-screen menu, without reconnecting the board to a computer.
 
+It runs on nine board configurations, each with its own ready-made binary — see
+[Supported hardware](#supported-hardware) for the file names:
+
+- Raspberry Pi Pico 2 / Pico 2 W, or a Pimoroni Pico Plus 2, with an Adafruit DVI
+  breakout and a microSD breakout — or the [PicoNES PCB](#picones-pcb-hw_config-2)
+  that replaces that wiring
+- Raspberry Pi Pico 2 / Pico 2 W on a Pimoroni Pico DV Demo Base
+- Adafruit Fruit Jam
+- Adafruit Metro RP2350
+- Adafruit Feather RP2350 with a TLV320DAC3100
+- Waveshare RP2350-Zero with the [PicoNES Mini PCB](#picones-mini-pcb-hw_config-6)
+- Waveshare RP2350-PiZero
+- Waveshare RP2350-USB-A, optionally on the
+  [PicoNES Micro PCB](#picones-micro-pcb-hw_config-9)
+- Murmulator M2
+
+Every one of them outputs video over DVI/HDMI and reads its applications from an
+SD card. RP2040 boards are not supported: the flash layout and the UF2 checks are
+RP2350-specific. The three PCBs are optional console-style carriers for boards
+already in this list — see [Custom PCBs](#custom-pcbs).
+
 It is not limited to emulation, though: any RP2350 application can be made
 bootable and added to the menu — see [Creating a bootable build of your own
 application](#creating-a-bootable-build-of-your-own-application).
@@ -35,16 +56,16 @@ starts it. A hardware reset or power cycle always returns to the menu.
 The following emulators and native ports are supported. Each is built from
 its own repository and identified by the program name embedded in its `.uf2`.
 
-| System | Program name | Source repository | |
-|---|---|---| -- |
-| Nintendo Entertainment System | `piconesPlus` | [pico-infonesPlus](https://github.com/fhoedemakers/pico-infonesPlus) | <img width="1920" height="1080" alt="Screenshot 2026-08-07 13-17-08" src="https://github.com/user-attachments/assets/95c8eab1-02ed-4b29-8339-087f9db04726" />|
-| Sega Genesis / Mega Drive | `picogenesisPlus` | [pico-genesisPlus](https://github.com/fhoedemakers/pico-genesisPlus) | <img width="1920" height="1080" alt="Screenshot 2026-08-07 13-17-03" src="https://github.com/user-attachments/assets/9ad3f11b-6f4f-44fc-abbd-908a9aed4326" /> |
-| NEC PC Engine / PCEngine CD | `picopcePlus` | [pico-pcePlus](https://github.com/fhoedemakers/pico-pcePlus) | <img width="1920" height="1080" alt="Screenshot 2026-08-07 13-17-14" src="https://github.com/user-attachments/assets/558b9d3b-d0c7-455e-b16a-6c1b30b0fa08" /> |
-| Nintendo Game Boy / Game Boy Color | `PicoPeanutGB` | [pico-peanutGB](https://github.com/fhoedemakers/pico-peanutGB) | <img width="1920" height="1080" alt="Screenshot 2026-08-07 13-17-17" src="https://github.com/user-attachments/assets/4954bcba-9e51-4ef1-a45e-02ecc408dbc2" /> |
-| Sega Master System / Game Gear | `picosmsPlus` | [pico-smsplus](https://github.com/fhoedemakers/pico-smsplus) | <img width="1920" height="1080" alt="Screenshot 2026-08-07 13-17-23" src="https://github.com/user-attachments/assets/a3c223c6-8f52-412d-b7ca-25dfe33f1740" />|
-| Philips Videopac / Magnavox Odyssey² | `picoPacPlus` | [pico-pacPlus](https://github.com/fhoedemakers/pico-pacPlus) | <img width="1920" height="1080" alt="Screenshot 2026-08-07 13-17-11" src="https://github.com/user-attachments/assets/838ba7b0-3360-4020-a83c-5113aa0efb4a" />|
-| **Doom** (native port, not emulated) | `doom_tiny` | [pico-doom](https://github.com/fhoedemakers/pico-doom) | <img width="1920" height="1080" alt="Screenshot 2026-08-07 13-17-25" src="https://github.com/user-attachments/assets/112fb4f3-a806-4f60-83fb-59f70fbffbff" />|
-| **Duke Nukem 3D** (native port, not emulated) | `duke3d_game` | [pico-duke3D](https://github.com/fhoedemakers/pico-duke3D) |<img width="1920" height="1080" alt="Screenshot 2026-08-07 13-15-47" src="https://github.com/user-attachments/assets/79798fb3-5517-41cf-bfcb-62c0aa0dc00e" />  |
+| System | Program name | Source repository | Menu artwork |
+|---|---|---|---|
+| Nintendo Entertainment System | `piconesPlus` | [pico-infonesPlus](https://github.com/fhoedemakers/pico-infonesPlus) | <img width="280" alt="Nintendo Entertainment System menu artwork" src="https://github.com/user-attachments/assets/95c8eab1-02ed-4b29-8339-087f9db04726" />|
+| Sega Genesis / Mega Drive | `picogenesisPlus` | [pico-genesisPlus](https://github.com/fhoedemakers/pico-genesisPlus) | <img width="280" alt="Sega Genesis / Mega Drive menu artwork" src="https://github.com/user-attachments/assets/9ad3f11b-6f4f-44fc-abbd-908a9aed4326" /> |
+| NEC PC Engine / PCEngine CD | `picopcePlus` | [pico-pcePlus](https://github.com/fhoedemakers/pico-pcePlus) | <img width="280" alt="NEC PC Engine menu artwork" src="https://github.com/user-attachments/assets/558b9d3b-d0c7-455e-b16a-6c1b30b0fa08" /> |
+| Nintendo Game Boy / Game Boy Color | `PicoPeanutGB` | [pico-peanutGB](https://github.com/fhoedemakers/pico-peanutGB) | <img width="280" alt="Nintendo Game Boy menu artwork" src="https://github.com/user-attachments/assets/4954bcba-9e51-4ef1-a45e-02ecc408dbc2" /> |
+| Sega Master System / Game Gear | `picosmsPlus` | [pico-smsplus](https://github.com/fhoedemakers/pico-smsplus) | <img width="280" alt="Sega Master System / Game Gear menu artwork" src="https://github.com/user-attachments/assets/a3c223c6-8f52-412d-b7ca-25dfe33f1740" />|
+| Philips Videopac / Magnavox Odyssey² | `picoPacPlus` | [pico-pacPlus](https://github.com/fhoedemakers/pico-pacPlus) | <img width="280" alt="Philips Videopac / Magnavox Odyssey II menu artwork" src="https://github.com/user-attachments/assets/838ba7b0-3360-4020-a83c-5113aa0efb4a" />|
+| **Doom** (native port, not emulated) | `doom_tiny` | [pico-doom](https://github.com/fhoedemakers/pico-doom) | <img width="280" alt="Doom menu artwork" src="https://github.com/user-attachments/assets/112fb4f3-a806-4f60-83fb-59f70fbffbff" />|
+| **Duke Nukem 3D** (native port, not emulated) | `duke3d_game` | [pico-duke3D](https://github.com/fhoedemakers/pico-duke3D) |<img width="280" alt="Duke Nukem 3D menu artwork" src="https://github.com/user-attachments/assets/79798fb3-5517-41cf-bfcb-62c0aa0dc00e" />  |
 
 The following emulators need a bios in `/bios` on SD:
 - *Nintendo Entertainment System* : For Famicom Dsik System games `fds-bios.rom`
@@ -175,12 +196,12 @@ number names the SD-card folder the loader reads applications from
 | HW_CONFIG | Board | Bootloader binary |
 |---|---|---|
 | 1 | Pimoroni Pico DV Demo Base (Pico 2 / Pico 2 W) | `pico-bootLoader_PimoroniDVI_pico2_arm.uf2` / `..._pico2_w_arm.uf2` |
-| 2 | Adafruit DVI breakout + SD breakout (or custom PCB) (Pico 2 / Pico 2 W) | `pico-bootLoader_AdafruitDVISD_pico2_arm.uf2` / `..._pico2_w_arm.uf2` |
+| 2 | Adafruit DVI + microSD breakout, or the [PicoNES PCB](#picones-pcb-hw_config-2) (Pico 2 / Pico 2 W / Pimoroni Pico Plus 2) | `pico-bootLoader_AdafruitDVISD_pico2_arm.uf2` / `..._pico2_w_arm.uf2` |
 | 5 | Adafruit Metro RP2350 | `pico-bootLoader_AdafruitMetroRP2350_arm.uf2` |
-| 6 | Waveshare RP2350-Zero with custom PCB | `pico-bootLoader_WaveShareRP2350ZeroWithPCB_arm.uf2` |
+| 6 | Waveshare RP2350-Zero with the [PicoNES Mini PCB](#picones-mini-pcb-hw_config-6) | `pico-bootLoader_WaveShareRP2350ZeroWithPCB_arm.uf2` |
 | 7 | Waveshare RP2350-PiZero | `pico-bootLoader_WaveShareRP2350PiZero_arm_piousb.uf2` |
 | 8 | Adafruit Fruit Jam | `pico-bootLoader_AdafruitFruitJam_arm_piousb.uf2` |
-| 9 | Waveshare RP2350-USB-A | `pico-bootLoader_WaveShare2350USBA_arm_piousb.uf2` |
+| 9 | Waveshare RP2350-USB-A (optionally on the [PicoNES Micro PCB](#picones-micro-pcb-hw_config-9)) | `pico-bootLoader_WaveShare2350USBA_arm_piousb.uf2` |
 | 13 | Murmulator M2 | `pico-bootLoader_MurmulatorM2_arm.uf2` |
 | 14 | Adafruit Feather RP2350 (TLV320DAC3100 audio) | `pico-bootLoader_AdafruitFeatherRP2350_TLV320DAC3100_arm_piousb.uf2` |
 
@@ -189,6 +210,197 @@ to the RP2350 HSTX pins — HW_CONFIG 2, 5, 8, 13 and 14 — drive it through th
 HSTX peripheral; the others use PicoDVI. A single SD card
 serves both kinds — artwork is cached in both pixel formats (see
 [Artwork](#artwork)).
+
+## Custom PCBs
+
+Three community PCB designs turn a supported board plus its breakouts into a
+finished console, each with an optional 3D-printed case. Every one of them is
+just a neater way to build a hardware configuration the loader already supports,
+so nothing about the firmware changes: flash the binary for that HW_CONFIG and
+put the applications in the matching `/emu/<HW_CONFIG>/` folder.
+
+| Design | Board it carries | HW_CONFIG | Gerber archive | Designed by |
+|---|---|---|---|---|
+| [PicoNES](#picones-pcb-hw_config-2) | Pico 2, Pico 2 W or Pimoroni Pico Plus 2 | 2 | `pico_nesPCB_v2.6.zip` | John Edgar Park |
+| [PicoNES Mini](#picones-mini-pcb-hw_config-6) | Waveshare RP2350-Zero | 6 | `Gerber_PicoNES_Mini_PCB_v2.0.zip` | Gavin Knight |
+| [PicoNES Micro](#picones-micro-pcb-hw_config-9) | Waveshare RP2350-USB-A | 9 | `Gerber_PicoNES_Micro_v1.2.zip` | Gavin Knight |
+
+All three archives are attached to every
+[release](https://github.com/fhoedemakers/pico-bootLoader/releases) of this
+project and also live in
+[`pico_shared/PCB`](https://github.com/fhoedemakers/pico_shared/tree/main/PCB).
+Upload the zip as-is to a PCB manufacturer of your choice;
+[PCBWay](https://www.pcbway.com/) and JLCPCB are both good options.
+
+The designs come from [pico-infonesPlus](https://github.com/fhoedemakers/pico-infonesPlus)
+and keep its NES-flavoured names, but there is nothing NES-specific about them —
+they are DVI, microSD and controller wiring, and every application in the menu
+runs on them.
+
+The Waveshare RP2350-PiZero (HW_CONFIG 7) needs no PCB, since it already carries
+its own HDMI and microSD connectors, but it has a matching NES-like case:
+[thingiverse.com/thing:6758682](https://www.thingiverse.com/thing:6758682),
+designed for two NES controller ports.
+
+> [!NOTE]
+> Sellers on AliExpress have copied the PicoNES design and sell pre-populated
+> boards. For questions about those, contact the seller.
+
+### PicoNES PCB (HW_CONFIG 2)
+
+The original design, by [@johnedgarpark](https://twitter.com/johnedgarpark). It
+carries the Pico, the DVI and microSD breakouts and up to two NES controller
+ports. It is also the only one of the three that takes an interchangeable
+Pico-format board, which is what makes a Pimoroni Pico Plus 2 — and with it
+PSRAM and 16 MB of flash — an option. The current design is **v2.6**; it runs
+the `AdafruitDVISD` loader binary and reads its applications from `/emu/2/`.
+
+<img width="480" alt="Populated PCB with a Pico plugged into the through-holes" src="https://github.com/user-attachments/assets/2bbc846d-56b1-4528-9899-01bc9b32ce11" />
+
+#### Mounting the Pico
+
+Design v2.6 added through-holes, so there are now two ways to fit the board:
+
+| Mounting | Boards | Design version |
+|---|---|---|
+| Soldered flat onto the PCB, no headers | Pico 2, Pico 2 W | any |
+| Male headers plugged into the through-holes | Pico 2, Pico 2 W, Pimoroni Pico Plus 2 | v2.6 or later |
+
+> [!IMPORTANT]
+> A [Pimoroni Pico Plus 2](https://shop.pimoroni.com/products/pimoroni-pico-plus-2?variant=42092668289107)
+> needs v2.6 **and** male headers. On v2.1 and older designs the board has to lie
+> flat against the PCB, which the SP/CE connector on the back of the Pico Plus 2
+> prevents.
+
+> [!NOTE]
+> Soldering skills are required. Solder every connection from the Pico to the
+> PCB, including the ones on the short right-hand side of the board — those are
+> ground.
+
+#### What you need
+
+- One of the following, mounted as described above:
+  * Raspberry Pi Pico 2 or Pico 2 W **without headers**, soldered flat.
+  * Raspberry Pi Pico 2, Pico 2 W or
+    [Pimoroni Pico Plus 2](https://shop.pimoroni.com/products/pimoroni-pico-plus-2?variant=42092668289107)
+    **with male headers** soldered on ([these](https://a.co/d/dSNPuyo) fit),
+    plugged into the through-holes.
+- [Adafruit DVI Breakout Board — For HDMI Source Devices](https://www.adafruit.com/product/4984)
+- [Adafruit Micro SD SPI or SDIO Card Breakout Board — 3V ONLY!](https://www.adafruit.com/product/4682)
+- For NES controllers:
+  * [one or two NES controller ports](https://www.zedlabz.com/products/controller-connector-port-for-nintendo-nes-console-7-pin-90-degree-replacement-2-pack-black-zedlabz)
+  * [one or two NES controllers](https://www.amazon.com/s?k=NES+controller)
+- [Micro USB to OTG Y-cable](https://a.co/d/b9t11rl) if you want to use a USB
+  game controller — it powers the board and connects the controller at the same
+  time.
+- Micro USB power supply.
+- Optional: an on/off switch, such as
+  [this one](https://www.kiwi-electronics.com/en/spdt-slide-switch-410?search=KW-2467).
+
+Two NES controllers give a two-player setup; a USB controller for player 1 and a
+NES controller in either port for player 2 works just as well.
+
+<img width="480" alt="Two-player setup with NES controllers" src="https://github.com/user-attachments/assets/d40ed98f-4632-4161-986a-732d35290fac" />
+
+#### Which loader binary to flash
+
+- Pico 2 **and** Pimoroni Pico Plus 2 — `pico-bootLoader_AdafruitDVISD_pico2_arm.uf2`
+- Pico 2 W — `pico-bootLoader_AdafruitDVISD_pico2_w_arm.uf2`
+
+The Pico Plus 2 needs no separate build. The loader reads the real flash size
+from the chip at boot and detects PSRAM at runtime, so the same `pico2` image
+adapts to whichever of the two is plugged in.
+
+#### What the Pico Plus 2 adds
+
+The Pico Plus 2 brings 16 MB of flash and 8 MB of PSRAM, and both change what
+the menu can offer:
+
+- **Flash.** The application partition is whatever is left after the loader's
+  512 KB — 15.5 MB on a Pico Plus 2, but only 3.5 MB on a 4 MB Pico 2. An
+  application that does not fit is simply **not listed** in the menu rather than
+  reported as an error, so on a Pico 2 some entries are missing. *Doom!* is the
+  clearest case: its engine plus the companion WAD image needs about 4.3 MB.
+- **PSRAM.** The entries that require it — *Duke Nukem 3D*, *PCEngine CD* and
+  `doom_tiny_full` — are the Pico Plus 2's alone; neither Pico 2 has PSRAM. See
+  [Bootable applications](#bootable-applications).
+
+#### 3D printed case
+
+Gavin Knight ([DynaMight1124](https://github.com/DynaMight1124)) designed an
+NES-like enclosure for this PCB:
+[thingiverse.com/thing:6689537](https://www.thingiverse.com/thing:6689537). The
+v2.0 design has a base, a power-switch part and a choice of two top covers — one
+with a button that reaches the BOOTSEL button so firmware can be updated without
+opening the case, one without. Print the files that match the PCB version you
+own; Gavin's Thingiverse page has the details.
+
+> [!IMPORTANT]
+> If the Pico is mounted with male headers, download the **latest** top cover.
+> Headers raise the Pico, and only the newest cover leaves room for the USB
+> cable — the older ones assume a Pico soldered flat onto the PCB.
+
+<img width="480" alt="Top cover with a button for BOOTSEL" src="https://github.com/user-attachments/assets/3c8f8990-51b9-4873-9054-64bb2cd6c300" />
+
+For the full photo gallery and assembly detail, see the
+[PCB section of the pico-infonesPlus documentation](https://github.com/fhoedemakers/pico-infonesPlus#pcb-with-raspberry-pi-pico-or-pico-2-and-pimoroni-pico-plus-2).
+
+### PicoNES Mini PCB (HW_CONFIG 6)
+
+A smaller take on the same idea by Gavin Knight
+([DynaMight1124](https://github.com/DynaMight1124)), built around a Waveshare
+RP2350-Zero and two NES controller ports. It uses cheaper but considerably
+harder to solder parts, so it is a more advanced project than the PicoNES — if
+you are unsure of your soldering, start with that one instead. The current
+design is **v2.0** (`Gerber_PicoNES_Mini_PCB_v2.0.zip`), which improved the SD
+slot and the components around the HDMI port.
+
+Flash `pico-bootLoader_WaveShareRP2350ZeroWithPCB_arm.uf2` and put the
+applications in `/emu/6/`. The design also exists in an RP2040-Zero flavour,
+which this bootloader cannot use — it is RP2350-only.
+
+> [!NOTE]
+> Good soldering skills are required, especially around the HDMI portion:
+> plenty of flux, a fine tip and solder wick. The recommended order is the
+> resistor arrays first, then the HDMI port, then the Pico or the microSD
+> adaptor, and the NES ports last — they can be hard to push into the PCB.
+
+The build guide and the full component list are on Instructables:
+<https://www.instructables.com/PicoNES-RaspberryPi-Pico-Based-NES-Emulator/>
+
+<img width="480" alt="Soldered PicoNES Mini PCB" src="https://github.com/user-attachments/assets/13933b1d-af00-402e-a0a0-8456de4a82da" />
+
+#### 3D printed case for the Mini
+
+Also by Gavin Knight:
+[thingiverse.com/thing:7041536](https://www.thingiverse.com/thing:7041536). The
+same page still carries the older v1.0 PCB design files, gerber and BOM. Without
+a printer of your own, a local printing service or a professional one such as
+PCBWay or JLCPCB will produce it — the professional finishes are excellent.
+
+<img width="480" alt="PicoNES Mini in its 3D-printed case" src="https://github.com/user-attachments/assets/732384bd-062d-43ca-97cb-a16a39607c41" />
+
+### PicoNES Micro PCB (HW_CONFIG 9)
+
+The smallest of the three, again by Gavin Knight: a Waveshare RP2350-USB-A board
+on a PCB barely larger than the USB port itself, with a single player
+controlling the console over USB. The current design is **v1.2**
+(`Gerber_PicoNES_Micro_v1.2.zip`).
+
+Flash `pico-bootLoader_WaveShare2350USBA_arm_piousb.uf2` and put the applications
+in `/emu/9/`. The game controller plugs into the USB-A port; the USB-C port is
+for power and for flashing the firmware.
+
+> [!NOTE]
+> Because of the size, micro-soldering skills are required — the design uses
+> 0603 SMD components. This is the most demanding of the three builds.
+
+The build guide is on Instructables:
+<https://www.instructables.com/PicoNES-RaspberryPi-Pico-Based-NES-Emulator/>
+
+<img width="480" alt="PicoNES Micro populated PCB, NES controller shown for scale" src="https://github.com/user-attachments/assets/59c8a31b-dc3e-47b0-8ffb-89e1eab2a75b" />
+
+<img width="480" alt="PicoNES Micro in its 3D-printed case" src="https://github.com/user-attachments/assets/1d6051f2-1393-40e1-aad0-e39ffb7717a0" />
 
 ## SD card layout
 
@@ -514,13 +726,13 @@ so there is no `SWVERSION` to stamp, and both build through their own per-board
 the boards it has a script for — *Doom* 2, 8, 13 and 14, *Duke Nukem 3D* 2, 8 and
 13 — and is reported as `SKIP` for every other configuration.
 
-Neither repository has a release tag yet, so tag mode falls back to a branch and
-records `<branch>@<sha>` as the version: `main` for *Doom*, which since the
-`full-version` merge carries the build scripts for both variants, and
-`fix/audio-production-rate` for *Duke Nukem 3D*, whose `main` does not yet carry
-its build scripts. Both repositories use the same `v*.*` tag convention as the
-emulators, so tag mode picks a tag up with no change here as soon as one is
-pushed.
+Both repositories are now tagged `v0.1` and are built from that tag like the
+emulators, so `versions.txt` records `v0.1` for `doom_tiny`, `doom_tiny_full` and
+`duke3d_game`. They use the same `v*.*` convention, so later tags are picked up
+with no change here. The `SCRIPTED_BRANCH` table in
+[`build_emulators.sh`](build_emulators.sh) — `main` for *Doom*,
+`fix/audio-production-rate` for *Duke Nukem 3D* — is now only the fallback for a
+repository that has no tag at all.
 
 *Doom* additionally needs `PICO_EXTRAS_PATH` pointing at a
 [pico-extras](https://github.com/raspberrypi/pico-extras) checkout, since it
@@ -567,8 +779,13 @@ gh release upload v0.2.1 releases/pico-bootLoader_sdcard.zip
 - The emulator cores and the native ports are the work of their upstream authors;
   see the repository links under [Bootable
   applications](#bootable-applications).
-- Additional artwork and testing of the loader by [Gavin
-  Knight](https://github.com/DynaMight1124).
+- The [PicoNES PCB](#picones-pcb-hw_config-2) was designed by [John Edgar
+  Park](https://twitter.com/johnedgarpark).
+- The [PicoNES Mini](#picones-mini-pcb-hw_config-6) and
+  [PicoNES Micro](#picones-micro-pcb-hw_config-9) PCBs, and the 3D-printed cases
+  for all three designs and for the Waveshare RP2350-PiZero, were designed by
+  [Gavin Knight](https://github.com/DynaMight1124), who also contributed
+  additional artwork and testing of the loader.
 - This project was developed with the assistance of AI
   (Anthropic Claude / Claude Code).
 

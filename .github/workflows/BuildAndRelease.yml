@@ -143,5 +143,13 @@ jobs:
               target_commitish: ${{ github.sha }}
               name: ${{ steps.ver.outputs.tag }}
               body_path: release-notes.md
+              # The PCB gerbers come from the pico_shared submodule (checked out
+              # above with submodules: recursive) and are re-attached to every
+              # release, so each release page carries the designs the CHANGELOG's
+              # "Binaries for each configuration and PCB design" line promises:
+              # PicoNES (HW_CONFIG 2), Mini (6) and Micro (9).
               files: |
                 releases/pico-bootLoader_*.uf2
+                pico_shared/PCB/pico_nesPCB_v2.6.zip
+                pico_shared/PCB/Gerber_PicoNES_Mini_PCB_v2.0.zip
+                pico_shared/PCB/Gerber_PicoNES_Micro_v1.2.zip

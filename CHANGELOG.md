@@ -6,6 +6,44 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 
 [Binaries for each configuration and PCB design are at the end of this page](#downloads___).
 
+## v0.3
+
+A release about the hardware around the bootloader rather than the bootloader
+itself. Nothing in the loader's behaviour changed since v0.2.
+
+> **Do you need to update?** The firmware is functionally identical to v0.2 —
+> the only difference in the `.uf2`s is the version shown in the menu title and
+> on the help screen, so re-flashing is optional. The SD-card archive *is* new:
+> it ships a rebuilt *Duke Nukem 3D*, so replace `/emu` on the card.
+
+### Added
+
+- **The three custom PCB designs are documented and shipped with the release.**
+  The README has a [Custom PCBs](https://github.com/fhoedemakers/pico-bootLoader#custom-pcbs)
+  chapter covering all of them — PicoNES (HW_CONFIG 2), PicoNES Mini (6) and
+  PicoNES Micro (9) — with the parts each one needs, how the board is mounted,
+  which loader binary to flash and the matching 3D-printed case. The Gerber
+  archives are now release assets alongside the binaries: `pico_nesPCB_v2.6.zip`,
+  `Gerber_PicoNES_Mini_PCB_v2.0.zip` and `Gerber_PicoNES_Micro_v1.2.zip`.
+- **PicoNES PCB design v2.6 takes a Pimoroni Pico Plus 2.** The design gained
+  through-holes, so instead of soldering the board flat you can fit male headers
+  and plug in a Pico 2, Pico 2 W or a Pico Plus 2. On HW_CONFIG 2 the Plus 2 is
+  what unlocks the entries that need PSRAM — *Duke Nukem 3D*, *PCEngine CD* and
+  `doom_tiny_full` — and its 16 MB of flash gives the full 15.5 MB application
+  partition instead of 3.5 MB. No separate binary is needed: the loader reads
+  the flash size and detects PSRAM at boot, so the existing `pico2` image covers
+  both. When the Pico is mounted on headers, print the **latest** top cover from
+  Thingiverse — the older ones assume a board soldered flat and leave no room
+  for the USB cable.
+- **The README opens with the list of boards the loader runs on**, each entry
+  linking to its binary in
+  [Supported hardware](https://github.com/fhoedemakers/pico-bootLoader#supported-hardware)
+  and, where one exists, to its PCB design.
+
+### Changed
+
+- **`duke3d_game` is built from pico-duke3D's first release tag, `v0.1`.**  The game itself is unchanged — relative to what  v0.2 shipped, the tag adds only a build fix for gcc 14 and a controller diagnostic that is compiled out by default.
+
 ## v0.2
 
 ### Added
