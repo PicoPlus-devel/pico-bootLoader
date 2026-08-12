@@ -270,8 +270,8 @@ Design v2.6 added through-holes, so there are now two ways to fit the board:
 > [!IMPORTANT]
 > A [Pimoroni Pico Plus 2](https://shop.pimoroni.com/products/pimoroni-pico-plus-2?variant=42092668289107)
 > needs v2.6 **and** male headers. On v2.1 and older designs the board has to lie
-> flat against the PCB, which the SP/CE connector on the back of the Pico Plus 2
-> prevents.
+> flat against the PCB, which the SP/CE connector on the back of the Pimoroni
+> Pico Plus 2 prevents.
 
 > [!NOTE]
 > Soldering skills are required. Solder every connection from the Pico to the
@@ -311,23 +311,23 @@ NES controller in either port for player 2 works just as well.
 - Pico 2 **and** Pimoroni Pico Plus 2 — `pico-bootLoader_AdafruitDVISD_pico2_arm.uf2`
 - Pico 2 W — `pico-bootLoader_AdafruitDVISD_pico2_w_arm.uf2`
 
-The Pico Plus 2 needs no separate build. The loader reads the real flash size
-from the chip at boot and detects PSRAM at runtime, so the same `pico2` image
-adapts to whichever of the two is plugged in.
+The Pimoroni Pico Plus 2 needs no separate build. The loader reads the real
+flash size from the chip at boot and detects PSRAM at runtime, so the same
+`pico2` image adapts to whichever of the two is plugged in.
 
-#### What the Pico Plus 2 adds
+#### What the Pimoroni Pico Plus 2 adds
 
-The Pico Plus 2 brings 16 MB of flash and 8 MB of PSRAM, and both change what
-the menu can offer:
+The Pimoroni Pico Plus 2 brings 16 MB of flash and 8 MB of PSRAM, and both
+change what the menu can offer:
 
 - **Flash.** The application partition is whatever is left after the loader's
-  512 KB — 15.5 MB on a Pico Plus 2, but only 3.5 MB on a 4 MB Pico 2. An
-  application that does not fit is simply **not listed** in the menu rather than
-  reported as an error, so on a Pico 2 some entries are missing. *Doom!* is the
-  clearest case: its engine plus the companion WAD image needs about 4.3 MB.
+  512 KB — 15.5 MB on a Pimoroni Pico Plus 2, but only 3.5 MB on a 4 MB Pico 2.
+  An application that does not fit is simply **not listed** in the menu rather
+  than reported as an error, so on a Pico 2 some entries are missing. *Doom!* is
+  the clearest case: its engine plus the companion WAD image needs about 4.3 MB.
 - **PSRAM.** The entries that require it — *Duke Nukem 3D*, *PCEngine CD* and
-  `doom_tiny_full` — are the Pico Plus 2's alone; neither Pico 2 has PSRAM. See
-  [Bootable applications](#bootable-applications).
+  `doom_tiny_full` — are the Pimoroni Pico Plus 2's alone; neither Pico 2 has
+  PSRAM. See [Bootable applications](#bootable-applications).
 
 #### 3D printed case
 

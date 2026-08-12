@@ -30,14 +30,14 @@ itself. Nothing in the loader's behaviour changed since v0.2.
   `Gerber_PicoNES_Mini_PCB_v2.0.zip` and `Gerber_PicoNES_Micro_v1.2.zip`.
 - **PicoNES PCB design v2.6 takes a Pimoroni Pico Plus 2.** The design gained
   through-holes, so instead of soldering the board flat you can fit male headers
-  and plug in a Pico 2, Pico 2 W or a Pico Plus 2. On HW_CONFIG 2 the Plus 2 is
-  what unlocks the entries that need PSRAM — *Duke Nukem 3D*, *PCEngine CD* and
-  `doom_tiny_full` — and its 16 MB of flash gives the full 15.5 MB application
-  partition instead of 3.5 MB. No separate binary is needed: the loader reads
-  the flash size and detects PSRAM at boot, so the existing `pico2` image covers
-  both. When the Pico is mounted on headers, print the **latest** top cover from
-  Thingiverse — the older ones assume a board soldered flat and leave no room
-  for the USB cable.
+  and plug in a Pico 2, Pico 2 W or a Pimoroni Pico Plus 2. On HW_CONFIG 2 the
+  Pimoroni Pico Plus 2 is what unlocks the entries that need PSRAM — *Duke Nukem
+  3D*, *PCEngine CD* and `doom_tiny_full` — and its 16 MB of flash gives the
+  full 15.5 MB application partition instead of 3.5 MB. No separate binary is
+  needed: the loader reads the flash size and detects PSRAM at boot, so the
+  existing `pico2` image covers both. When the Pico is mounted on headers, print
+  the **latest** top cover from Thingiverse — the older ones assume a board
+  soldered flat and leave no room for the USB cable.
 - **The README opens with the list of boards the loader runs on**, each entry
   linking to its binary in
   [Supported hardware](https://github.com/fhoedemakers/pico-bootLoader#supported-hardware)
