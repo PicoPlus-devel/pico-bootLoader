@@ -6,6 +6,17 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 
 [Binaries for each configuration and PCB design are at the end of this page](#downloads___).
 
+## v0.4
+
+A maintenance release. The loader picks up the current shared menu and support code. Nothing about how you use it changes, and the SD-card archive from v0.3 stays valid.
+
+> **Do you need to update?** Only if your monitor accepts DVI but not HDMI and the loader menu stayed black. Otherwise the loader behaves exactly as it did in v0.3 and re-flashing is optional.
+
+### Fixes
+
+- **DVI-only monitors show a picture again.** In DVI mode, some older screens that accept DVI but not HDMI stayed black.
+- **Steadier start-up.** The board lets its power settle before switching to the higher clock speed.
+
 ## v0.3
 
 A release about the hardware around the bootloader rather than the bootloader
