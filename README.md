@@ -302,7 +302,7 @@ Two NES controllers give a two-player setup; a USB controller for player 1 and a
 NES controller in either port for player 2 works just as well. 
 
 > [!NOTE]
-> You can also connect an SNES controller. The sockets speak the SNES protocol as well. The connectors differ, so a SNES pad needs a [SNES-to-NES adapter cable](https://nl.aliexpress.com/item/1005007923169070.html) — one per socket — [or one you make yourself](http://www.neshq.com/hardmods/snes_to_nes_controller.txt).
+> You can also connect an SNES controller. The sockets speak the SNES protocol as well. The connectors differ, so a SNES pad needs an adapter cable — one per socket — [see here how to make one](http://www.neshq.com/hardmods/snes_to_nes_controller.txt). Note  you can find also ready-made adapter cables at AlieExpress, but they do not always work, so they are not recommended.
 
 <img width="480" alt="Two-player setup with NES controllers" src="https://github.com/user-attachments/assets/d40ed98f-4632-4161-986a-732d35290fac" />
 
