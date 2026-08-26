@@ -712,15 +712,17 @@ emulator reports its version instead of a build date. `-B` asks interactively fo
 a branch instead, and `-m` builds each repository's default branch; neither
 stamps a version.
 
-> **`pico_shared` is not left at the revision the tag pins.** `bld.sh` only
-> learned `-b` (`BUILD_FOR_BOOTLOADER`) in `pico_shared` `f2c8be9`, and the
-> emulator release tags predate it — their pinned `pico_shared` rejects `-b`
-> outright, so no bootloader-format `.uf2` can be produced from it. Tag mode
-> therefore builds each emulator's tagged source against `pico_shared` `main`.
-> Every other submodule stays at the revision the tag pins, and
-> `emu/versions.txt` records both refs. Once the emulator repositories pin a
-> `-b`-capable `pico_shared` and are re-tagged, this substitution becomes a
-> no-op.
+> **`pico_shared` is taken from `main`, not from the revision the tag pins.** Tag
+> mode builds each emulator's tagged source against `pico_shared` `main`; every
+> other submodule stays at the revision the tag pins, and `emu/versions.txt`
+> records both refs. The reason is historical: `bld.sh` only learned `-b`
+> (`BUILD_FOR_BOOTLOADER`) in `pico_shared` `f2c8be9`, and the emulator release
+> tags of the time predated it — their pinned `pico_shared` rejected `-b`
+> outright, so no bootloader-format `.uf2` could be produced from it. **As of the
+> v0.4 tag set the substitution is a no-op**: every emulator tag pins `3e19ce0`,
+> a descendant of `f2c8be9`, which is also where `main` sits, so the two columns
+> of `emu/versions.txt` now agree. They will differ again whenever a repository
+> is tagged against an older `pico_shared`, which is what the behaviour is for.
 
 The native ports are the exception to all of the above. Neither
 [pico-doom](https://github.com/fhoedemakers/pico-doom) nor
@@ -730,10 +732,10 @@ so there is no `SWVERSION` to stamp, and both build through their own per-board
 the boards it has a script for — *Doom* 2, 8, 13 and 14, *Duke Nukem 3D* 2, 8 and
 13 — and is reported as `SKIP` for every other configuration.
 
-Both repositories are now tagged `v0.1` and are built from that tag like the
-emulators, so `versions.txt` records `v0.1` for `doom_tiny`, `doom_tiny_full` and
-`duke3d_game`. They use the same `v*.*` convention, so later tags are picked up
-with no change here. The `SCRIPTED_BRANCH` table in
+Both repositories are tagged and are built from their latest tag like the
+emulators, so `versions.txt` records a real version for `doom_tiny`,
+`doom_tiny_full` and `duke3d_game`. They use the same `v*.*` convention, so later
+tags are picked up with no change here. The `SCRIPTED_BRANCH` table in
 [`build_emulators.sh`](build_emulators.sh) — `main` for *Doom*,
 `fix/audio-production-rate` for *Duke Nukem 3D* — is now only the fallback for a
 repository that has no tag at all.

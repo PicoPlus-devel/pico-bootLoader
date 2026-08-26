@@ -164,12 +164,17 @@ from `github.sha`, so it will point at whatever is current.
   each emulator's own `pico_shared/menu.h`. In-tree both keep their placeholders
   (`"0.1"`, `"VX.X"`), and a build from an unstamped tree shows the build date
   instead — that is how a dev build identifies itself.
-- **`pico_shared` in tag mode is not the revision the tag pins.** `bld.sh` gained
-  `-b` (`BUILD_FOR_BOOTLOADER`) only in `pico_shared` `f2c8be9`, which the
-  emulator release tags predate — their pinned revision rejects `-b` outright.
-  Tag mode builds each emulator's tagged source against `pico_shared` `main` and
-  records both refs in the manifest. Once the emulator repos pin a `-b`-capable
-  `pico_shared` and are re-tagged, the substitution becomes a no-op.
+- **`pico_shared` in tag mode is `main`, not the revision the tag pins.** Tag mode
+  builds each emulator's tagged source against `pico_shared` `main` and records
+  both refs in the manifest. The reason was historical: `bld.sh` gained `-b`
+  (`BUILD_FOR_BOOTLOADER`) only in `pico_shared` `f2c8be9`, and the emulator tags
+  of the time predated it, so their pinned revision rejected `-b` outright.
+  **As of the v0.4 tag set that is no longer true** — every emulator tag now pins
+  `3e19ce0`, a descendant of `f2c8be9`, and `main` is at that same revision, so
+  the substitution is a no-op and both columns of `emu/versions.txt` agree. The
+  behaviour is kept because it is what makes a bundle buildable at all when a
+  repo is tagged against an older `pico_shared`; when the two columns differ,
+  that is the reason.
 - **A tag pushed from CI would not trigger this workflow** — GitHub does not fire
   workflows for events created with the default `GITHUB_TOKEN`. That is why the
   release step passes `tag_name` + `target_commitish` and creates the tag itself

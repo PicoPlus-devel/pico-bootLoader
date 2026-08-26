@@ -8,14 +8,90 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 
 ## v0.4
 
-A maintenance release. The loader picks up the current shared menu and support code. Nothing about how you use it changes, and the SD-card archive from v0.3 stays valid.
+A release of both halves: the loader **and** the SD card. The loader picks up the current shared
+menu and support code, and every application on the card is rebuilt from its latest release. The
+headline is Sega Genesis/Mega Drive, which now runs at full speed on HSTX boards.
 
-> **Do you need to update?** Only if your monitor accepts DVI but not HDMI and the loader menu stayed black. Otherwise the loader behaves exactly as it did in v0.3 and re-flashing is optional.
+> **Do you need to update?** Yes, both parts — download the new `pico-bootLoader_sdcard.zip`
+> below and replace the `/emu` folder on your card, and re-flash the board with the loader `.uf2`
+> for your hardware. The card is where nearly all of this release is: Genesis went from
+> struggling to full speed, every emulator gained a **recently played** list, and DVI-only
+> monitors that stayed black now show a picture. Your ROMs, save states and artwork are
+> untouched — only `/emu` is replaced.
 
-### Fixes
+### The loader
 
 - **DVI-only monitors show a picture again.** In DVI mode, some older screens that accept DVI but not HDMI stayed black.
 - **Steadier start-up.** The board lets its power settle before switching to the higher clock speed.
+
+### What's new on the card
+
+All ten applications are rebuilt from their newest releases — the exact versions are in the table
+at the end of this page and in `/emu/versions.txt` on the card. Every emulator picks up the same
+shared fixes the loader did, and two things the loader has no use for:
+
+- **A recently played list.** The last 20 games you started, newest first, kept separately for
+  each emulator. Open it with **X** in the ROM browser — that is button 3 on any pad: X on a SNES
+  controller, Y on XInput, Triangle on PlayStation, C on Genesis — or from the new **Recently
+  played** entry at the top of the settings menu, which is the route for pads without a button 3.
+  In the list **A** starts the game, **SELECT** removes it, **START** shows its artwork and **B**
+  closes the list. Each list is plain text at the root of the card (`/recent_NES.txt`,
+  `/recent_SNES.txt` and so on), so it survives a reboot and can be edited or deleted on a PC. A
+  game that is no longer on the card is reported as missing rather than started. A damaged list
+  simply comes up empty — unlike the settings file, nothing else is reset.
+- **No more waiting for a re-flash you don't need.** On boards without PSRAM, starting a game
+  always rewrote it into flash, even when that exact game was already there. The emulator now
+  records what it wrote and skips programming when the selected game is exactly the image already
+  in flash — verified with a checksum, not just a file name — which saves several seconds of black
+  screen every time you restart the same title. That game is marked **[READY]** in the recently
+  played list.
+
+**Sega Genesis/Mega Drive is transformed.** pico-genesisPlus v0.14 rebuilds the emulator core:
+
+- **Full speed on HSTX boards**, including in games with heavy sound — a Raspberry Pi Pico 2 or
+  Pimoroni Pico Plus 2 (on the PicoNES PCB or on a breadboard), the Adafruit Fruit Jam, the
+  Adafruit Metro RP2350 and the Murmulator M2. Sound is now produced on the second processor
+  core, which leaves far more room for the game itself.
+- **Sound works properly at last** — music, noise effects, the "SEGAAA!" voice and the audio of
+  SGDK games, without dropouts in busy scenes.
+- **Games can save your progress**, PAL (European) games run at the right speed, 256-wide games
+  fill the screen, and starting one game after another is stable.
+- Still slow on boards **without** HSTX — the Pimoroni Pico DV Demo Base, Waveshare RP2350-Zero /
+  PicoNES Mini, Waveshare RP2350-USB-A / PicoNES Micro, the Spotpear HDMI board and the
+  Murmulator M1. Putting the picture on screen takes so much of the board's attention that too
+  little is left for the emulator. The games are playable but the action, music and sound all
+  drag, and this is not something that can be tuned away.
+
+The rest:
+
+- **Nintendo Entertainment System** (v0.47) gains **beta support for the NES Zapper light gun** in
+  controller port 2. It needs the custom PicoNES PCB (design v2.1 or later) and so is only in the
+  `piconesPlus` build for the Adafruit DVI + MicroSD breakout / PicoNES PCB — on every other board
+  those two pins are already in use, and the Murmulator M1 and M2 leave them unconnected
+  entirely. There is nothing to switch on; the gun is detected when plugged in, and a normal pad
+  in port 2 keeps working alongside it. Two things to know before buying one: games need the
+  LCD-lag correction patches from [neslcdmod.com](https://neslcdmod.com/), and an **original
+  Nintendo Zapper does not work on a flat panel** — it is built around the bright flash of a CRT.
+  A third-party gun made for modern displays is required; the Tomee Zapp Gun is what this was
+  developed and tested with. See
+  [NES Zapper](https://github.com/fhoedemakers/pico-infonesPlus#nes-zapper-light-gun) for patching
+  and calibration. Also in this release: a `.nes` file claiming **mapper 31** correctly reports
+  "unsupported" again instead of booting into the NSF player, and the framerate overlay now shows
+  a resync counter (`R<n>`) — a steadily rising number means the display is struggling to hold
+  sync.
+- **Doom!** (v0.2) and **Duke Nukem 3D** (v0.3) — a new **BOOTSEL Mode** item at the bottom of
+  the Options menu restarts the board as the USB firmware drive, so you can re-flash it without
+  unplugging it and holding the BOOT button.
+- **Super Nintendo, PC Engine, Master System/Game Gear, Game Boy and Videopac** — the shared menu
+  and controller work above; the emulator cores themselves are unchanged. On the SNES the 504 MHz
+  overclock option is now documented as not advised, and the 378 MHz default is unchanged.
+- **Controllers.** A SNES pad wired straight to a NES controller port now uses **A and B** as you
+  would expect, in games as well as in the menu — previously the pad reported B and Y where a NES
+  pad has A and B, so physical A did nothing at all and "choose" landed on B. In the menu **A**
+  chooses, **B** goes back and **X** opens the recently played list, as on USB and Wii pads; on a
+  Genesis pad **C** opens it. The Controller Test now names the buttons for the kind of pad it
+  detects and shows the raw data the pad sends, which makes an adapter cable that quietly
+  converts the signal easy to spot, and leaving that screen no longer drops into the screensaver.
 
 ## v0.3
 
@@ -68,85 +144,9 @@ itself. Nothing in the loader's behaviour changed since v0.2.
 
 ## v0.2
 
-### Added
-
-- **Duke Nukem 3D**, a native RP2350 port from
-  [pico-duke3D](https://github.com/fhoedemakers/pico-duke3D), joins the menu as
-  `duke3d_game`. It runs on the Adafruit Fruit Jam (HW_CONFIG 8), the Adafruit
-  DVI + MicroSD breakout combination (2) and the Murmulator M2 (13), and needs
-  PSRAM on all three. `DUKE3D.GRP` streams from `/roms/duke3d/` on the SD card,
-  so there is no companion data image to flash.
-- **Artwork themes.** The graphical menu can carry up to ten sets of artwork in
-  `<BASEDIR>/assets/themes/0` … `themes/9`. Press **UP** or **DOWN** in the
-  graphical menu to cycle through the themes present on the card; the choice is
-  saved immediately and restored on the next boot. A theme need not be
-  complete — any application it has no image for falls back to theme 0.
-- **On-screen help.** Press **START** in either menu mode for a full-screen
-  summary of the controls, the meaning of the `*` and `!` markers, and the
-  current mode, theme, board configuration and index file.
-- **Rejected-`.uf2` error screen.** When pre-flight validation refuses a file,
-  the loader now says why in plain language instead of flashing a terse notice
-  for three seconds. It names the actual problem — linked at the wrong address
-  (the address is shown), built for the wrong chip or architecture, too large
-  for the board's flash, corrupt, or an incomplete copy — and, where relevant,
-  gives the build flags needed to produce an image the loader accepts. The page
-  stays up until a button is pressed. Nothing is erased at that point, so the
-  menu is still there afterwards.
-- **`GUI` and `THEME` keys in `boot.txt`**, holding the menu mode and the active
-  theme.
-
-### Changed
-
-- **The SD-card archive no longer leaves a menu entry without artwork.** It still
-  ships the small `.444`/`.555` caches in preference to the source images, but
-  where a theme has no cache for an entry its `.png`/`.jpg` now ships instead and
-  the first boot converts it.
-- `build_emulators.sh` builds *Doom* from pico-doom `main`, which carries the
-  build scripts for both variants since the `full-version` merge.
-- **Menu artwork moved** from `<BASEDIR>/assets` to
-  `<BASEDIR>/assets/themes/0`. Existing cards are migrated automatically on the
-  first boot — the cached `.444`/`.555` files move too, so nothing is
-  re-converted, and the `screensaver/` folder is left where it is. The move is
-  resumable if it is interrupted.
-- **`boot.txt` is now written by the bootloader.** Only the `GUI=` and `THEME=`
-  lines are rewritten; comments, ordering, spacing and every other key are
-  preserved. The file is created on the first change if it does not exist,
-  carrying the effective value of all keys. Updates go through a temporary file
-  that is re-parsed before being renamed into place, so a power cut cannot
-  corrupt the configuration. A card that cannot be written is not an error: the
-  change applies for the session and the help screen says it was not saved.
-- **The `.guimode` file is gone**, folded into `boot.txt`'s `GUI` key. An
-  existing `.guimode` is read once, migrated, and deleted.
-- Menu footer and text-mode hints updated for the new controls.
-- Boards without PSRAM now convert artwork for *every* theme at boot rather than
-  one folder, since the converter cannot run once the menu is up. The first boot
-  after adding a theme is correspondingly slower.
-- **`pico-bootLoader_sdcard.zip` is a release asset again.** The archive carries
-  the emulators, the *Doom* port and its WAD, the artwork themes, the screensaver
-  sprites, a sample `boot.txt` and a new `versions.txt` recording which release
-  tag each emulator was built from. Unpack it at the root of the card.
-- **Release tags now say what changed.** `v0.N` is a bootloader firmware release
-  (re-flash the board and refresh the card); `v0.N.M` ships the same firmware with
-  refreshed emulator binaries, so only `/emu` on the card needs replacing. Each
-  release lists the emulator versions its archive contains.
-- **Doom's WAD is named `doom1-whx.uf2`** in `emulators.txt`, matching what the
-  build actually produces. Earlier cards declared `doom1-whx-for-fruitjam.uf2`,
-  which the loader could never find, so it launched *Doom* without flashing the
-  WAD.
-
-### Fixed
-
-- **A standalone build could be flashed and leave the board unbootable.** An
-  application linked at `0x10000000` but larger than the 512 KB bootloader
-  region straddles the partition boundary: validation skipped every block below
-  `0x10080000` and accepted the tail, so the loader wrote a fragment from the
-  middle of the image into the start of the application partition. The progress
-  bar ran to 100 %, the flashed app then had no usable vector table, and the
-  board rebooted into the menu with no explanation. Any block below the
-  partition now rejects the whole file up front, before anything is erased, and
-  the new error screen names the address it was linked at. Builds smaller than
-  512 KB were already rejected, which is why this only showed up with larger
-  applications.
+The first release with the SD-card archive, artwork themes, on-screen help and *Duke Nukem 3D*.
+See the [v0.2 release notes](https://github.com/fhoedemakers/pico-bootLoader/releases/tag/v0.2)
+for the full list.
 
 ## Getting started
 
@@ -154,7 +154,7 @@ For board-by-board wiring, supported display modes and more refer to the [pico-i
 
 1. **Flash the bootloader.** Download the loader `.uf2` for your board. Hold
    BOOTSEL, connect the board over USB, and copy the `.uf2` onto the
-   `RP2350` drive. See [Supported](https://github.com/fhoedemakers/pico-bootLoaders#supported-hardware) Hardware in the README.
+   `RP2350` drive. See [Supported hardware](https://github.com/fhoedemakers/pico-bootLoader#supported-hardware) in the README.
 2. **Prepare the SD card.** Download `pico-bootLoader_sdcard.zip` from the same
    Releases page and unpack it onto a FAT32- or exFAT-formatted card. The
    archive contains the emulators, the *Doom* port, the menu artwork, and a

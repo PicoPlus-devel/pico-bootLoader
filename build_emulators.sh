@@ -8,12 +8,16 @@
 # instead of a build date. This is the mode the release bundle is cut from; add
 # -z to also pack the SD-card zip.
 #
-# pico_shared is NOT left at the revision the tag pins. bld.sh only learned -b
-# (BUILD_FOR_BOOTLOADER) in pico_shared f2c8be9, and the emulator release tags
-# predate that: they pin a pico_shared whose bld.sh rejects -b outright, so a
-# bootloader-format UF2 cannot be produced from a tag's own pin. Tag mode
-# therefore builds the emulator's tagged source against pico_shared main, and
-# emu/versions.txt records both refs.
+# pico_shared is taken from main, NOT from the revision the tag pins, and
+# emu/versions.txt records both refs. The reason is historical: bld.sh only
+# learned -b (BUILD_FOR_BOOTLOADER) in pico_shared f2c8be9, and the emulator
+# release tags of the time predated that -- they pinned a pico_shared whose
+# bld.sh rejects -b outright, so a bootloader-format UF2 could not be produced
+# from a tag's own pin. As of the v0.4 tag set the substitution is a no-op:
+# every emulator tag pins 3e19ce0, a descendant of f2c8be9, which is also where
+# main sits. The behaviour stays because it is what keeps a bundle buildable
+# when a repo is tagged against an older pico_shared; when the two columns of
+# versions.txt differ, that is why.
 #
 # -B instead asks interactively for a branch to use for the emulator repos and
 # for pico_shared; -m non-interactively builds each repo's default branch (main
@@ -47,7 +51,7 @@ Usage: $0 [-c N|all] [-j N] [-B|-m] [-z] [-h]
   -h     this help
 
 Default (no -B/-m): each emulator repo's latest release tag, built against
-pico_shared main (the tags pin a pico_shared whose bld.sh predates -b).
+pico_shared main rather than the tag's own pin (see the note at the top).
 EOF
 }
 while getopts "c:j:Btmzh" opt; do
@@ -298,7 +302,7 @@ step "git           : $(git --version | head -1)"
 step "PICO_SDK_PATH : $PICO_SDK_PATH"
 step "PICO_PIO_USB  : ${PICO_PIO_USB_PATH:-(unset)}"
 step "PICO_EXTRAS   : ${PICO_EXTRAS_PATH:-(unset)}  (pico-doom only)"
-[ -f "$LOADER_DIR/emu/emulators.txt" ] || die "uf2/emulators.txt not found (run from pico-bootLoader root)"
+[ -f "$LOADER_DIR/emu/emulators.txt" ] || die "emu/emulators.txt not found (run from pico-bootLoader root)"
 step "loader dir    : $LOADER_DIR"
 step "build tree    : $BUILD_DIR  (kept outside the repo)"
 step "host cores    : $NPROC"
@@ -317,9 +321,9 @@ while IFS=';' read -r prog _rest || [ -n "${prog:-}" ]; do
     PROG_NAMES+=("$prog")
 done < "$LOADER_DIR/emu/emulators.txt"
 
-[ ${#PROG_NAMES[@]} -gt 0 ] || die "no buildable emulators found in uf2/emulators.txt"
+[ ${#PROG_NAMES[@]} -gt 0 ] || die "no buildable emulators found in emu/emulators.txt"
 echo
-info "Emulators discovered in uf2/emulators.txt (${#PROG_NAMES[@]}):"
+info "Emulators discovered in emu/emulators.txt (${#PROG_NAMES[@]}):"
 for prog in "${PROG_NAMES[@]}"; do
     step "$prog  ->  https://github.com/${GITHUB_OWNER}/${REPO_OF[$prog]}.git"
 done
@@ -423,11 +427,13 @@ if (( TAG_MODE )); then
     info "          with the tag stamped into its SWVERSION."
     EMU_BRANCH="(latest tag per repo)"
     # NOT the revision the tag pins: bld.sh gained -b (BUILD_FOR_BOOTLOADER) only
-    # in pico_shared f2c8be9, and the emulator release tags predate it, so their
-    # pinned pico_shared rejects -b and no bootloader UF2 can be built from it.
+    # in pico_shared f2c8be9. Emulator tags older than that pin a pico_shared
+    # that rejects -b, so no bootloader UF2 can be built from their own pin.
+    # Tags from the v0.4 set on already pin a -b-capable revision, making this a
+    # no-op; versions.txt records both refs either way.
     SHARED_BRANCH="main"
-    info "          pico_shared is switched to '$SHARED_BRANCH': the revisions the tags"
-    info "          pin predate bld.sh's -b flag, so they cannot build for the loader."
+    info "          pico_shared is taken from '$SHARED_BRANCH' rather than each tag's own pin,"
+    info "          so a tag predating bld.sh's -b flag can still build for the loader."
 elif (( MAIN_MODE )); then
     info "Main mode: building each repo's default branch (main or master),"
     info "          resolved per repo from the remote's HEAD."
@@ -1114,8 +1120,10 @@ write_versions_manifest() {
         echo "#   ref          the release tag the emulator was built from, or"
         echo "#                <branch>@<shortsha> for a repo that has no tag yet."
         echo "#   pico_shared  the shared-framework revision it was built against."
-        echo "#                Not the revision the tag pins: bld.sh gained -b only"
-        echo "#                in f2c8be9, which the emulator tags predate."
+        echo "#                Taken from pico_shared main, not from the tag's own"
+        echo "#                pin: bld.sh gained -b only in f2c8be9, so an older"
+        echo "#                tag cannot build for the loader from its own pin."
+        echo "#                Since the v0.4 tag set the two are the same anyway."
         for prog in "${PROG_NAMES[@]}"; do
             [ -n "${REF_OF[$prog]:-}" ] || continue
             for hw in "${HWCONFIGS_TO_BUILD[@]}"; do
