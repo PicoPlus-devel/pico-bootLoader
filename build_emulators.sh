@@ -77,7 +77,7 @@ cd "$(dirname "$0")"
 LOADER_DIR="$(pwd)"
 # Keep the clone+build tree OUTSIDE this repo so it doesn't pollute git status.
 BUILD_DIR="$(dirname "$LOADER_DIR")/emu-build"
-GITHUB_OWNER="fhoedemakers"
+GITHUB_OWNER="PicoPlus-devel"
 
 NPROC=$(nproc)
 PER_PROC=$(( NPROC / JOBS ))
