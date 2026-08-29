@@ -187,16 +187,25 @@ If anything was written to the card, the bootloader restarts on the way out so
 that the application list, the artwork and the cached conversions are read
 again.
 
-Two limitations apply:
+What this means for the board in front of you depends on whether it has a
+separate port for game controllers:
 
-- On boards without PIO USB — hardware configurations 1, 2, 5, 6 and 13 — the
-  USB host controller has to release the port to the mass-storage device, so
-  **USB controllers stop working until the screen is closed**, and the board
-  always restarts on the way out. A controller connected to a NES/SNES port or
-  a Wii Classic controller continues to work.
-- The Pico 2 W builds do not include USB drive mode. Those images carry the
-  wireless firmware and leave no room in the 512 KB bootloader partition for
-  the USB device stack. The options menu simply omits the entry.
+- Boards without PIO USB — hardware configurations 1, 2, 6 and 13 — read USB
+  game controllers through the same USB port that USB drive mode needs for the
+  connection to the computer. Only one of the two can be attached at a time, so
+  on these boards **the menu has to be operated with a controller on a NES/SNES
+  port or with a Wii Classic controller**; without one there is no button to
+  leave the screen with and the only way back is to eject the drive on the
+  computer. The board also restarts on the way out, because the USB host
+  controller has to take the port back.
+- Boards with PIO USB — hardware configurations 5, 7, 8, 9 and 14 — read game
+  controllers through a second, separate port, so those keep working while the
+  card is on the computer and the menu comes straight back.
+
+One board is excluded outright: the Pico 2 W builds do not include USB drive
+mode. Those images carry the wireless firmware and leave no room in the 512 KB
+bootloader partition for the USB device stack, so the options menu omits the
+entry.
 
 ## Getting started
 

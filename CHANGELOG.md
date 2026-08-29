@@ -29,14 +29,21 @@ holds four entries:
   files, then eject the drive on the computer and the menu comes back. If
   anything was written, the board restarts so that it reads the card afresh.
 
-Two notes on USB drive mode. On boards without PIO USB — the Pimoroni Pico DV
-Demo Base, the Adafruit DVI/microSD breakouts and PicoNES PCB, the Adafruit
-Metro RP2350, the Waveshare RP2350-Zero PCB and the Murmulator M2 — USB
-controllers stop working while the card is on your computer, and the board
-always restarts on the way out; a NES/SNES or Wii Classic controller keeps
-working. The Pico 2 W builds do not include USB drive mode at all: those images
-carry the wireless firmware and the bootloader partition has no room left for
-it. Everything else is unchanged on those boards.
+Two notes on USB drive mode. Some boards read USB game controllers through the
+same port that USB drive mode needs for the cable to your computer — the
+Pimoroni Pico DV Demo Base, the Adafruit DVI/microSD breakouts and PicoNES PCB,
+the Waveshare RP2350-Zero PCB and the Murmulator M2. Only one of the two can be
+attached at a time, so on those boards you need a controller on a NES/SNES port
+or a Wii Classic controller to work the menu; without one there is no button to
+leave the screen with and you have to eject the drive on your computer instead.
+The board also restarts when you leave. Boards with a separate controller port —
+the Adafruit Metro RP2350 and Fruit Jam, the Waveshare RP2350-PiZero and
+RP2350-USB-A and the Adafruit Feather RP2350 — are unaffected: controllers keep
+working and the menu comes straight back.
+
+The Pico 2 W builds do not include USB drive mode at all: those images carry the
+wireless firmware and the bootloader partition has no room left for it.
+Everything else is unchanged on those boards.
 
 ## v0.4
 

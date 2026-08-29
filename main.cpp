@@ -783,9 +783,14 @@ void showUsbDriveScreen()
 
             centerText(14, "Do not remove the SD card.", COL_FG, COL_BG);
 #if !CFG_TUH_RPI_PIO_USB
-            // The host stack gave this port to the device stack; only NES/Wii
-            // pads still reach us until usbMscEnd() puts it back.
-            centerText(16, "USB controllers are off until you exit.", COL_FG, COL_BG);
+            // The reference prints "USB controllers are off until you exit."
+            // here, which cannot be true on these boards: the USB host runs on
+            // the native port, so the cable now going to the computer is the
+            // same one a gamepad would use and there was never one attached.
+            // What the user does need to know is that the way out costs a
+            // restart -- usbMscNeedsRebootOnExit() is unconditionally true
+            // here, because handing rhport 0 back leaks spinlocks.
+            centerText(16, "The board restarts when you leave.", COL_FG, COL_BG);
 #endif
             solidBar(28, COL_BAR_FG, COL_BAR_BG);
             snprintf(line, sizeof(line), "Eject on the computer, or press %s", btn2);
