@@ -6,6 +6,38 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 
 [Binaries for each configuration and PCB design are at the end of this page](#downloads___).
 
+## v0.5
+
+A loader-only release. The SD card is unchanged, so the
+`pico-bootLoader_sdcard.zip` from v0.4 stays valid and does not need to be
+downloaded again — only re-flash the board with the loader `.uf2` for your
+hardware.
+
+**SELECT now opens an options menu** instead of switching the menu mode
+directly. Move through it with UP / DOWN, confirm with A and return with B. It
+holds four entries:
+
+- **Help** — the same help screen, still also reachable with START.
+- **Menu mode** — switch between the text list and the artwork view, as SELECT
+  used to do on its own.
+- **Enter BOOTSEL mode** — restart the board into the RP2350 ROM bootloader,
+  where it appears on your computer as a drive named `RP2350`. This is how you
+  update the bootloader itself without unplugging the board and holding the
+  BOOTSEL button. Reset the board to return to the menu.
+- **USB drive mode** — show the SD card on your computer over USB, so you can
+  add applications or change artwork without taking the card out. Copy your
+  files, then eject the drive on the computer and the menu comes back. If
+  anything was written, the board restarts so that it reads the card afresh.
+
+Two notes on USB drive mode. On boards without PIO USB — the Pimoroni Pico DV
+Demo Base, the Adafruit DVI/microSD breakouts and PicoNES PCB, the Adafruit
+Metro RP2350, the Waveshare RP2350-Zero PCB and the Murmulator M2 — USB
+controllers stop working while the card is on your computer, and the board
+always restarts on the way out; a NES/SNES or Wii Classic controller keeps
+working. The Pico 2 W builds do not include USB drive mode at all: those images
+carry the wireless firmware and the bootloader partition has no room left for
+it. Everything else is unchanged on those boards.
+
 ## v0.4
 
 A release of both halves: the loader **and** the SD card. The loader picks up the current shared

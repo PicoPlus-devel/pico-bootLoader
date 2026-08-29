@@ -19,7 +19,7 @@ message("* Current build type is : ${CMAKE_BUILD_TYPE}")
 # Hardware / board selection
 # ---------------------------------------------------------------------------
 if(NOT HW_CONFIG)
-    set(HW_CONFIG 2 CACHE STRING "Select the hardware configuration for your board")
+    set(HW_CONFIG 8 CACHE STRING "Select the hardware configuration for your board")
 endif()
 if(NOT USE_HSTX)
     set(USE_HSTX 1 CACHE STRING "Use HSTX for display output when possible")
@@ -50,10 +50,11 @@ add_definitions(-DPICO_MALLOC_PANIC=0)
 # translation unit; as a trailing compile option the -Os wins over the build
 # type's -O level. Measured flash use, HW_CONFIG 1 / pico2_w (the worst case):
 #   -O3 110.9% (overflows by 56 KB) | -O2 101.6% (overflows by 8 KB)
-#   -Os  97.0% (fits, ~15 KB margin)
+#   -Os  97.8% (fits, ~11 KB margin)
 # -Os is no longer merely preferable here: -O2 used to fit with ~6 KB to spare
 # and no longer does, so -Os is the only level that links. Re-measure this
-# configuration when adding code.
+# configuration when adding code. This is also why USB drive mode is left out
+# of the Pico 2 W builds -- see the ENABLE_USB_MSC block further down.
 # -Os is safe for the display: the real-time TMDS path is hand-written assembly
 # (pico_lib/dvi/tmds_encode.S, RAM-resident .scratch_x/y) and HSTX encodes in
 # hardware -- neither is affected by the C optimization level. Only per-scanline
@@ -213,7 +214,61 @@ target_compile_definitions(${projectname} PRIVATE
     BOOTLOADER_SIZE=${FRENS_BOOTLOADER_SIZE}
     FLASH_TOTAL_SIZE=${FRENS_FLASH_TOTAL}
 )
-
+# ---------------------------------------------------------------------------
+# USB drive mode: the "USB drive mode" entry in the options menu (SELECT) shows
+# the SD card on a PC as a mass storage device. The device stack is started when
+# that screen opens and stopped when it closes, so nothing outside it changes;
+# when this is 0 no tinyusb device code is linked at all and the menu entry is
+# compiled out.
+#
+# Boards without PIO USB (HW_CONFIG 1/2/5/6/13) take the route where the USB
+# host has to give the native port back - gamepads stop while the card is
+# mounted and the loader reboots on the way out.
+#
+# Off by default on the Pico 2 W builds. Those carry the CYW43 firmware blob and
+# already fill the 512 KB resident partition almost completely (HW_CONFIG 1 /
+# pico2_w measured at 97.8%, HW_CONFIG 2 / pico2_w at 93.6%), leaving no room
+# for the tinyusb device stack, which costs roughly 12 KB. Every other config
+# sits between 50% and 57% with it built in. -DENABLE_USB_MSC=ON on the command
+# line still wins if that ever changes.
+# ---------------------------------------------------------------------------
+if(NOT DEFINED ENABLE_USB_MSC AND PICO_BOARD MATCHES "_w$")
+    set(_usb_msc_default OFF)
+else()
+    set(_usb_msc_default ON)
+endif()
+option(ENABLE_USB_MSC "Show the SD card on a PC over USB from the options menu"
+       ${_usb_msc_default})
+if(ENABLE_USB_MSC)
+    set(USB_MSC_ENABLED 1)
+else()
+    set(USB_MSC_ENABLED 0)
+endif()
+message(STATUS "USB drive mode (mass storage): ${USB_MSC_ENABLED}")
+target_compile_definitions(${projectname} PRIVATE FRENS_USB_MSC=${USB_MSC_ENABLED})
+if(USB_MSC_ENABLED)
+    target_link_libraries(${projectname} PRIVATE tinyusb_device pico_unique_id)
+    # Widen the pool of claimable hardware spinlocks from 8 to 12.
+    #
+    # spin_lock_claim_unused() only hands out PICO_SPINLOCK_ID_CLAIM_FREE_FIRST
+    # ..LAST, which is ids 24..31 by default - eight in total. On PicoDVI builds
+    # dvi::DVI alone takes four of them (validTMDSQueue_, freeTMDSQueue_,
+    # validLineQueue_, freeLineQueue_ - util::Queue holds a util::SpinLock), and
+    # the TinyUSB host stack takes most of the rest, so bringing the device
+    # stack up for USB drive mode ran the pool dry and panicked with "No
+    # spinlocks are available" on the very first visit. HSTX builds have no
+    # PicoDVI and so never hit it.
+    #
+    # The striped range gives up the four ids instead. Striped locks are handed
+    # out round-robin and are shared by design, so a smaller range costs a
+    # little more contention and nothing else.
+    target_compile_definitions(${projectname} PRIVATE
+        PICO_SPINLOCK_ID_STRIPED_FIRST=16
+        PICO_SPINLOCK_ID_STRIPED_LAST=19
+        PICO_SPINLOCK_ID_CLAIM_FREE_FIRST=20
+        PICO_SPINLOCK_ID_CLAIM_FREE_LAST=31
+    )
+endif()
 if(NOT PICO_PLATFORM STREQUAL "rp2040")
     target_compile_definitions(${projectname} PRIVATE
         PICO_PIO_USE_GPIO_BASE=1

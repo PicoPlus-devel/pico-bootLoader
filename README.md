@@ -146,17 +146,57 @@ Classic controller (over I²C) are also supported and use their own buttons.
 | Move through the list (text mode) | D-pad UP / DOWN | ↑ / ↓ |
 | Slide between applications (graphical mode) | D-pad LEFT / RIGHT | ← / → |
 | Change artwork theme (graphical mode) | D-pad UP / DOWN | ↑ / ↓ |
-| Launch the selected application | A | Z |
-| Toggle text / graphical mode | SELECT | A |
+| Launch the selected application | A | X |
+| Open the options menu | SELECT | A |
 | Open the help screen | START | S |
+| Confirm the highlighted option | A | X |
+| Return from a screen | B | Z |
 | Wake from screensaver | any button | any mapped key |
 
-START is used for the help screen because it is the only spare button present
-on every supported input device, including NES controllers.
+SELECT and START are used for the options and help screens because they are the
+only spare buttons present on every supported input device, including NES
+controllers. On controllers whose face buttons are labelled differently, the
+on-screen prompts follow the attached device: A and B appear as B and A on an
+XInput pad, and as ○ and ✕ on a DualShock or DualSense.
 
 The chosen menu mode and artwork theme are remembered across boots. Inside a running emulator built
 on the shared framework, **SELECT + START** opens its menu, which offers *Return
 to emulator selection* to reboot back into this menu.
+
+### The options menu
+
+**SELECT** opens a small menu on top of the application picker. Move through it
+with UP / DOWN, confirm with A, and return with B.
+
+| Entry | Effect |
+|---|---|
+| Help | Opens the help screen described under [On-screen help](#on-screen-help). |
+| Menu mode | Switches between the text list and the full-screen artwork view. The choice is written to `/boot.txt` and restored on the next boot. |
+| Enter BOOTSEL mode | Restarts the board into the RP2350 ROM bootloader, where it appears on a computer as a drive named `RP2350`. Copy a `.uf2` onto it to update the bootloader itself, or reset the board to return to the menu. |
+| USB drive mode | Presents the SD card to a computer as a USB mass-storage device, so applications, the index file and artwork can be changed without removing the card. |
+
+### USB drive mode
+
+While the card is presented over USB the bootloader has released the
+filesystem, and the card must not be removed. Copy or delete files, then eject
+the drive on the computer; the menu returns on its own. Pressing B leaves
+immediately, and the screen closes by itself if no computer connects within
+twenty seconds.
+
+If anything was written to the card, the bootloader restarts on the way out so
+that the application list, the artwork and the cached conversions are read
+again.
+
+Two limitations apply:
+
+- On boards without PIO USB — hardware configurations 1, 2, 5, 6 and 13 — the
+  USB host controller has to release the port to the mass-storage device, so
+  **USB controllers stop working until the screen is closed**, and the board
+  always restarts on the way out. A controller connected to a NES/SNES port or
+  a Wii Classic controller continues to work.
+- The Pico 2 W builds do not include USB drive mode. Those images carry the
+  wireless firmware and leave no room in the 512 KB bootloader partition for
+  the USB device stack. The options menu simply omits the entry.
 
 ## Getting started
 
@@ -572,10 +612,11 @@ images. The move is resumable: if it is interrupted, the next boot finishes it.
 
 ### On-screen help
 
-Press **START** in either menu mode for a full-screen summary of the controls,
-the meaning of the `*` and `!` markers, and the current mode, theme, board
-configuration and index file. Press START, the launch button, B or SELECT to
-return. It is also where a failed configuration write is reported.
+Press **START** in either menu mode, or choose *Help* from the options menu, for
+a full-screen summary of the controls, the meaning of the `*` and `!` markers,
+and the current mode, theme, board configuration and index file. Press START,
+the launch button, B or SELECT to return. It is also where a failed
+configuration write is reported.
 
 ## Creating a bootable build of your own application
 

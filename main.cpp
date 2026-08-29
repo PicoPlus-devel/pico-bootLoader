@@ -37,11 +37,13 @@
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
 #include "pico/version.h"
+#include "pico/bootrom.h"
 #include "hardware/clocks.h"
 #include "hardware/watchdog.h"
 #include "hardware/vreg.h"
 
 #include "FrensHelpers.h"
+#include "usb_msc.h"         // C++ linkage (namespace Frens); FRENS_USB_MSC gates it
 #include "RomLister.h"
 #include "menu.h"
 #include "settings.h"
@@ -243,7 +245,7 @@ void drawMenu(int sel, int top, int visible)
     char hint[SCREEN_COLS + 1];
     centerText(SCREEN_ROWS - 4, "* in flash    ! SD differs (reflash)",
                COL_FG, COL_BG);
-    centerText(SCREEN_ROWS - 3, "UP / DOWN : choose   SELECT : graphical", COL_FG, COL_BG);
+    centerText(SCREEN_ROWS - 3, "UP / DOWN : choose   SELECT : options", COL_FG, COL_BG);
     // '_' rather than spaces for the gap: putText collapses whitespace runs,
     // so a space-padded string would render shorter than centerText measured
     // it with strlen() and the line would sit off-centre. putText turns '_'
@@ -470,11 +472,17 @@ void drawErrorScreen(const char *title, const char *l1, const char *l2, const ch
 // prevButtons. The nespad_read_start() / _finish() bracket keeps its original
 // spacing: the frame-counter and LED work sits between them so the PIO shift
 // register has time to clock out before we block on the result.
-uint32_t readPads()
+//
+// `pace` exists only for USB drive mode. PaceFrames60fps() busy-waits for
+// vsync, which is what every other screen wants, but there it would cap
+// Frens::usbMscTask() at 60 calls a second and throttle the transfer to a
+// crawl. That screen passes false and spends the frame on USB instead; it
+// repaints only when the mounted state changes, so nothing needs the pacing.
+uint32_t readPads(bool pace = true)
 {
     using Btn = io::GamePadState::Button;
 
-    Frens::PaceFrames60fps(false, true);
+    if (pace) Frens::PaceFrames60fps(false, true);
 #if NES_PIN_CLK != -1
     nespad_read_start();
 #endif
@@ -568,13 +576,13 @@ struct HelpLine { uint8_t row, col; const char *text; };
 const HelpLine HELP_BODY[] = {
     { 2,  1, "TEXT MODE" },
     { 3,  3, "UP / DOWN" },      { 3,  18, "select application" },
-    { 5,  3, "SELECT" },         { 5,  18, "switch to graphics" },
+    { 5,  3, "SELECT" },         { 5,  18, "options menu" },
     { 6,  3, "START" },          { 6,  18, "this help screen" },
 
     { 8,  1, "GRAPHICAL MODE" },
     { 9,  3, "LEFT / RIGHT" },   { 9,  18, "select application" },
     { 10, 3, "UP / DOWN" },      { 10, 18, "change artwork theme" },
-    { 12, 3, "SELECT" },         { 12, 18, "switch to text mode" },
+    { 12, 3, "SELECT" },         { 12, 18, "options menu" },
     { 13, 3, "START" },          { 13, 18, "this help screen" },
 
     { 15, 1, "LIST MARKERS" },
@@ -643,9 +651,12 @@ void drawHelpScreen(bool graphical_mode, const char *index_file, bool cfg_save_f
                 COL_ERR_FG, COL_ERR_BG);
     }
 
+    // Own buffer: val[] is sized for the 22-cell description column, and this
+    // line is wider than that.
+    char foot[SCREEN_COLS + 1];
     solidBar(28, COL_BAR_FG, COL_BAR_BG);
-    snprintf(val, sizeof(val), "Press START or %s to return", btn1);
-    centerText(28, val, COL_BAR_FG, COL_BAR_BG);
+    snprintf(foot, sizeof(foot), "Press START, %s or %s to return", btn1, btn2);
+    centerText(28, foot, COL_BAR_FG, COL_BAR_BG);
 }
 
 // Show the help page until the user dismisses it.
@@ -673,6 +684,351 @@ void showHelpScreen(bool graphical_mode, const char *index_file, bool cfg_save_f
 
         if (pushed & (Btn::START | Btn::A | Btn::B | Btn::SELECT)) break;
     }
+}
+
+// Defined further down, next to the flashing helpers, but needed by the two
+// screens below.
+void idleFor(int ms);
+
+// --- USB drive mode ---------------------------------------------------------
+//
+// Hands the raw SD card to a PC as a mass-storage device and sits here until the
+// host lets go or the user presses B. Reduced port of showUsbDriveScreen() in
+// pico_shared/menu.cpp, which is static and so cannot be called from here.
+//
+// The reference has a second path for line-buffer DVI (RP2040): core0 cannot
+// serve both the SD and a scanline every 63.5us, so it parks the display and
+// runs blind. We never need it -- this loader is RP2350-only and passes
+// useFrameBuffer=true to Frens::initAll, so isFrameBufferUsed() is always true
+// and core1 scans out of the framebuffer without core0's help. The check below
+// is a guard, not a branch: if that assumption ever breaks we decline the screen
+// rather than show a collapsing picture.
+//
+// NOTHING here may touch FatFs. usbMscBegin() unmounts the volume and the PC
+// owns the filesystem until usbMscEnd() puts it back, so no sd_boot_ini_save(),
+// no gui_load_image(), no themes_*, no screensaver -- which is why this screen
+// is pure charcell.
+#if FRENS_USB_MSC
+void showUsbDriveScreen()
+{
+    using Btn = io::GamePadState::Button;
+
+    // Long enough for a PC to notice and enumerate a new device, short enough
+    // that a board whose only pad is on the USB port it just gave away is never
+    // stuck here.
+    constexpr uint32_t NO_HOST_TIMEOUT_MS = 20000;
+
+    char btn1[2], btn2[2];
+    getButtonLabels(btn1, btn2);
+    char line[SCREEN_COLS + 1];
+
+    // Same pump as showHelpScreen(): draw once, then push the buffer every
+    // frame until a press is seen. prev = ~0u swallows the A press that got
+    // us here.
+    auto notice = [&](const char *l1, const char *l2, const char *l3) {
+        showMessage(l1, l2, l3);
+        uint32_t prev = ~0u;
+        for (;;) {
+            uint32_t btns   = readPads();
+            uint32_t pushed = btns & ~prev;
+            prev = btns;
+            DrawScreen(-1);
+            if (pushed & (Btn::START | Btn::A | Btn::B | Btn::SELECT)) break;
+        }
+    };
+
+    if (!Frens::isFrameBufferUsed()) {
+        // Cannot happen on the configurations we build (see the note above).
+        LOG("USB drive mode declined: no framebuffer on this build.");
+        notice("USB drive mode", "Not available on this build.", nullptr);
+        return;
+    }
+
+    if (!Frens::usbMscBegin()) {
+        LOG("usbMscBegin() failed; staying in the picker.");
+        notice("Cannot read SD card", "USB drive mode unavailable.", nullptr);
+        return;
+    }
+    LOG("USB drive mode: device stack up.");
+
+    const uint32_t started = Frens::time_ms();
+    uint32_t prev    = ~0u;   // swallow the A press that opened this screen
+    int      painted = -1;    // last painted state; -1 = nothing painted yet
+    bool     done    = false;
+
+    while (!done) {
+        // 0 = waiting for a host, 1 = mounted, 2 = mounted but bus suspended.
+        const bool mounted = Frens::usbMscHostConnected();
+        const int  state   = !mounted ? 0 : (Frens::usbMscHostSuspended() ? 2 : 1);
+
+        // Repaint only on a state change. This screen is static otherwise, and
+        // every cycle not spent in DrawScreen() is a cycle spent on the
+        // transfer -- see the `pace` note on readPads().
+        if (state != painted) {
+            painted = state;
+            ClearScreen(COL_BG);
+            solidBar(0, COL_BAR_FG, COL_BAR_BG);
+            centerText(0, "USB DRIVE MODE", COL_BAR_FG, COL_BAR_BG);
+
+            if (mounted) {
+                centerText(8, state == 2 ? "SD card is mounted (computer asleep)."
+                                         : "SD card is mounted on your computer.",
+                           COL_FG, COL_BG);
+                centerText(10, "Copy or delete files, then eject the", COL_FG, COL_BG);
+                centerText(11, "drive on your computer.", COL_FG, COL_BG);
+            } else {
+                centerText(8,  "Connect the USB port to a computer.", COL_FG, COL_BG);
+                centerText(10, "Waiting for the computer...",         COL_FG, COL_BG);
+            }
+
+            centerText(14, "Do not remove the SD card.", COL_FG, COL_BG);
+#if !CFG_TUH_RPI_PIO_USB
+            // The host stack gave this port to the device stack; only NES/Wii
+            // pads still reach us until usbMscEnd() puts it back.
+            centerText(16, "USB controllers are off until you exit.", COL_FG, COL_BG);
+#endif
+            solidBar(28, COL_BAR_FG, COL_BAR_BG);
+            snprintf(line, sizeof(line), "Eject on the computer, or press %s", btn2);
+            centerText(28, line, COL_BAR_FG, COL_BAR_BG);
+            DrawScreen(-1);
+        }
+
+        // Spend the bulk of the iteration pumping the device stack. tud_task()
+        // is where the SCSI transfers actually happen, so this is the transfer
+        // rate; readPads(false) below skips the vsync wait for the same reason.
+        absolute_time_t until = make_timeout_time_ms(12);
+        while (!time_reached(until)) {
+            Frens::usbMscTask();
+        }
+
+        uint32_t btns   = readPads(false);
+        uint32_t pushed = btns & ~prev;
+        prev = btns;
+
+        if (pushed & Btn::B) {
+            LOG("USB drive mode: cancelled by the user.");
+            done = true;
+        } else if (Frens::usbMscEverConnected()) {
+            // A computer had the drive; leave the moment it lets go. A bus
+            // suspend is not letting go, so a sleeping host does not drop us
+            // out mid-copy -- that is why usbMscHostConnected() ignores it.
+            done = !Frens::usbMscHostConnected();
+            if (done) LOG("USB drive mode: host ejected or unplugged.");
+        } else if (Frens::time_ms() - started > NO_HOST_TIMEOUT_MS) {
+            LOG("USB drive mode: no computer connected within %u ms.",
+                (unsigned)NO_HOST_TIMEOUT_MS);
+            done = true;
+        }
+    }
+
+    const bool wrote = Frens::usbMscMediaDirty();
+    Frens::usbMscEnd();
+    LOG("USB drive mode: ended. mediaDirty=%d needsReboot=%d",
+        (int)wrote, (int)Frens::usbMscNeedsRebootOnExit());
+
+    // Two independent reasons to restart:
+    //  - the board demands it. Without PIO USB the host must take rhport 0
+    //    back, which forces a tud_deinit() that leaks two hardware spinlocks
+    //    TinyUSB never frees; a second visit would run the pool dry.
+    //  - the PC wrote to the card. The .uf2 list, the in-flash CRC comparison,
+    //    the theme scan and the cached .444/.555 conversions were all built at
+    //    boot from what was on the card then. Rebooting re-reads all of it,
+    //    which is exactly what we would have to do here anyway.
+    if (Frens::usbMscNeedsRebootOnExit() || wrote) {
+        showMessage("Restarting", wrote ? "The SD card was changed." : nullptr, nullptr);
+        DrawScreen(-1);
+        idleFor(1000);
+        // No Frens::resetWifi() here, unlike the pico_shared version: the Pico 2 W
+        // builds have no room for USB drive mode and compile this out entirely
+        // (see ENABLE_USB_MSC in CMakeLists.txt), so there is never a CYW43 to
+        // shut down. The loader's other reboot paths don't call it either.
+        // watchdog_reboot(), NOT watchdog_enable(): the latter stamps the SDK
+        // magic that our own resume check reads back through
+        // watchdog_enable_caused_reboot(), which would make the next boot jump
+        // straight into the application instead of showing the picker.
+        watchdog_reboot(0, 0, 0);
+        while (1) {
+            tight_loop_contents();
+        }
+    }
+}
+#endif // FRENS_USB_MSC
+
+// --- Options menu (SELECT) --------------------------------------------------
+//
+// The picker's secondary screen: help, the text/graphical toggle, BOOTSEL mode
+// and (where it is built in) USB drive mode. Same charcell chrome and the same
+// pump as showHelpScreen(); A applies the highlighted entry, B or SELECT
+// returns.
+
+enum OptionsResult {
+    OPT_BACK,           // nothing the caller has to act on
+    OPT_MODE_CHANGED,   // ini->gui_graphical was flipped
+};
+
+// Entry ids rather than array indices: the USB row is compiled out on builds
+// without FRENS_USB_MSC and the rows must close up behind it.
+enum OptionId {
+    OPTID_HELP,
+    OPTID_MENU_MODE,
+    OPTID_BOOTSEL,
+    OPTID_USB_DRIVE,
+};
+
+#define OPT_FIRST_ROW  6    // first entry row; entries are two rows apart
+#define OPT_ROW_STEP   2
+#define OPT_LABEL_COL  6
+#define OPT_VALUE_COL  24
+
+void drawOptionsScreen(const OptionId *ids, int count, int sel,
+                       const sd_boot_ini_t *ini, bool cfg_save_failed)
+{
+    char btn1[2], btn2[2];
+    getButtonLabels(btn1, btn2);
+
+    ClearScreen(COL_BG);
+    solidBar(0, COL_BAR_FG, COL_BAR_BG);
+    centerText(0, "OPTIONS", COL_BAR_FG, COL_BAR_BG);
+
+    for (int i = 0; i < count; i++) {
+        const int  row  = OPT_FIRST_ROW + i * OPT_ROW_STEP;
+        const bool here = (i == sel);
+        // Selection is shown with a marker rather than an inverted row:
+        // putText collapses whitespace runs, so painting a full-width
+        // background would need the '_' trick and would fight the value
+        // column. ClearScreen above already wiped the previous marker.
+        if (here) putText(OPT_LABEL_COL - 3, row, ">", COL_HELP_HDR, COL_BG);
+
+        const char *label = "";
+        const char *value = nullptr;
+        switch (ids[i]) {
+        case OPTID_HELP:       label = "Help";              break;
+        case OPTID_MENU_MODE:  label = "Menu mode";
+                               value = ini->gui_graphical ? "graphical" : "text";
+                               break;
+        case OPTID_BOOTSEL:    label = "Enter BOOTSEL mode"; break;
+        case OPTID_USB_DRIVE:  label = "USB drive mode";     break;
+        }
+        putText(OPT_LABEL_COL, row, label,
+                here ? COL_HELP_HDR : COL_FG, COL_BG);
+        if (value) putText(OPT_VALUE_COL, row, value,
+                           here ? COL_HELP_HDR : COL_FG, COL_BG);
+    }
+
+    // One-line explanation of the highlighted entry, so nothing needs guessing.
+    const char *hint = "";
+    switch (ids[sel]) {
+    case OPTID_HELP:      hint = "Show the controls and current settings"; break;
+    case OPTID_MENU_MODE: hint = "Application list, or full-screen artwork"; break;
+    case OPTID_BOOTSEL:   hint = "Restart for flashing over USB"; break;
+    case OPTID_USB_DRIVE: hint = "Show the SD card on your computer"; break;
+    }
+    centerText(20, hint, COL_FG, COL_BG);
+
+    if (cfg_save_failed) {
+        centerText(22, "Settings not saved - SD write failed",
+                   COL_ERR_FG, COL_ERR_BG);
+    }
+
+    char foot[SCREEN_COLS + 1];
+    solidBar(28, COL_BAR_FG, COL_BAR_BG);
+    snprintf(foot, sizeof(foot), "%s : apply____%s : back", btn1, btn2);
+    centerText(28, foot, COL_BAR_FG, COL_BAR_BG);
+}
+
+OptionsResult showOptionsScreen(sd_boot_ini_t *ini, bool *cfg_save_failed,
+                                bool graphical_mode)
+{
+    using Btn = io::GamePadState::Button;
+
+    OptionId ids[4];
+    int count = 0;
+    ids[count++] = OPTID_HELP;
+    ids[count++] = OPTID_MENU_MODE;
+    ids[count++] = OPTID_BOOTSEL;
+#if FRENS_USB_MSC
+    ids[count++] = OPTID_USB_DRIVE;
+#endif
+
+    const bool mode_on_entry = ini->gui_graphical;
+    // What the help screen reports as the current mode. Starts at what the
+    // picker is actually doing -- which is not always ini->gui_graphical, since
+    // enter_graphical() falls back to text mode when the GUI buffers won't
+    // allocate -- and follows the toggle from then on.
+    bool help_mode = graphical_mode;
+    int  sel   = 0;
+    bool dirty = true;          // force the first paint
+    // ~0u so the SELECT press that opened this screen isn't read as input.
+    uint32_t prev = ~0u;
+
+    for (;;) {
+        if (dirty) {
+            drawOptionsScreen(ids, count, sel, ini, *cfg_save_failed);
+            dirty = false;
+        }
+
+        uint32_t btns   = readPads();
+        uint32_t pushed = btns & ~prev;
+        prev = btns;
+
+        DrawScreen(-1);
+
+        if (pushed & (Btn::B | Btn::SELECT)) break;
+
+        if (pushed & Btn::UP)   { if (sel > 0)         { sel--; dirty = true; } }
+        if (pushed & Btn::DOWN) { if (sel < count - 1) { sel++; dirty = true; } }
+
+        if (pushed & Btn::A) {
+            switch (ids[sel]) {
+            case OPTID_HELP:
+                // Returns here, not to the picker: B walks back one level.
+                showHelpScreen(help_mode, ini->index_file, *cfg_save_failed);
+                prev  = ~0u;    // swallow the press that dismissed it
+                dirty = true;
+                break;
+
+            case OPTID_MENU_MODE:
+                ini->gui_graphical = !ini->gui_graphical;
+                help_mode = ini->gui_graphical;
+                LOG("Options -> mode=%s", ini->gui_graphical ? "graphical" : "text");
+                // Non-fatal on failure, exactly like the picker's persist_cfg():
+                // a write-protected or full card must not stop the loader, so
+                // the setting still takes effect for this session and the
+                // screen says it wasn't saved.
+                if (!sd_boot_ini_save("/boot.txt", ini)) {
+                    LOG("boot.txt write FAILED; setting kept in RAM only");
+                    *cfg_save_failed = true;
+                } else {
+                    *cfg_save_failed = false;
+                }
+                dirty = true;
+                break;
+
+            case OPTID_BOOTSEL:
+                // The picture dies with the reset, so say what is about to
+                // happen while there is still a screen to say it on.
+                LOG("Options -> BOOTSEL mode.");
+                showMessage("Entering BOOTSEL mode",
+                            "The board appears on your computer",
+                            "as a drive named RP2350.");
+                DrawScreen(-1);
+                idleFor(1200);
+                reset_usb_boot(0, 0);   // does not return
+                break;
+
+            case OPTID_USB_DRIVE:
+#if FRENS_USB_MSC
+                LOG("Options -> USB drive mode.");
+                showUsbDriveScreen();   // may reboot instead of returning
+                prev  = ~0u;
+                dirty = true;
+#endif
+                break;
+            }
+        }
+    }
+
+    return (ini->gui_graphical != mode_on_entry) ? OPT_MODE_CHANGED : OPT_BACK;
 }
 
 // --- Rejected-.uf2 error screen ---------------------------------------------
@@ -1607,7 +1963,7 @@ int main()
     }
 
     // --- PICKER LOOP --------------------------------------------------------
-    LOG("Entering picker loop. D-pad: navigate, A: start, SELECT: toggle graphical, START: help.");
+    LOG("Entering picker loop. D-pad: navigate, A: start, SELECT: options, START: help.");
     const int visible = ENDROW - STARTROW + 1;
     int sel = (g_flash_idx >= 0) ? g_flash_idx : 0;
     int top = 0;
@@ -1689,7 +2045,7 @@ int main()
         if (ss_active) {
             if (btns) {
                 // Any press exits. The press itself must NOT also drive
-                // navigation, A-launch, or SELECT-mode-toggle this frame --
+                // navigation, A-launch, or the SELECT options menu this frame --
                 // the user just meant "wake up". Setting prevButtons = ~0u
                 // prevents *future* frames from seeing this press as a fresh
                 // edge, and the `continue` below stops this frame's already-
@@ -1709,8 +2065,9 @@ int main()
             else                    ss_unavailable = true;
         }
 
-        // START: help screen. Checked before SELECT so opening help can never
-        // also toggle the menu mode on the same frame.
+        // START: help screen, kept as a direct shortcut alongside the options
+        // menu's Help entry. Checked before SELECT so a press of both on the
+        // same frame lands on one screen only.
         if (pushed & Btn::START) {
             showHelpScreen(graphical_mode, ini.index_file, cfg_save_failed);
             prevButtons = ~0u;   // swallow the press that dismissed it
@@ -1718,13 +2075,19 @@ int main()
             continue;            // repaint from scratch next frame
         }
 
-        // SELECT: toggle modes regardless. Persist so next boot lands the same way.
+        // SELECT: the options menu (help, menu mode, BOOTSEL, USB drive mode).
+        // It owns /boot.txt while it is open -- it writes GUI= itself -- so the
+        // only thing left to do here is act on a mode change.
         if (pushed & Btn::SELECT) {
-            graphical_mode = !graphical_mode;
-            LOG("SELECT -> mode=%s", graphical_mode ? "graphical" : "text");
-            ini.gui_graphical = graphical_mode;
-            persist_cfg();
-            if (graphical_mode) enter_graphical();
+            OptionsResult r = showOptionsScreen(&ini, &cfg_save_failed, graphical_mode);
+            if (r == OPT_MODE_CHANGED) {
+                graphical_mode = ini.gui_graphical;
+                LOG("Options -> mode=%s", graphical_mode ? "graphical" : "text");
+                if (graphical_mode) enter_graphical();
+            }
+            prevButtons = ~0u;   // swallow the press that dismissed it
+            idle_frames = 0;
+            continue;            // repaint from scratch next frame
         }
 
         // Mode-specific navigation.
@@ -1837,7 +2200,7 @@ int main()
             getButtonLabels(bl1, bl2);
             char footer[SCREEN_COLS + 1];
             snprintf(footer, sizeof(footer),
-                     "L/R:app  U/D:theme  %s:go  START:help", bl1);
+                     "L/R:app U/D:theme %s:go SEL:opt ST:help", bl1);
             gui_set_footer(footer);
             gui_draw_frame(gui_buf_cur(),
                            slide_dir != 0 ? gui_buf_next() : nullptr,
