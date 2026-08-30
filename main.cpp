@@ -1652,8 +1652,13 @@ void flashAndLaunch(int idx, bool flashEmu, bool flashAux, const uf2_fingerprint
     // SRAM audit of core1. Stop core1 entirely before flashing so it can't
     // hardfault on anything; the screen goes intentionally dark and the
     // LED heartbeat in flashProgress() carries progress for the user.
+    // Of the picoDVI configs only HW_CONFIG 1 has an LED at all (6, 7 and 9 set
+    // LED_GPIO_PIN -1), and that config runs one pico2 image on both a Pico 2
+    // and a Pico 2 W -- where pin 25 is the radio's chip select and nothing
+    // lights up. So the blink is offered as a maybe, never promised.
     showMessage("Screen will go blank.",
-                LED_GPIO_PIN == -1 ? "" :"Watch LED for progress.",
+                LED_GPIO_PIN == -1 ? "Do not power off."
+                                   : "LED may blink. Do not power off.",
                 "Be patient...");
     DrawScreen(-1);
     idleFor(PICO_DVI_FLASH_NOTICE_MS);
