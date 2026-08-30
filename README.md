@@ -190,17 +190,17 @@ again.
 What this means for the board in front of you depends on whether it has a
 separate port for game controllers:
 
-- Boards without PIO USB — hardware configurations 1, 2, 6 and 13 — read USB
-  game controllers through the same USB port that USB drive mode needs for the
+- Boards without PIO USB — hardware configurations 1, 2, 6 and 13 — read a USB
+  game controller through the very port that USB drive mode needs for the
   connection to the computer. Only one of the two can be attached at a time, so
   on these boards **the menu has to be operated with a controller on a NES/SNES
-  port or with a Wii Classic controller**; without one there is no button to
-  leave the screen with and the only way back is to eject the drive on the
+  port or with a Wii Classic controller**; without one there is no button left
+  to close the screen with, and the only way back is to eject the drive on the
   computer. The board also restarts on the way out, because the USB host
   controller has to take the port back.
 - Boards with PIO USB — hardware configurations 5, 7, 8, 9 and 14 — read game
-  controllers through a second, separate port, so those keep working while the
-  card is on the computer and the menu comes straight back.
+  controllers through a second, separate port. Those controllers keep working
+  while the card is on the computer, and the menu comes straight back.
 
 One board is excluded outright: the Pico 2 W builds do not include USB drive
 mode. Those images carry the wireless firmware and leave no room in the 512 KB
