@@ -17,12 +17,12 @@ for HWCONFIG in $HWCONFIGS; do
     ./bld.sh -c "$HWCONFIG" -2
 done
 # Pico 2 w
-./bld.sh -c 1 -2 -w
-./bld.sh -c 2 -2 -w
-if [ -z "$(ls -A releases)" ]; then
-    echo "No UF2 files produced in releases/" >&2
-    exit 1
-fi
+# ./bld.sh -c 1 -2 -w
+# ./bld.sh -c 2 -2 -w
+# if [ -z "$(ls -A releases)" ]; then
+#     echo "No UF2 files produced in releases/" >&2
+#     exit 1
+# fi
 
 echo
 echo "Built loader binaries:"

@@ -131,8 +131,8 @@ gh release delete v0.2.1-alpha --cleanup-tag
 gh release view v0.2.1
 ```
 
-- **11 loader `.uf2` assets** — one per board, plus the two `_pico2_w_` variants
-  for HW_CONFIG 1 and 2.
+- **9 loader `.uf2` assets** — one per board. The `_pico2_w_` variants for
+  HW_CONFIG 1 and 2 are no longer built; a Pico 2 W runs the `pico2` asset.
 - `pico-bootLoader_sdcard.zip` present, unless this is a Scenario A release.
 - **3 PCB gerber assets** — `pico_nesPCB_v2.6.zip`,
   `Gerber_PicoNES_Mini_PCB_v2.0.zip` and `Gerber_PicoNES_Micro_v1.2.zip`,

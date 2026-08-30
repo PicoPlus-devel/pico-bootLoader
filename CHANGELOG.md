@@ -42,6 +42,14 @@ Waveshare RP2350-PiZero and RP2350-USB-A, and the Adafruit Feather RP2350 — ar
 not affected: game controllers go into that port, while the built-in port is the
 one used for the cable to your computer.
 
+**The separate Pico 2 W builds are gone.** The only thing they added was a
+working on-board LED, which on that board is wired to the wireless chip and so
+pulled the whole CYW43 driver in, filling the 512 KB bootloader partition to
+within a few kilobytes. Pico 2 W boards are still supported: flash the ordinary
+Pico 2 binary for your hardware. What you lose there is the LED, which no longer
+blinks as a heartbeat or while an application is being flashed. What you gain is
+USB drive mode, which never fit alongside the wireless driver.
+
 
 ## v0.4
 

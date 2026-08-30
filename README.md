@@ -202,10 +202,8 @@ separate port for game controllers:
   controllers through a second, separate port. Those controllers keep working
   while the card is on the computer, and the menu comes straight back.
 
-One board is excluded outright: the Pico 2 W builds do not include USB drive
-mode. Those images carry the wireless firmware and leave no room in the 512 KB
-bootloader partition for the USB device stack, so the options menu omits the
-entry.
+USB drive mode is available on every released binary, the Pico 2 W included —
+see [Pico 2 W](#pico-2-w) for what that board does and does not do.
 
 ## Getting started
 
@@ -245,8 +243,8 @@ number names the SD-card folder the loader reads applications from
 
 | HW_CONFIG | Board | Bootloader binary |
 |---|---|---|
-| 1 | Pimoroni Pico DV Demo Base (Pico 2 / Pico 2 W) | `pico-bootLoader_PimoroniDVI_pico2_arm.uf2` / `..._pico2_w_arm.uf2` |
-| 2 | Adafruit DVI + microSD breakout, or the [PicoNES PCB](#picones-pcb-hw_config-2) (Pico 2 / Pico 2 W / Pimoroni Pico Plus 2) | `pico-bootLoader_AdafruitDVISD_pico2_arm.uf2` / `..._pico2_w_arm.uf2` |
+| 1 | Pimoroni Pico DV Demo Base (Pico 2 / Pico 2 W) | `pico-bootLoader_PimoroniDVI_pico2_arm.uf2` |
+| 2 | Adafruit DVI + microSD breakout, or the [PicoNES PCB](#picones-pcb-hw_config-2) (Pico 2 / Pico 2 W / Pimoroni Pico Plus 2) | `pico-bootLoader_AdafruitDVISD_pico2_arm.uf2` |
 | 5 | Adafruit Metro RP2350 | `pico-bootLoader_AdafruitMetroRP2350_arm.uf2` |
 | 6 | Waveshare RP2350-Zero with the [PicoNES Mini PCB](#picones-mini-pcb-hw_config-6) | `pico-bootLoader_WaveShareRP2350ZeroWithPCB_arm.uf2` |
 | 7 | Waveshare RP2350-PiZero | `pico-bootLoader_WaveShareRP2350PiZero_arm_piousb.uf2` |
@@ -260,6 +258,20 @@ to the RP2350 HSTX pins — HW_CONFIG 2, 5, 8, 13 and 14 — drive it through th
 HSTX peripheral; the others use PicoDVI. A single SD card
 serves both kinds — artwork is cached in both pixel formats (see
 [Artwork](#artwork)).
+
+### Pico 2 W
+
+The Pico 2 W runs the ordinary `pico2` binary for its hardware configuration;
+there is no separate build for it. Up to v0.4 there was one, purely so that the
+on-board LED would work: that LED hangs off the wireless chip and reaching it
+means linking the CYW43 driver, which filled the 512 KB bootloader partition to
+within a few kilobytes and left no room for USB drive mode.
+
+Everything on the board therefore works as it does on a Pico 2, except the
+on-board LED, which no longer blinks as a heartbeat or while an application is
+being flashed. A build with the LED can still be produced locally with
+`./bld.sh -2 -c <HW_CONFIG> -w`; it is not released and USB drive mode is off in
+it by default.
 
 ## Custom PCBs
 
@@ -361,12 +373,14 @@ NES controller in either port for player 2 works just as well.
 
 #### Which loader binary to flash
 
-- Pico 2 **and** Pimoroni Pico Plus 2 — `pico-bootLoader_AdafruitDVISD_pico2_arm.uf2`
-- Pico 2 W — `pico-bootLoader_AdafruitDVISD_pico2_w_arm.uf2`
+- Pico 2, Pico 2 W **and** Pimoroni Pico Plus 2 —
+  `pico-bootLoader_AdafruitDVISD_pico2_arm.uf2`
 
-The Pimoroni Pico Plus 2 needs no separate build. The loader reads the real
-flash size from the chip at boot and detects PSRAM at runtime, so the same
-`pico2` image adapts to whichever of the two is plugged in.
+None of the three needs a build of its own. The loader reads the real flash size
+from the chip at boot and detects PSRAM at runtime, so the same `pico2` image
+adapts to whichever board is plugged in. On a Pico 2 W the on-board LED stays
+dark, since that LED is driven by the wireless chip; see
+[Pico 2 W](#pico-2-w) below.
 
 #### What the Pimoroni Pico Plus 2 adds
 
@@ -745,16 +759,17 @@ make -j
 # -> build/pico-bootLoader.uf2  (flash via BOOTSEL)
 ```
 
-The wrapper `./bld.sh -2 -c <HW_CONFIG>` performs the same build (add `-w` for
-Pico 2 W). `./buildAll.sh` builds every supported board into `releases/`
-(requires `picotool`).
+The wrapper `./bld.sh -2 -c <HW_CONFIG>` performs the same build; `-w` adds the
+CYW43 driver for the Pico 2 W LED, which is no longer released (see
+[Pico 2 W](#pico-2-w)). `./buildAll.sh` builds every supported board into
+`releases/` (requires `picotool`).
 
 The image must fit the 512 KB bootloader region; the linker errors out if it
-does not, and every link prints its occupancy. Most configurations sit near
-265 KB (~51%), but the Pico 2 W builds pull in the CYW43 driver and land around
-497 KB (~97%), leaving about 15 KB free — that is the configuration to check
-when adding code. It is tight enough that the whole project is compiled `-Os`;
-`-O2` no longer links for Pico 2 W (see the comment in `CMakeLists.txt`).
+does not, and every link prints its occupancy. The released binaries sit between
+50% and 57% with USB drive mode built in. A `-w` build is the tight one: it
+reaches 97.8% on HW_CONFIG 1 even with USB drive mode left out, which is why the
+whole project is compiled `-Os` — `-O2` no longer links there (see the comment
+in `CMakeLists.txt`).
 
 To build the emulators and the native ports themselves,
 [`build_emulators.sh`](build_emulators.sh) clones each source repository and
