@@ -1,0 +1,10 @@
+# Ports category: games ported to the RP2350 rather than emulated. Same format
+# as emulators.txt:
+#
+#   <program_name>;<image_key>;<display_name>[;<aux_uf2>]
+#
+# Only .uf2 files whose embedded program name matches a row below appear in
+# this category, in the order the rows are written. Max 32 rows.
+doom_tiny;doom;Doom!;doom1-whx.uf2
+doom_tiny_full;doom_full;Doom Full!
+duke3d_game;duke3d;Duke Nukem 3D

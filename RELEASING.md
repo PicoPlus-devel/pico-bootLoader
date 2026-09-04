@@ -185,5 +185,10 @@ from `github.sha`, so it will point at whatever is current.
 - **`emu/<HW_CONFIG>/` is gitignored** — the built emulator UF2s live only in the
   archive. `emu/versions.txt` is tracked precisely so the shipped versions are
   recorded in git.
+- **`emu/emulators.txt` remains the master list** even on a card that uses
+  categories: `build_emulators.sh` and `pack_sdcard.sh` both work from it, so a
+  program listed only in a category file would never be built or packed. The
+  packer warns when it finds one. `emu/categories.txt` and the config files it
+  names are packed alongside it, as is each theme's `Categories/` artwork.
 - **The self-hosted runner hardcodes** `/datalocal/pico/pico-sdk` and
   `/datalocal/Pico-PIO-USB`; a GitHub-hosted runner cannot build this.

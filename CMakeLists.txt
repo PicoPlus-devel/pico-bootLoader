@@ -106,6 +106,7 @@ add_executable(${projectname}
     src/storage_pico.c
     src/program_name.c
     src/emulators_txt.c
+    src/categories.c
     src/sd_boot_ini.c
     src/uf2_crc.cpp
     src/gui.cpp

@@ -1,0 +1,10 @@
+# Arcade category. Same format as emulators.txt:
+#
+#   <program_name>;<image_key>;<display_name>[;<aux_uf2>]
+#
+# Only .uf2 files whose embedded program name matches a row below appear in
+# this category, in the order the rows are written. Max 32 rows.
+#
+# No arcade emulator is part of the bundle yet, so this category is empty:
+# opening it reports that it lists no applications. Add a row here (and the
+# matching row in emulators.txt) once one ships.

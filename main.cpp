@@ -62,6 +62,7 @@ extern "C" {
 #include "storage.h"
 #include "program_name.h"
 #include "emulators_txt.h"
+#include "categories.h"
 #include "uf2_crc.h"
 #include "gui.h"
 #include "themes.h"
@@ -104,7 +105,7 @@ namespace Frens { uint storage_get_flash_capacity(); }
 
 // End of usable flash for app images: build-time partition end, clamped to
 // the real chip size reported by the JEDEC ID. Both the loader's runtime
-// bound (set in main) and the menu's size gate (scanEmulators) derive from
+// bound (set in main) and the menu's size gate (buildEmuList) derive from
 // this, so the picker never lists an image the loader would refuse.
 static uint32_t appFlashEnd()
 {
@@ -150,9 +151,21 @@ struct SdEmu {
     char aux_uf2[AUX_UF2_MAX];               // emulators.txt column 4 (basename of aux .uf2; "" = none)
 };
 
+// One .uf2 found in the config dir. Filled once by scanUf2Dir() and then read
+// by buildEmuList() for every category, so walking into a category costs no
+// directory scan and no binary_info re-parse.
+struct Uf2File {
+    char     filename[ROMLISTER_MAXPATH];    // basename
+    char     prog_name[PROG_NAME_MAX];       // from binary_info; never empty once stored
+    uint32_t ext_hi;                         // last flash address the image touches
+    bool     ext_known;                      // false when the extent probe failed
+};
+
 char  g_emuDir[80];                   // "<BASEDIR>/<HW_CONFIG>"
-SdEmu g_emus[32];
-int   g_emu_count = 0;                // entries actually shown (matched in emulators.txt)
+Uf2File g_uf2[64];                    // every readable .uf2 in g_emuDir
+int   g_uf2_count = 0;
+SdEmu g_emus[32];                     // the list currently on screen (one category's worth)
+int   g_emu_count = 0;                // entries actually shown (matched in the index file)
 int   g_emu_seen  = 0;                // total .uf2 files found in g_emuDir, pre-filter
 char  g_flash_prog_name[PROG_NAME_MAX] = {0};   // currently-flashed image's program name
 int   g_flash_idx = -1;                         // index into g_emus, or -1 if none matches
@@ -166,8 +179,23 @@ bool  g_flash_drift = false;
 // the old EMULATORS_TXT_PATH / GUI_MODE_PATH macros used to be.
 char  g_index_path[144];              // "<BASEDIR>/<INDEX>"
 char  g_guimode_path[80];             // "<BASEDIR>/.guimode"
+char  g_base_dir[64];                 // BASEDIR, for building category config paths
+char  g_categories_path[144];         // "<BASEDIR>/categories.txt"
+
+// True when categories.txt parsed and holds at least one row. When false the
+// picker is what it always was: one flat carousel driven by the INDEX file.
+bool  g_have_categories = false;
+
+// Bare filename of the categories index. Not configurable in /boot.txt: a card
+// either has categories or it doesn't, and INDEX already names the flat list.
+#define CATEGORIES_TXT "categories.txt"
 
 #define GUI_SLIDE_PX_PER_FRAME 20            // 320 / 20 = 16 frames ≈ 270 ms
+// Vertical travel is 240 rows rather than 320 columns, so the per-frame step
+// is scaled to keep both transitions the same 16 frames long -- a level
+// change that ran visibly quicker than a neighbour change would read as a
+// different kind of movement rather than the same gesture on another axis.
+#define GUI_SLIDE_PY_PER_FRAME 15            // 240 / 15 = 16 frames
 
 // Fallback label derived from filename when binary_info parsing fails:
 //   "picogenesisPlus_AdafruitFruitJam_arm_piousb.uf2" -> "picogenesisPlus"
@@ -250,7 +278,51 @@ void drawMenu(int sel, int top, int visible)
     // so a space-padded string would render shorter than centerText measured
     // it with strlen() and the line would sit off-centre. putText turns '_'
     // back into a literal space (menu.cpp:598).
-    snprintf(hint, sizeof(hint), "%s : start____START : help", buttonLabel1);
+    if (g_have_categories) {
+        snprintf(hint, sizeof(hint), "%s : start____%s : back____START : help",
+                 buttonLabel1, buttonLabel2);
+    } else {
+        snprintf(hint, sizeof(hint), "%s : start____START : help", buttonLabel1);
+    }
+    centerText(SCREEN_ROWS - 2, hint, COL_FG, COL_BG);
+}
+
+// The category level's text menu. Same chrome as drawMenu(), minus the
+// flash-state markers -- a category is not a thing that can be in flash.
+void drawCategoryMenu(int sel, int top, int visible)
+{
+    ClearScreen(COL_BG);
+    centerText(0, "RP2350 bootloader " SWVERSION, COL_FG, COL_BG);
+
+    char hdr[SCREEN_COLS + 1];
+    snprintf(hdr, sizeof(hdr), "Config %d   %s", HW_CONFIG, g_emuDir);
+    centerText(1, hdr, COL_FG, COL_BG);
+
+    char bar[SCREEN_COLS + 1];
+    memset(bar, ' ', SCREEN_COLS);
+    bar[SCREEN_COLS] = '\0';
+
+    const int count = categories_count();
+    for (int i = 0; i < visible && (top + i) < count; i++) {
+        int idx = top + i;
+        bool seld = (idx == sel);
+        int fg = seld ? COL_BG : COL_FG;
+        int bg = seld ? COL_FG : COL_BG;
+        int row = STARTROW + i;
+        putText(0, row, bar, fg, bg);
+        char line[SCREEN_COLS + 1];
+        snprintf(line, sizeof(line), "%c %s",
+                 seld ? '>' : ' ', categories_name(idx));
+        putText(1, row, line, fg, bg);
+    }
+
+    char buttonLabel1[2];
+    char buttonLabel2[2];
+    getButtonLabels(buttonLabel1, buttonLabel2);
+
+    char hint[SCREEN_COLS + 1];
+    centerText(SCREEN_ROWS - 3, "UP / DOWN : choose   SELECT : options", COL_FG, COL_BG);
+    snprintf(hint, sizeof(hint), "%s : open____START : help", buttonLabel1);
     centerText(SCREEN_ROWS - 2, hint, COL_FG, COL_BG);
 }
 
@@ -595,6 +667,29 @@ const HelpLine HELP_BODY[] = {
     { 27, 3, "Any button wakes it." },
 };
 
+// The same page for a card WITH categories. Rows are at a premium -- the
+// static table already runs from row 2 to the footer bar at 28 -- so each mode
+// section pairs SELECT with START on one line to make room for the back
+// button, and the two flash markers lose their continuation line.
+const HelpLine HELP_BODY_CATEGORIES[] = {
+    { 2,  1, "TEXT MODE" },
+    { 3,  3, "UP / DOWN" },      { 3,  18, "choose" },
+    { 6,  3, "SELECT / START" }, { 6,  18, "options / help" },
+
+    { 8,  1, "GRAPHICAL MODE" },
+    { 9,  3, "LEFT / RIGHT" },   { 9,  18, "choose" },
+    { 10, 3, "UP / DOWN" },      { 10, 18, "change artwork theme" },
+    { 13, 3, "SELECT / START" }, { 13, 18, "options / help" },
+
+    { 15, 1, "LIST MARKERS" },
+    { 16, 3, "*" },              { 16, 18, "in flash, up to date" },
+    { 17, 3, "!" },              { 17, 18, "SD differs, reflashes" },
+
+    { 20, 1, "STATUS" },
+    { 26, 3, "Screensaver: after 30 s idle." },
+    { 27, 3, "Any button wakes it." },
+};
+
 // Paint the help page into the charcell layer. Pure charcell on purpose: it
 // renders identically on all three backends and reuses the screenBuffer that
 // is already allocated, so the screen costs no extra RAM.
@@ -608,16 +703,28 @@ void drawHelpScreen(bool graphical_mode, const char *index_file, bool cfg_save_f
     solidBar(0, COL_BAR_FG, COL_BAR_BG);
     centerText(0, "HELP - RP2350 bootloader " SWVERSION, COL_BAR_FG, COL_BAR_BG);
 
-    for (const HelpLine &h : HELP_BODY) {
+    const HelpLine *body = g_have_categories ? HELP_BODY_CATEGORIES : HELP_BODY;
+    const size_t body_n  = g_have_categories ? (sizeof(HELP_BODY_CATEGORIES) /
+                                                sizeof(HELP_BODY_CATEGORIES[0]))
+                                             : (sizeof(HELP_BODY) / sizeof(HELP_BODY[0]));
+    for (size_t i = 0; i < body_n; i++) {
+        const HelpLine &h = body[i];
         putText(h.col, h.row, h.text, h.col == 1 ? COL_HELP_HDR : COL_FG, COL_BG);
     }
 
-    // The launch button's label follows the attached pad ("A" on NES, "B" on
-    // XInput, "O" on DualShock, "Z" on a keyboard), so these two rows can't
-    // live in the static table.
+    // The button labels follow the attached pad ("A"/"B" on NES, "B"/"A" on
+    // XInput, "O"/"X" on DualShock, "X"/"Z" on a keyboard), so these rows
+    // can't live in a static table.
     for (int row : { 4, 11 }) {
-        putText(3,  row, btn1,                 COL_FG, COL_BG);
-        putText(18, row, "start selected app", COL_FG, COL_BG);
+        putText(3,  row, btn1, COL_FG, COL_BG);
+        putText(18, row, g_have_categories ? "open / start"
+                                           : "start selected app", COL_FG, COL_BG);
+    }
+    if (g_have_categories) {
+        for (int row : { 5, 12 }) {
+            putText(3,  row, btn2,                 COL_FG, COL_BG);
+            putText(18, row, "back to categories", COL_FG, COL_BG);
+        }
     }
 
     char val[28];
@@ -643,8 +750,11 @@ void drawHelpScreen(bool graphical_mode, const char *index_file, bool cfg_save_f
 
     putText(3,  23, "Config", COL_FG, COL_BG);
     putText(18, 23, g_emuDir, COL_FG, COL_BG);
-    putText(3,  24, "Index",  COL_FG, COL_BG);
-    putText(18, 24, index_file ? index_file : "", COL_FG, COL_BG);
+    // With categories, INDEX is not read at all -- each category names its own
+    // config file -- so naming it here would just mislead.
+    putText(3,  24, g_have_categories ? "Categories" : "Index",  COL_FG, COL_BG);
+    putText(18, 24, g_have_categories ? CATEGORIES_TXT
+                                      : (index_file ? index_file : ""), COL_FG, COL_BG);
 
     if (cfg_save_failed) {
         putText(3, 25, "Settings not saved - SD write failed",
@@ -1313,17 +1423,17 @@ extern "C" void __not_in_flash_func(flashProgress)(int phase, uint32_t done, uin
     Frens::blinkLed(led_on);
 }
 
-// Read the SD directory, parse each emulator's program_name from its binary_info,
-// build g_emus[], and locate the in-flash entry (g_flash_idx).
+// Read the SD directory once, parsing each .uf2's program_name from its
+// binary_info into g_uf2[], and settle everything about the image currently in
+// flash (g_flash_prog_name, g_flash_drift).
 //
-// Filtering: an .uf2 file is added to g_emus[] only if its program_name has a
-// matching row in /emu/emulators.txt. Files that aren't listed (third-party
-// builds, test images, .uf2 files for unrelated tools) are silently skipped --
-// the picker should show only emulators that the maintainer of this card has
-// curated as launchable.
-void scanEmulators()
+// This half is category-independent: which files are on the card, and whether
+// the flashed image still matches its copy on the card, do not change when the
+// user walks into a different category. The per-category half is
+// buildEmuList() below.
+void scanUf2Dir()
 {
-    g_emu_count = 0;
+    g_uf2_count = 0;
     g_emu_seen  = 0;
 
     // f_stat first: RomLister::list() silently falls back to chdir("/") when
@@ -1344,101 +1454,52 @@ void scanEmulators()
         int count = (int)lister.Count();
         auto *entries = lister.GetEntries();
 
-        int cap = (int)(sizeof(g_emus) / sizeof(g_emus[0]));
+        int cap = (int)(sizeof(g_uf2) / sizeof(g_uf2[0]));
         if (count > cap) {
-            LOG("WARNING: %d entries found, capping list at %d", count, cap);
+            LOG("WARNING: %d entries found, capping scan at %d", count, cap);
             count = cap;
         }
 
         g_emu_seen  = count;
         int skipped = 0;
-        uint32_t flash_end = appFlashEnd();
         for (int i = 0; i < count; i++) {
-            SdEmu &e = g_emus[g_emu_count];
-            strncpy(e.filename, entries[i].Path, sizeof(e.filename) - 1);
-            e.filename[sizeof(e.filename) - 1] = '\0';
+            Uf2File &u = g_uf2[g_uf2_count];
+            strncpy(u.filename, entries[i].Path, sizeof(u.filename) - 1);
+            u.filename[sizeof(u.filename) - 1] = '\0';
 
             char full[FF_MAX_LFN];
-            snprintf(full, sizeof(full), "%s/%s", g_emuDir, e.filename);
+            snprintf(full, sizeof(full), "%s/%s", g_emuDir, u.filename);
 
-            e.prog_name[0]    = '\0';
-            e.image_key[0]    = '\0';
-            e.display_name[0] = '\0';
-            e.aux_uf2[0]      = '\0';
-            bool ok = program_name_from_uf2_file(full, e.prog_name, sizeof(e.prog_name));
-            if (!ok || !e.prog_name[0]) {
-                LOG("  SKIP %s (binary_info parse failed; no program_name)", e.filename);
-                skipped++;
-                continue;
-            }
-            strncpy(e.label, e.prog_name, sizeof(e.label) - 1);
-            e.label[sizeof(e.label) - 1] = '\0';
-
-            // The emulators.txt match is mandatory: an unlisted .uf2 is not
-            // shown. This is how Frank curates which emulators are "supported"
-            // on this card -- the bootloader trusts the txt as the allow-list.
-            bool matched = emulators_txt_lookup(e.prog_name,
-                                                e.image_key,    sizeof(e.image_key),
-                                                e.display_name, sizeof(e.display_name),
-                                                e.aux_uf2,      sizeof(e.aux_uf2));
-            if (!matched) {
-                LOG("  SKIP %s (prog_name=\"%s\" not in emulators.txt)",
-                    e.filename, e.prog_name);
+            u.prog_name[0] = '\0';
+            u.ext_hi       = 0;
+            u.ext_known    = false;
+            bool ok = program_name_from_uf2_file(full, u.prog_name, sizeof(u.prog_name));
+            if (!ok || !u.prog_name[0]) {
+                LOG("  SKIP %s (binary_info parse failed; no program_name)", u.filename);
                 skipped++;
                 continue;
             }
 
-            // Size gate: hide entries whose image (or companion data image)
-            // extends past the end of the actual flash chip. An extent probe
-            // failure is NOT a skip -- the flash-time validate in
-            // flashAndLaunch() remains the backstop for odd files.
+            // Cached here so entering a category costs no extra SD reads --
+            // the app extent depends only on the file, never on the index row.
             uint32_t lo, hi;
-            if (uf2_extent_from_file_family(full, UF2_FAMILY_RP2350_ARM_S,
-                                            &lo, &hi) && hi > flash_end) {
-                LOG("  SKIP %s (image 0x%08X-0x%08X exceeds flash end 0x%08X, %u KB over)",
-                    e.filename, (unsigned)lo, (unsigned)hi, (unsigned)flash_end,
-                    (unsigned)((hi - flash_end + 1023) / 1024));
-                skipped++;
-                continue;
+            if (uf2_extent_from_file_family(full, UF2_FAMILY_RP2350_ARM_S, &lo, &hi)) {
+                u.ext_hi    = hi;
+                u.ext_known = true;
             }
-            if (e.aux_uf2[0]) {
-                char auxFull[FF_MAX_LFN];
-                snprintf(auxFull, sizeof(auxFull), "%s/%s", g_emuDir, e.aux_uf2);
-                if (uf2_extent_from_file_family(auxFull, UF2_FAMILY_RP2350_DATA,
-                                                &lo, &hi) && hi > flash_end) {
-                    LOG("  SKIP %s (aux %s at 0x%08X-0x%08X exceeds flash end 0x%08X)",
-                        e.filename, e.aux_uf2, (unsigned)lo, (unsigned)hi,
-                        (unsigned)flash_end);
-                    skipped++;
-                    continue;
-                }
-            }
-            LOG("  [%2d] %-40s  prog_name=\"%s\"  img_key=\"%s\"  display=\"%s\"%s%s",
-                g_emu_count, e.filename, e.prog_name, e.image_key, e.display_name,
-                e.aux_uf2[0] ? "  aux=" : "", e.aux_uf2[0] ? e.aux_uf2 : "");
-            g_emu_count++;
+            LOG("  [%2d] %-40s  prog_name=\"%s\"", g_uf2_count, u.filename, u.prog_name);
+            g_uf2_count++;
         }
-        LOG("Listed %d of %d .uf2 file(s) in %s (%d skipped).",
-            g_emu_count, g_emu_seen, g_emuDir, skipped);
+        LOG("Scanned %d of %d .uf2 file(s) in %s (%d unreadable).",
+            g_uf2_count, g_emu_seen, g_emuDir, skipped);
     }
 
     g_flash_prog_name[0] = '\0';
-    g_flash_idx = -1;
     g_flash_drift = false;
     if (app_launch_present()) {
         if (program_name_from_xip(APP_BASE_ADDR, APP_PARTITION_SIZE,
                                   g_flash_prog_name, sizeof(g_flash_prog_name))) {
             LOG("In-flash program_name: \"%s\"", g_flash_prog_name);
-            for (int i = 0; i < g_emu_count; i++) {
-                if (g_emus[i].prog_name[0] &&
-                    strcmp(g_emus[i].prog_name, g_flash_prog_name) == 0) {
-                    g_flash_idx = i;
-                    break;
-                }
-            }
-            LOG("In-flash match: %s (idx=%d)",
-                g_flash_idx >= 0 ? g_emus[g_flash_idx].filename : "(no match)",
-                g_flash_idx);
         } else {
             LOG("In-flash image present but binary_info parse failed.");
         }
@@ -1446,33 +1507,140 @@ void scanEmulators()
         LOG("No valid image currently in flash.");
     }
 
-    // If we matched the in-flash image to an SD entry by program_name,
-    // CRC32-compare the two to detect "user dropped a new build on the card".
-    // If the bytes differ, set g_flash_drift so the picker reflashes on launch.
-    if (g_flash_idx >= 0) {
-        char full[FF_MAX_LFN];
-        snprintf(full, sizeof(full), "%s/%s", g_emuDir, g_emus[g_flash_idx].filename);
+    // If the in-flash image corresponds to a file on the card, CRC32-compare
+    // the two to detect "user dropped a new build on the card". If the bytes
+    // differ, set g_flash_drift so the picker reflashes on launch. Keyed on
+    // program_name against the scan, not against a category's list: the answer
+    // is the same whichever category the file is shown in -- or none at all.
+    if (g_flash_prog_name[0]) {
+        int fidx = -1;
+        for (int i = 0; i < g_uf2_count; i++) {
+            if (strcmp(g_uf2[i].prog_name, g_flash_prog_name) == 0) { fidx = i; break; }
+        }
+        if (fidx < 0) {
+            LOG("In-flash image has no counterpart on the card.");
+        } else {
+            char full[FF_MAX_LFN];
+            snprintf(full, sizeof(full), "%s/%s", g_emuDir, g_uf2[fidx].filename);
 
-        uf2_fingerprint_t fp = {0};
-        if (uf2_fingerprint_from_file(full, &fp)) {
-            uint32_t flash_crc = 0;
-            if (uf2_fingerprint_from_xip(fp.image_base, fp.image_size, &flash_crc)) {
-                if (flash_crc != fp.crc) {
-                    g_flash_drift = true;
-                    LOG("DRIFT: SD CRC=0x%08X  flash CRC=0x%08X  -> reflash on launch",
-                        (unsigned)fp.crc, (unsigned)flash_crc);
+            uf2_fingerprint_t fp = {0};
+            if (uf2_fingerprint_from_file(full, &fp)) {
+                uint32_t flash_crc = 0;
+                if (uf2_fingerprint_from_xip(fp.image_base, fp.image_size, &flash_crc)) {
+                    if (flash_crc != fp.crc) {
+                        g_flash_drift = true;
+                        LOG("DRIFT: SD CRC=0x%08X  flash CRC=0x%08X  -> reflash on launch",
+                            (unsigned)fp.crc, (unsigned)flash_crc);
+                    } else {
+                        LOG("In-flash image matches SD copy (CRC 0x%08X, %u bytes).",
+                            (unsigned)fp.crc, (unsigned)fp.image_size);
+                    }
                 } else {
-                    LOG("In-flash image matches SD copy (CRC 0x%08X, %u bytes).",
-                        (unsigned)fp.crc, (unsigned)fp.image_size);
+                    LOG("WARN: XIP fingerprint failed (base=0x%08X size=%u)",
+                        (unsigned)fp.image_base, (unsigned)fp.image_size);
                 }
             } else {
-                LOG("WARN: XIP fingerprint failed (base=0x%08X size=%u)",
-                    (unsigned)fp.image_base, (unsigned)fp.image_size);
+                LOG("WARN: SD fingerprint failed for %s", full);
             }
-        } else {
-            LOG("WARN: SD fingerprint failed for %s", full);
         }
     }
+}
+
+// Build g_emus[] from the index file currently loaded in emulators_txt, and
+// locate the in-flash entry within it (g_flash_idx). Called once at boot in
+// flat mode, and once per category as the user enters one -- it only walks
+// tables already in RAM plus, at most, one extent probe per aux blob.
+//
+// Order is the INDEX FILE's order, not the directory's: the list the user sees
+// is the list they wrote. Filtering is still mandatory -- a row with no .uf2 on
+// the card is dropped, and an .uf2 with no row is never shown. This is how the
+// maintainer of a card curates what is launchable.
+int buildEmuList()
+{
+    g_emu_count = 0;
+    g_flash_idx = -1;
+
+    const uint32_t flash_end = appFlashEnd();
+    const int rows = emulators_txt_count();
+    int missing = 0, skipped = 0;
+
+    for (int r = 0; r < rows && g_emu_count < (int)(sizeof(g_emus) / sizeof(g_emus[0])); r++) {
+        SdEmu &e = g_emus[g_emu_count];
+        e.filename[0] = '\0';
+        if (!emulators_txt_row(r,
+                               e.prog_name,    sizeof(e.prog_name),
+                               e.image_key,    sizeof(e.image_key),
+                               e.display_name, sizeof(e.display_name),
+                               e.aux_uf2,      sizeof(e.aux_uf2))) {
+            continue;
+        }
+
+        // Locate the file this row names. strcasecmp: emulators_txt_lookup()
+        // has always matched program names case-insensitively.
+        int fidx = -1;
+        for (int i = 0; i < g_uf2_count; i++) {
+            if (strcasecmp(g_uf2[i].prog_name, e.prog_name) == 0) { fidx = i; break; }
+        }
+        if (fidx < 0) {
+            LOG("  no .uf2 for \"%s\" in %s", e.prog_name, g_emuDir);
+            missing++;
+            continue;
+        }
+
+        strncpy(e.filename, g_uf2[fidx].filename, sizeof(e.filename) - 1);
+        e.filename[sizeof(e.filename) - 1] = '\0';
+        // The label is the binary's own program_name, kept as the fallback for
+        // rows whose display_name is empty.
+        strncpy(e.label, g_uf2[fidx].prog_name, sizeof(e.label) - 1);
+        e.label[sizeof(e.label) - 1] = '\0';
+        // Adopt the binary's spelling over the index row's. The row matched
+        // case-insensitively, so the two can differ -- and prog_name is then
+        // compared with strcmp against the in-flash name just below, exactly
+        // as it was before the list was built from the index instead of from
+        // the directory.
+        strncpy(e.prog_name, g_uf2[fidx].prog_name, sizeof(e.prog_name) - 1);
+        e.prog_name[sizeof(e.prog_name) - 1] = '\0';
+
+        // Size gate: hide entries whose image (or companion data image)
+        // extends past the end of the actual flash chip. An extent probe
+        // failure is NOT a skip -- the flash-time validate in
+        // flashAndLaunch() remains the backstop for odd files.
+        if (g_uf2[fidx].ext_known && g_uf2[fidx].ext_hi > flash_end) {
+            LOG("  SKIP %s (image ends 0x%08X, past flash end 0x%08X, %u KB over)",
+                e.filename, (unsigned)g_uf2[fidx].ext_hi, (unsigned)flash_end,
+                (unsigned)((g_uf2[fidx].ext_hi - flash_end + 1023) / 1024));
+            skipped++;
+            continue;
+        }
+        if (e.aux_uf2[0]) {
+            char auxFull[FF_MAX_LFN];
+            snprintf(auxFull, sizeof(auxFull), "%s/%s", g_emuDir, e.aux_uf2);
+            uint32_t lo, hi;
+            if (uf2_extent_from_file_family(auxFull, UF2_FAMILY_RP2350_DATA,
+                                            &lo, &hi) && hi > flash_end) {
+                LOG("  SKIP %s (aux %s at 0x%08X-0x%08X exceeds flash end 0x%08X)",
+                    e.filename, e.aux_uf2, (unsigned)lo, (unsigned)hi,
+                    (unsigned)flash_end);
+                skipped++;
+                continue;
+            }
+        }
+
+        if (g_flash_prog_name[0] && g_flash_idx < 0 &&
+            strcmp(e.prog_name, g_flash_prog_name) == 0) {
+            g_flash_idx = g_emu_count;
+        }
+
+        LOG("  [%2d] %-40s  prog_name=\"%s\"  img_key=\"%s\"  display=\"%s\"%s%s",
+            g_emu_count, e.filename, e.prog_name, e.image_key, e.display_name,
+            e.aux_uf2[0] ? "  aux=" : "", e.aux_uf2[0] ? e.aux_uf2 : "");
+        g_emu_count++;
+    }
+
+    LOG("Built list: %d entry/entries from %d row(s) (%d not on card, %d too big). "
+        "In-flash idx=%d",
+        g_emu_count, rows, missing, skipped, g_flash_idx);
+    return g_emu_count;
 }
 
 // AuxState tells the launch dispatcher how to handle a row's aux blob.
@@ -1864,6 +2032,9 @@ int main()
     snprintf(g_emuDir,       sizeof(g_emuDir),       "%s/%d",      ini.base_dir, HW_CONFIG);
     snprintf(g_index_path,   sizeof(g_index_path),   "%s/%s",      ini.base_dir, ini.index_file);
     snprintf(g_guimode_path, sizeof(g_guimode_path), "%s/.guimode", ini.base_dir);
+    snprintf(g_base_dir,     sizeof(g_base_dir),     "%s",         ini.base_dir);
+    snprintf(g_categories_path, sizeof(g_categories_path), "%s/" CATEGORIES_TXT,
+             ini.base_dir);
     gui_set_asset_dir(ini.base_dir);
     screensaver_set_asset_dir(ini.base_dir);
     screensaver_set_mode(ini.screensaver);
@@ -1915,45 +2086,56 @@ int main()
             (unsigned)themes_mask(), themes_count(), theme);
     }
 
-    // Pre-load the emulators.txt (or user-renamed) index. It's the allow-list
-    // that scanEmulators() filters SD .uf2 files against, so a missing or
+    // Categories are optional. When <BASEDIR>/categories.txt is there the
+    // picker gains a level above the application list; when it isn't, the
+    // INDEX file drives a single flat list exactly as it always has.
+    g_have_categories = categories_load(g_categories_path);
+
+    // Without categories, pre-load the INDEX file. It's the allow-list that
+    // buildEmuList() filters the scanned .uf2 files against, so a missing or
     // empty file means we'd hide every emulator and confuse the user with a
     // "no matching emulators" screen. Name the real cause directly instead.
-    LOG("Loading %s...", g_index_path);
-    if (!emulators_txt_load(g_index_path)) {
-        fatalErrorScreen("INDEX FILE MISSING",
-                         "Place the index file at",
-                         g_index_path,
-                         "and reset.");
+    // With categories, each one names its own config file and INDEX is unused.
+    if (!g_have_categories) {
+        LOG("Loading %s...", g_index_path);
+        if (!emulators_txt_load(g_index_path)) {
+            fatalErrorScreen("INDEX FILE MISSING",
+                             "Place the index file at",
+                             g_index_path,
+                             "and reset.");
+        }
     }
 
     // Parse program_name from every .uf2 on SD and from the in-flash image.
     // Briefly tell the user what's happening (this can take a second or two
-    // while we seek through 5+ files on slow SD cards).
+    // while we seek through 5+ files on slow SD cards). Done once: entering a
+    // category re-filters this table rather than re-reading the card.
     showMessage("Scanning emulators...", g_emuDir, nullptr);
     DrawScreen(-1);
     LOG("Scanning %s for *.uf2 and parsing binary_info...", g_emuDir);
-    scanEmulators();
+    scanUf2Dir();
+    if (!g_have_categories) buildEmuList();
 
-    if (g_emu_count == 0) {
+    // An empty config dir is fatal either way -- there is nothing to launch on
+    // this card. The "listed nowhere" case can only be diagnosed here in flat
+    // mode; with categories it is reported per category, on entry, since each
+    // one has its own list and the others may well be fine.
+    if (g_emu_seen == 0) {
         char m[48];
-        if (g_emu_seen == 0) {
-            // No .uf2 files at all in the config dir.
-            snprintf(m, sizeof(m), "Nothing in %s", g_emuDir);
-            fatalErrorScreen("NO EMULATORS FOUND",
-                             m,
-                             "Copy emulator .uf2 files there",
-                             "and reset.");
-        } else {
-            // .uf2 files exist but none are listed in the index -- either
-            // the file is missing, or its entries don't match any prog_name.
-            snprintf(m, sizeof(m), "%d UF2 file(s) found in %s",
-                     g_emu_seen, g_emuDir);
-            fatalErrorScreen("NO MATCHING EMULATORS",
-                             m,
-                             "but none listed in",
-                             g_index_path);
-        }
+        snprintf(m, sizeof(m), "Nothing in %s", g_emuDir);
+        fatalErrorScreen("NO EMULATORS FOUND",
+                         m,
+                         "Copy emulator .uf2 files there",
+                         "and reset.");
+    }
+    if (!g_have_categories && g_emu_count == 0) {
+        char m[48];
+        snprintf(m, sizeof(m), "%d UF2 file(s) found in %s",
+                 g_emu_seen, g_emuDir);
+        fatalErrorScreen("NO MATCHING EMULATORS",
+                         m,
+                         "but none listed in",
+                         g_index_path);
     }
 
     // Materialise .444/.555 caches for any PNG/JPG images on the card. On
@@ -1981,6 +2163,13 @@ int main()
     uint32_t prevButtons = 0;
     using Btn = io::GamePadState::Button;
 
+    // Which of the two levels is on screen. Pinned to LVL_APPS -- and B left
+    // inert -- on a card with no categories.txt.
+    enum Level { LVL_CATEGORIES, LVL_APPS };
+    Level level   = g_have_categories ? LVL_CATEGORIES : LVL_APPS;
+    int   cat_sel = 0;
+    int   cat_top = 0;
+
     // Graphical-mode state. Buffers are allocated lazily on first entry so
     // text-only sessions don't pay the ~300 KB cost.
     bool graphical_mode = false;
@@ -1997,12 +2186,39 @@ int main()
     bool     ss_active      = false;
     bool     ss_unavailable = false;
 
-    // Persist GUI= / THEME= to /boot.txt. Failure is deliberately non-fatal:
-    // a write-protected or full card must not stop the picker from working,
-    // so the change still takes effect for this session and the help screen
-    // reports that it wasn't saved.
     bool cfg_save_failed = false;
+    bool pos_dirty       = false;
+
+    // Copy the on-screen position into `ini`. Names, not indices: a config file
+    // the user has since edited then degrades to "first entry" instead of
+    // selecting something else entirely.
+    //
+    // Called before EVERY write, including the ones the options screen makes on
+    // its own -- otherwise a theme change or a mode toggle made while a
+    // selection change was still waiting on its debounce would commit the
+    // previous position.
+    auto capture_position = [&]() {
+        ini.view_categories = (level == LVL_CATEGORIES);
+        if (g_have_categories) {
+            snprintf(ini.category, sizeof(ini.category), "%s", categories_name(cat_sel));
+        }
+        if (level == LVL_APPS && sel >= 0 && sel < g_emu_count) {
+            snprintf(ini.app, sizeof(ini.app), "%s", g_emus[sel].prog_name);
+        }
+        pos_dirty = false;
+    };
+
+    // Persist GUI= / THEME= / VIEW= / CATEGORY= / APP= to /boot.txt. Failure is
+    // deliberately non-fatal: a write-protected or full card must not stop the
+    // picker from working, so the change still takes effect for this session
+    // and the help screen reports that it wasn't saved.
+    //
+    // Writes are driven by transitions plus a short idle debounce (below), not
+    // by every LEFT/RIGHT: a rewrite is a full read-modify-write of /boot.txt
+    // through a .tmp and a rename, which has no business running once per
+    // carousel step.
     auto persist_cfg = [&]() {
+        capture_position();
         if (sd_boot_ini_save("/boot.txt", &ini)) {
             cfg_save_failed = false;
         } else {
@@ -2011,18 +2227,71 @@ int main()
         }
     };
 
+    // Land on the remembered application (ini.app), else on the one already in
+    // flash, else on the first entry. Used for the boot-time restore and again
+    // every time a category is entered -- which is what makes walking out of a
+    // category and back in return to the same tile.
+    auto select_initial_app = [&]() {
+        sel = -1;
+        if (ini.app[0]) {
+            for (int i = 0; i < g_emu_count; i++) {
+                if (strcasecmp(g_emus[i].prog_name, ini.app) == 0) { sel = i; break; }
+            }
+        }
+        if (sel < 0) sel = (g_flash_idx >= 0) ? g_flash_idx : 0;
+        top = (sel >= visible) ? sel - visible + 1 : 0;
+    };
+
     // Single loader that picks the full-res or half-res variant based on the
     // target buffer's size. Used for both cur (always full) and next (half
-    // when no PSRAM, full otherwise).
-    auto load_image_into = [](int idx, uint16_t *dest, bool half_res) {
-        if (idx >= 0 && idx < g_emu_count && g_emus[idx].image_key[0]) {
-            bool ok = half_res
-                ? gui_load_image_half_res(g_emus[idx].image_key, dest)
-                : gui_load_image(g_emus[idx].image_key, dest);
+    // when no PSRAM, full otherwise). The level decides which table the key
+    // comes from and which directory gui.cpp resolves it in.
+    auto load_image_into = [&](int idx, uint16_t *dest, bool half_res) {
+        const char *key = nullptr;
+        if (level == LVL_CATEGORIES) {
+            gui_set_image_subdir(THEMES_CATEGORY_SUBDIR);
+            if (idx >= 0 && idx < categories_count()) key = categories_image_key(idx);
+        } else {
+            gui_set_image_subdir(nullptr);
+            if (idx >= 0 && idx < g_emu_count) key = g_emus[idx].image_key;
+        }
+        if (key && key[0]) {
+            bool ok = half_res ? gui_load_image_half_res(key, dest)
+                               : gui_load_image(key, dest);
             if (ok) return;
         }
         if (half_res) gui_fill_solid_half_res(dest, 0);
         else          gui_fill_solid(dest, 0);
+    };
+
+    // Repaint the current level from scratch: reload cur at full res and drop
+    // any slide in progress. Used on entering graphical mode, on a theme
+    // change, and on every level transition.
+    auto reload_current = [&]() {
+        if (!buffers_ready) return;
+        load_image_into(level == LVL_CATEGORIES ? cat_sel : sel, gui_buf_cur(), false);
+        slide_p   = 0;
+        slide_dir = 0;
+    };
+
+    // Stage the incoming level's artwork in the slide buffer and start a
+    // vertical transition: the two levels sit above one another, so opening a
+    // category travels UP into it and backing out travels DOWN. `cur` keeps the
+    // outgoing image, exactly as it does for a LEFT/RIGHT slide, so this costs
+    // no memory beyond the two buffers that already exist -- and on a board
+    // without PSRAM the incoming image lands in the same half-res buffer the
+    // horizontal slide uses.
+    //
+    // Falls back to a straight reload when there is no slide buffer at all, and
+    // is a no-op in text mode, where reload_current() is one too.
+    auto start_level_slide = [&](int dir) {
+        if (!buffers_ready) return;
+        uint16_t *next_buf = gui_buf_next();
+        if (!next_buf) { reload_current(); return; }
+        load_image_into(level == LVL_CATEGORIES ? cat_sel : sel,
+                        next_buf, gui_next_is_half_res());
+        slide_dir = dir;
+        slide_p   = 0;
     };
 
     auto enter_graphical = [&]() {
@@ -2032,15 +2301,92 @@ int main()
             graphical_mode = false;
             return;
         }
-        load_image_into(sel, gui_buf_cur(), false);   // cur is always full res
-        slide_p   = 0;
-        slide_dir = 0;
+        reload_current();
     };
+
+    // A dismissible notice, in the charcell layer so it works in both menu
+    // modes. Any button, or the timeout, returns to the caller.
+    auto showNotice = [&](const char *l1, const char *l2, const char *l3) {
+        showMessage(l1, l2, l3);
+        DrawScreen(-1);
+        const int MAX_FRAMES = 4 * 60;              // ~4 s @ 60 fps
+        uint32_t prev = ~0u;                        // swallow the press that got here
+        for (int f = 0; f < MAX_FRAMES; f++) {
+            uint32_t b = readPads();
+            if (b & ~prev) break;
+            prev = b;
+            DrawScreen(-1);
+        }
+    };
+
+    // Load a category's config file and build its list. Returns false -- with
+    // the reason already on screen -- when the category has nothing to show,
+    // leaving the caller at the category level. `quiet` suppresses the notice
+    // for the boot-time restore, where there is no press to answer.
+    auto open_category = [&](int idx, bool quiet) -> bool {
+        const char *cfg = categories_config(idx);
+        if (!cfg[0]) return false;                  // options row; not a list
+
+        char path[FF_MAX_LFN];
+        snprintf(path, sizeof(path), "%s/%s", g_base_dir, cfg);
+        LOG("Opening category \"%s\" -> %s", categories_name(idx), path);
+
+        if (!emulators_txt_load(path)) {
+            // emulators_txt_load() reports false for a missing file and for one
+            // that parsed to no rows alike, so f_stat to tell the user which it
+            // is -- "not found" sent someone looking for a file that is sitting
+            // right there with nothing but comments in it.
+            FILINFO fi;
+            bool present = (f_stat(path, &fi) == FR_OK) && !(fi.fattrib & AM_DIR);
+            LOG("  config file %s", present ? "lists nothing" : "missing");
+            if (!quiet) {
+                char l3[SCREEN_COLS + 1];
+                if (present) snprintf(l3, sizeof(l3), "%s lists no applications", cfg);
+                else         snprintf(l3, sizeof(l3), "%s not found in %s", cfg, g_base_dir);
+                showNotice("NOTHING IN THIS CATEGORY", categories_name(idx), l3);
+            }
+            return false;
+        }
+        if (buildEmuList() == 0) {
+            if (!quiet) {
+                char l3[SCREEN_COLS + 1];
+                snprintf(l3, sizeof(l3), "No matching .uf2 files in %s", g_emuDir);
+                showNotice("NOTHING IN THIS CATEGORY", categories_name(idx), l3);
+            }
+            return false;
+        }
+        return true;
+    };
+
+    // Restore the position /boot.txt remembers. An unknown name, or a category
+    // that has since gone empty, lands on the categories carousel rather than
+    // on an empty list.
+    if (g_have_categories) {
+        int c = categories_find(ini.category);
+        if (c >= 0) cat_sel = c;
+        if (cat_sel >= visible) cat_top = cat_sel - visible + 1;
+        LOG("Restoring VIEW=%s CATEGORY=%s APP=%s",
+            ini.view_categories ? "CATEGORIES" : "APPS",
+            ini.category[0] ? ini.category : "(none)",
+            ini.app[0] ? ini.app : "(none)");
+        if (!ini.view_categories && open_category(cat_sel, /*quiet=*/true)) {
+            level = LVL_APPS;
+        }
+    }
+
+    select_initial_app();
 
     // Restore the last mode the user left us in (/boot.txt GUI= key).
     graphical_mode = ini.gui_graphical;
-    LOG("Initial menu mode: %s", graphical_mode ? "graphical" : "text");
+    LOG("Initial menu mode: %s, level: %s", graphical_mode ? "graphical" : "text",
+        level == LVL_CATEGORIES ? "categories" : "apps");
     if (graphical_mode) enter_graphical();
+
+    // Selection-change debounce: a change is written back once the user has
+    // stopped moving for ~2 s, so a power-off while browsing still comes back
+    // where they left off without a write per button press.
+    constexpr uint32_t POS_SETTLE_FRAMES = 2 * 60;
+    int pos_settle = -1;                // frames left, or -1 when nothing pending
 
     for (;;) {
         uint32_t btns   = readPads();
@@ -2089,6 +2435,9 @@ int main()
         // It owns /boot.txt while it is open -- it writes GUI= itself -- so the
         // only thing left to do here is act on a mode change.
         if (pushed & Btn::SELECT) {
+            // The options screen writes /boot.txt itself when the mode is
+            // toggled, so hand it an `ini` that already reflects where we are.
+            capture_position();
             OptionsResult r = showOptionsScreen(&ini, &cfg_save_failed, graphical_mode);
             if (r == OPT_MODE_CHANGED) {
                 graphical_mode = ini.gui_graphical;
@@ -2100,7 +2449,12 @@ int main()
             continue;            // repaint from scratch next frame
         }
 
-        // Mode-specific navigation.
+        // Mode-specific navigation. `count` and `cursor` alias whichever level
+        // is on screen, so the movement code below is written once.
+        const int count   = (level == LVL_CATEGORIES) ? categories_count() : g_emu_count;
+        int      &cursor  = (level == LVL_CATEGORIES) ? cat_sel : sel;
+        int      &scroll  = (level == LVL_CATEGORIES) ? cat_top : top;
+
         if (graphical_mode && buffers_ready) {
             if (slide_dir == 0) {
                 // Idle: a fresh LEFT/RIGHT picks the neighbour.
@@ -2109,19 +2463,23 @@ int main()
                 // in that case we snap-load the new image instead of sliding.
                 bool right = (pushed & Btn::RIGHT) != 0;
                 bool left  = (pushed & Btn::LEFT)  != 0;
-                if ((right || left) && g_emu_count > 1) {
-                    sel = right ? (sel + 1) % g_emu_count
-                                : (sel + g_emu_count - 1) % g_emu_count;
-                    LOG("%s -> sel=%d (%s)",
-                        right ? "RIGHT" : "LEFT", sel, g_emus[sel].label);
+                if ((right || left) && count > 1) {
+                    cursor = right ? (cursor + 1) % count
+                                   : (cursor + count - 1) % count;
+                    LOG("%s -> %s=%d (%s)", right ? "RIGHT" : "LEFT",
+                        level == LVL_CATEGORIES ? "cat" : "sel", cursor,
+                        level == LVL_CATEGORIES ? categories_name(cursor)
+                                                : g_emus[cursor].label);
+                    pos_dirty  = true;
+                    pos_settle = POS_SETTLE_FRAMES;
                     uint16_t *next_buf = gui_buf_next();
                     if (next_buf) {
-                        load_image_into(sel, next_buf, gui_next_is_half_res());
-                        slide_dir = right ? +1 : -1;
+                        load_image_into(cursor, next_buf, gui_next_is_half_res());
+                        slide_dir = right ? GUI_SLIDE_RIGHT : GUI_SLIDE_LEFT;
                         slide_p   = 0;
                     } else {
                         // No slide buffer at all: just reload cur with the new image.
-                        load_image_into(sel, gui_buf_cur(), false);
+                        load_image_into(cursor, gui_buf_cur(), false);
                     }
                 }
 
@@ -2141,36 +2499,83 @@ int main()
                         LOG("%s -> theme=%d", tdn ? "DOWN" : "UP", t);
                         ini.theme = (uint8_t)t;
                         persist_cfg();
-                        load_image_into(sel, gui_buf_cur(), false);
+                        load_image_into(cursor, gui_buf_cur(), false);
                         slide_p   = 0;
                         slide_dir = 0;
                     }
                 }
             } else {
-                // Mid-slide: advance progress. Ignore further LEFT/RIGHT until done.
-                slide_p += GUI_SLIDE_PX_PER_FRAME;
-                if (slide_p > SCREENWIDTH) slide_p = SCREENWIDTH;
+                // Mid-slide: advance progress. Ignore further input until done.
+                const bool vertical = (slide_dir == GUI_SLIDE_UP ||
+                                       slide_dir == GUI_SLIDE_DOWN);
+                const int  extent   = gui_slide_extent(slide_dir);
+                slide_p += vertical ? GUI_SLIDE_PY_PER_FRAME : GUI_SLIDE_PX_PER_FRAME;
+                if (slide_p > extent) slide_p = extent;
             }
         } else {
             // Text mode (also the fallback when GUI buffers can't be allocated).
             if (pushed & Btn::UP) {
-                if (sel > 0) { sel--; LOG("UP -> sel=%d (%s)", sel, g_emus[sel].label); }
-            }
-            if (pushed & Btn::DOWN) {
-                if (sel < g_emu_count - 1) {
-                    sel++; LOG("DOWN -> sel=%d (%s)", sel, g_emus[sel].label);
+                if (cursor > 0) {
+                    cursor--;
+                    pos_dirty = true; pos_settle = POS_SETTLE_FRAMES;
                 }
             }
-            if (top > sel)              top = sel;
-            if (sel >= top + visible)   top = sel - visible + 1;
+            if (pushed & Btn::DOWN) {
+                if (cursor < count - 1) {
+                    cursor++;
+                    pos_dirty = true; pos_settle = POS_SETTLE_FRAMES;
+                }
+            }
+            if (scroll > cursor)             scroll = cursor;
+            if (cursor >= scroll + visible)  scroll = cursor - visible + 1;
         }
 
-        // A always launches the selected entry.
-        if (pushed & Btn::A) {
+        // B backs out of a category. Nothing to back out of at the category
+        // level, or on a card without categories, so it stays inert there.
+        if ((pushed & Btn::B) && g_have_categories && level == LVL_APPS) {
+            LOG("B -> back to categories");
+            level = LVL_CATEGORIES;
+            start_level_slide(GUI_SLIDE_DOWN);
+            persist_cfg();
+            idle_frames = 0;
+            continue;                       // repaint at the new level
+        }
+
+        // A enters a category, or launches the selected application.
+        if ((pushed & Btn::A) && level == LVL_CATEGORIES) {
+            const char *cfg = categories_config(cat_sel);
+            if (!cfg[0]) {
+                // The options row: no application list behind it, just the
+                // screen SELECT opens.
+                LOG("A on \"%s\" (no config file) -> options", categories_name(cat_sel));
+                capture_position();     // it may write /boot.txt itself
+                OptionsResult r = showOptionsScreen(&ini, &cfg_save_failed, graphical_mode);
+                if (r == OPT_MODE_CHANGED) {
+                    graphical_mode = ini.gui_graphical;
+                    LOG("Options -> mode=%s", graphical_mode ? "graphical" : "text");
+                    if (graphical_mode) enter_graphical();
+                }
+            } else if (open_category(cat_sel, /*quiet=*/false)) {
+                level = LVL_APPS;
+                select_initial_app();
+                start_level_slide(GUI_SLIDE_UP);
+                persist_cfg();
+            }
+            prevButtons = ~0u;   // swallow the press
+            idle_frames = 0;
+            continue;            // repaint at the new level
+        }
+
+        // A launches the selected entry.
+        if ((pushed & Btn::A) && level == LVL_APPS) {
             LOG("A pressed. sel=%d (%s) flashed_idx=%d emu_drift=%d aux=\"%s\"",
                 sel, g_emus[sel].label, g_flash_idx, (int)g_flash_drift,
                 g_emus[sel].aux_uf2);
             bool emuDrift = (sel != g_flash_idx) || g_flash_drift;
+
+            // Remember where we are before the launch takes the board away:
+            // returning from the application has to land back on this entry.
+            persist_cfg();
 
             // Acknowledge the press on screen BEFORE any SD I/O.
             // computeAuxDrift() CRC-walks a possibly multi-MB aux .uf2 and
@@ -2200,6 +2605,13 @@ int main()
             prevButtons = ~0u;
         }
 
+        // Write the position back once the user has settled. Deliberately not
+        // per keypress: sd_boot_ini_save() rewrites the whole file through a
+        // .tmp and a rename.
+        if (pos_settle > 0 && --pos_settle == 0 && pos_dirty) {
+            persist_cfg();
+        }
+
         // Render.
         if (graphical_mode && buffers_ready) {
             // Rebuilt every frame so the A-button label tracks pad hot-plug
@@ -2209,20 +2621,28 @@ int main()
             char bl1[2], bl2[2];
             getButtonLabels(bl1, bl2);
             char footer[SCREEN_COLS + 1];
-            snprintf(footer, sizeof(footer),
-                     "L/R:app U/D:theme %s:go SEL:opt ST:help", bl1);
+            if (level == LVL_CATEGORIES) {
+                snprintf(footer, sizeof(footer),
+                         "L/R:category U/D:theme %s:open SEL:opt", bl1);
+            } else if (g_have_categories) {
+                snprintf(footer, sizeof(footer),
+                         "L/R:app %s:go %s:back SEL:opt ST:help", bl1, bl2);
+            } else {
+                snprintf(footer, sizeof(footer),
+                         "L/R:app U/D:theme %s:go SEL:opt ST:help", bl1);
+            }
             gui_set_footer(footer);
             gui_draw_frame(gui_buf_cur(),
                            slide_dir != 0 ? gui_buf_next() : nullptr,
                            slide_p, slide_dir,
                            gui_next_is_half_res());
-            if (slide_dir != 0 && slide_p >= SCREENWIDTH) {
+            if (slide_dir != 0 && slide_p >= gui_slide_extent(slide_dir)) {
                 if (gui_next_is_half_res()) {
                     // Half-res slide: don't swap (next is a 160x120 scratch).
                     // Reload cur at full res so the static display sharpens
                     // back up. Brief snap from blocky to full-res is the
                     // tradeoff for keeping the animation on no-PSRAM configs.
-                    load_image_into(sel, gui_buf_cur(), false);
+                    load_image_into(cursor, gui_buf_cur(), false);
                 } else {
                     // Both buffers full-res: just swap pointers.
                     gui_swap_buffers();
@@ -2231,7 +2651,8 @@ int main()
                 slide_p   = 0;
             }
         } else {
-            drawMenu(sel, top, visible);
+            if (level == LVL_CATEGORIES) drawCategoryMenu(cat_sel, cat_top, visible);
+            else                         drawMenu(sel, top, visible);
             DrawScreen(-1);
         }
     }

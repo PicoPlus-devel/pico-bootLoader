@@ -272,6 +272,7 @@ void themes_set_active(int n)
 void themes_convert_all(void)
 {
     char dir[96];
+    char sub[128];
     char title[32];
     for (int n = 0; n < THEME_MAX; n++) {
         if (!(s_mask & (1u << n))) continue;
@@ -279,6 +280,18 @@ void themes_convert_all(void)
         snprintf(title, sizeof(title), "Converting theme %d", n);
         image_convert_batch_dir(dir, SCREENWIDTH, SCREENHEIGHT,
                                 /*letterbox=*/true, title);
+
+        // Category artwork lives one level down. image_convert_batch_dir()
+        // skips subdirectories, so it needs its own call -- and it has to
+        // happen here rather than lazily, since on a no-PSRAM board the
+        // converter's scratch is gone once the GUI buffers are allocated.
+        snprintf(sub, sizeof(sub), "%s/%s", dir, THEMES_CATEGORY_SUBDIR);
+        FILINFO fi;
+        if (f_stat(sub, &fi) == FR_OK && (fi.fattrib & AM_DIR)) {
+            snprintf(title, sizeof(title), "Converting theme %d cats", n);
+            image_convert_batch_dir(sub, SCREENWIDTH, SCREENHEIGHT,
+                                    /*letterbox=*/true, title);
+        }
     }
 }
 

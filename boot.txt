@@ -8,11 +8,12 @@
 # to the values shown below, EXCEPT for SCREENSAVER -- see its note).
 #
 # THE BOOTLOADER WRITES THIS FILE. Changing the menu mode (SELECT) or the
-# artwork theme (UP/DOWN) rewrites the GUI= and THEME= lines. Everything else --
-# your comments, your ordering, your spacing -- is preserved exactly. If the
-# file does not exist yet it is created on the first such change. The update is
-# written to /boot.txt.tmp, verified, and only then renamed into place, so a
-# power cut cannot corrupt your configuration.
+# artwork theme (UP/DOWN) rewrites the GUI= and THEME= lines, and moving around
+# the menu rewrites VIEW=, CATEGORY= and APP=. Everything else -- your comments,
+# your ordering, your spacing -- is preserved exactly. If the file does not
+# exist yet it is created on the first such change. The update is written to
+# /boot.txt.tmp, verified, and only then renamed into place, so a power cut
+# cannot corrupt your configuration.
 #
 # Syntax:
 #   - One KEY=VALUE per line.
@@ -33,7 +34,9 @@
 # Layout expected under BASEDIR:
 #   <BASEDIR>/<HW_CONFIG>/*.uf2            emulator/app images for this board
 #   <BASEDIR>/<INDEX>                      the allow-list (see INDEX below)
+#   <BASEDIR>/categories.txt               optional category list (see below)
 #   <BASEDIR>/assets/themes/0/<key>.png    default artwork theme
+#   <BASEDIR>/assets/themes/0/Categories/  category artwork (with categories.txt)
 #   <BASEDIR>/assets/themes/1..9/          optional extra themes (see THEME)
 #   <BASEDIR>/assets/screensaver/*         screensaver sprites (optional)
 #
@@ -50,15 +53,40 @@ BASEDIR=/emu
 # Bare filename (no slashes) of the allow-list inside BASEDIR. Only .uf2 files
 # whose program_name appears in this file are shown in the picker; the file
 # also supplies the display name and the splash-artwork key for each entry.
+# Applications appear in the order the rows are written.
 #
 # Format of each row: <program_name>;<image_key>;<display_name>[;<aux_uf2>]
 # The optional 4th field names a companion data .uf2 (UF2 family RP2350 DATA)
 # in the same <BASEDIR>/<HW_CONFIG>/ folder, flashed alongside the app
 # (e.g. Doom's WAD).
 #
+# This key is only used when BASEDIR holds no categories.txt. With categories,
+# each one names its own config file and INDEX is not read.
+#
 # Default: emulators.txt
 #
 INDEX=emulators.txt
+
+
+# --- CATEGORIES (a file, not a key) ------------------------------------------
+# Put a file named categories.txt in BASEDIR and the menu gains a level above
+# the applications: you browse categories first and open one to see what it
+# holds. Remove the file and the menu is a single flat list again, driven by
+# INDEX above. There is no key for this -- the file's presence is the switch.
+#
+# Format of each row: <category_name>;<image_key>;<config_file>
+#   category_name  the label shown in the text menu
+#   image_key      artwork under <BASEDIR>/assets/themes/<N>/Categories/
+#   config_file    a file in BASEDIR, in the same format as INDEX, listing the
+#                  applications of this category. Leave it empty and the entry
+#                  opens the options screen instead.
+#
+# Categories appear in the order the rows are written. A category whose config
+# file is missing, or whose applications are not on the card, still appears --
+# opening it says there is nothing in it.
+#
+# In the menu: LEFT / RIGHT (or UP / DOWN in text mode) browses, the first
+# button opens a category, the second button goes back to the category list.
 
 
 # --- SCREENSAVER -------------------------------------------------------------
@@ -106,6 +134,9 @@ GUI=1
 # A theme does not have to be complete: any application it has no image for
 # falls back to theme 0.
 #
+# Category artwork sits one level down, in <BASEDIR>/assets/themes/<N>/Categories,
+# named after the image_key from categories.txt. Same fallback to theme 0.
+#
 # UP and DOWN in the graphical menu cycle through the themes that actually
 # exist on the card and rewrite this line. Themes listed here but missing from
 # the card fall back to 0.
@@ -115,3 +146,20 @@ GUI=1
 # Default: 0
 #
 THEME=0
+
+
+# --- VIEW / CATEGORY / APP ---------------------------------------------------
+# Where the menu was when you last used it, so it comes back to the same place.
+# The bootloader writes all three; there is normally no reason to edit them.
+#
+#   VIEW      CATEGORIES (the category list) or APPS (inside a category).
+#             Ignored on a card with no categories.txt. Default: CATEGORIES.
+#   CATEGORY  the category_name of the category you were in.
+#   APP       the program_name of the application you had selected.
+#
+# Both names are matched against the files on the card, so renaming a category
+# or an application simply starts you at the beginning again rather than at the
+# wrong entry. Leave a key out entirely to remember nothing -- an empty value
+# (CATEGORY= with nothing after it) is a syntax error, not "no value".
+#
+VIEW=CATEGORIES

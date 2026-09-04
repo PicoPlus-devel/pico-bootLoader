@@ -480,8 +480,11 @@ The build guide is on Instructables:
 /emu/                                      BASEDIR (default /emu, override in boot.txt)
 /emu/<HW_CONFIG>/*.uf2                     applications for this board (e.g. /emu/8/)
 /emu/emulators.txt                         the index / allow-list (name set by INDEX)
+/emu/categories.txt                        optional category list (see Categories)
+/emu/<category>.txt                        one index file per category, named by categories.txt
 /emu/versions.txt                          which version each application was built from (informational)
 /emu/assets/themes/0/<image_key>.png|.jpg  default artwork theme, converted on first use
+/emu/assets/themes/0/Categories/*.png|.jpg category artwork (with categories.txt)
 /emu/assets/themes/1..9/                   optional extra themes (UP/DOWN to switch)
 /emu/assets/screensaver/*.png|.jpg         screensaver images (optional, not themed)
 ```
@@ -504,17 +507,28 @@ apply. A commented sample ships in the repository root: [`boot.txt`](boot.txt).
 | Key | Default | Meaning |
 |---|---|---|
 | `BASEDIR` | `/emu` | Absolute SD path (must start with `/`, max 63 characters) under which everything lives: application folders, the index, artwork, screensaver images. |
-| `INDEX` | `emulators.txt` | Bare file name (no slashes) of the index file inside `BASEDIR`. |
+| `INDEX` | `emulators.txt` | Bare file name (no slashes) of the index file inside `BASEDIR`. Only read when `BASEDIR` holds no `categories.txt` — see [Categories](#categories). |
 | `SCREENSAVER` | see note | `STARFIELD` — images fly outward from the screen centre, growing toward the camera. `BLOCKS` — images float and bounce off the edges; the on-screen set is re-picked every 15 s. The screensaver starts after ~30 s of inactivity and any button press exits it. |
 | `GUI` | `1` | `0` = text menu, `1` = graphical menu. Rewritten whenever SELECT toggles the mode. Replaces the `.guimode` file used by earlier releases, which is migrated and deleted automatically. |
 | `THEME` | `0` | Active artwork theme, `0`–`9` — see [Artwork themes](#artwork-themes). Rewritten whenever UP/DOWN changes the theme in graphical mode. A theme that is not on the card falls back to `0`. |
+| `VIEW` | `CATEGORIES` | Which level the menu was left on: `CATEGORIES` or `APPS`. Ignored without a `categories.txt`. |
+| `CATEGORY` | — | `category_name` of the category last opened. |
+| `APP` | — | `program_name` of the application last selected. |
+
+`VIEW`, `CATEGORY` and `APP` record where you were so the menu returns there on
+the next boot. The bootloader maintains them; there is normally no reason to
+edit them by hand. Both names are matched against what is actually on the card,
+so renaming a category or an application starts you at the first entry rather
+than at the wrong one. To remember nothing, leave the key out altogether — an
+empty value (`CATEGORY=` with nothing after it) is a syntax error.
 
 > **Screensaver default.** When `/boot.txt` is *absent* the default is
 > `STARFIELD`; when the file is *present* but the key is omitted, it is
 > `BLOCKS`. Set the key explicitly if the choice matters.
 
 **The bootloader writes this file.** Changing the menu mode or the artwork
-theme rewrites the corresponding `GUI=` / `THEME=` line. Nothing else is
+theme rewrites the corresponding `GUI=` / `THEME=` line, and moving around the
+menu rewrites `VIEW=`, `CATEGORY=` and `APP=`. Nothing else is
 touched: comments, blank lines, key order, spacing and any other keys are
 copied through unchanged, so the file stays yours to edit. If `/boot.txt` does
 not exist, the first such change creates it with the current effective value of
@@ -530,9 +544,10 @@ screen reports that it was not saved.
 ### The index file (allow-list)
 
 `<BASEDIR>/<INDEX>` — by default `/emu/emulators.txt` — determines what appears
-in the menu. Only `.uf2` files whose embedded program name matches a row are
-listed; anything else in the application folder is ignored. One row per
-application:
+in the menu, and in what order. Only `.uf2` files whose embedded program name
+matches a row are listed; anything else in the application folder is ignored.
+The same format is used by each category's config file (see
+[Categories](#categories)). One row per application:
 
 ```
 <program_name>;<image_key>;<display_name>[;<aux_uf2>]
@@ -546,7 +561,8 @@ doom_tiny       ; doom      ; Doom!                     ; doom1-whx.uf2
 ```
 
 - Fields are separated by `;`, whitespace is trimmed, and `#` starts a comment
-  line. A maximum of 16 rows is allowed.
+  line. A maximum of 32 rows is allowed.
+- Applications are shown in the order the rows are written.
 - **`program_name`** (max 32 characters) — matched case-insensitively against
   the name each `.uf2` embeds via `pico_set_program_name()` (read from its
   `binary_info`, without flashing anything). The `.uf2` *file name* is
@@ -558,6 +574,56 @@ doom_tiny       ; doom      ; Doom!                     ; doom1-whx.uf2
   `.uf2` in the same `<BASEDIR>/<HW_CONFIG>/` folder, flashed alongside the
   application (see [Auxiliary data images](#auxiliary-data-images)).
 
+### Categories
+
+With many applications on a card, one flat list becomes tedious to page
+through. Placing a file named `categories.txt` in `BASEDIR` adds a level above
+it: the menu opens on a list of categories, and opening one shows the
+applications it holds. Remove the file and the menu is a single flat list again,
+driven by `INDEX`. The file's presence is the only switch; there is no key in
+`boot.txt` for it.
+
+```
+# category_name ; image_key ; config_file
+Computer        ; computer  ; computer.txt
+Console         ; console   ; console.txt
+Handheld        ; handheld  ; handheld.txt
+Ports           ; ports     ; ports.txt
+Settings        ; settings  ;
+```
+
+- Fields are separated by `;`, whitespace is trimmed, and `#` starts a comment
+  line. A maximum of 16 rows is allowed.
+- Categories are shown in the order the rows are written.
+- **`category_name`** (max 32 characters) — the label shown in the text menu.
+  The graphical menu does not draw it: the artwork carries its own label.
+- **`image_key`** (max 16 characters) — basename of the category artwork, in
+  the `Categories` subfolder of each theme:
+  `<BASEDIR>/assets/themes/<N>/Categories/<image_key>.png` (or `.jpg`/`.jpeg`).
+  Application artwork stays in the theme folder itself.
+- **`config_file`** (max 64 characters) — a file inside `BASEDIR` listing the
+  applications of this category, in exactly the format described in
+  [The index file](#the-index-file-allow-list) above. Leaving it empty makes
+  the entry open the options screen instead of an application list, which is
+  what the `Settings` row above does.
+
+An application may appear in more than one category, or in none. A category
+whose config file is missing, or whose applications are not on the card, is
+still shown — opening it reports that there is nothing in it — so a category
+never silently disappears from the menu.
+
+Controls, in both menu modes:
+
+| | Category list | Application list |
+|---|---|---|
+| LEFT / RIGHT (graphical), UP / DOWN (text) | choose a category | choose an application |
+| first button (`A` on a NES pad) | open the category | start the application |
+| second button (`B` on a NES pad) | — | back to the category list |
+
+The menu remembers which level you were on, which category, and which
+application, and returns there on the next boot — see `VIEW`, `CATEGORY` and
+`APP` in [Configuration](#configuration-boottxt).
+
 ### Artwork
 
 Ordinary images are placed on the card and converted by the bootloader itself:
@@ -565,6 +631,9 @@ Ordinary images are placed on the card and converted by the bootloader itself:
 - **Menu artwork** — `<BASEDIR>/assets/themes/<N>/<image_key>.png|.jpg|.jpeg`,
   one per index row, shown full-screen in graphical mode. `<N>` is the theme
   number; theme `0` is the default — see [Artwork themes](#artwork-themes).
+- **Category artwork** — `<BASEDIR>/assets/themes/<N>/Categories/<image_key>.png|.jpg|.jpeg`,
+  one per row of `categories.txt`. Same rules, same theme fallback; only the
+  folder differs.
 - **Screensaver images** — any `*.png|.jpg|.jpeg` in
   `<BASEDIR>/assets/screensaver/` (file names do not matter; more images give
   more variety). These are **not** themed.
@@ -613,7 +682,9 @@ The graphical menu can carry up to ten sets of artwork. Each is a folder:
 
 A theme folder holds one image per application, named after the `image_key`
 from the index file — so a theme might contain `nes.png`, `md.png`, `doom.png`.
-Only the folders that exist are used; the numbers need not be contiguous.
+On a card with [categories](#categories) it also holds a `Categories` subfolder
+with one image per category. Only the folders that exist are used; the numbers
+need not be contiguous.
 
 **Switching** — press UP or DOWN in the graphical menu. Only themes that are
 actually on the card are reachable, so with themes `0`, `1` and `3` present,
@@ -637,9 +708,9 @@ images. The move is resumable: if it is interrupted, the next boot finishes it.
 
 Press **START** in either menu mode, or choose *Help* from the options menu, for
 a full-screen summary of the controls, the meaning of the `*` and `!` markers,
-and the current mode, theme, board configuration and index file. Press START,
-the launch button, B or SELECT to return. It is also where a failed
-configuration write is reported.
+and the current mode, theme, board configuration and index file (or, on a card
+with categories, `categories.txt`). Press START, the launch button, B or SELECT
+to return. It is also where a failed configuration write is reported.
 
 ## Creating a bootable build of your own application
 
@@ -697,7 +768,11 @@ return to the menu.
 
 Copy the `.uf2` to `<BASEDIR>/<HW_CONFIG>/` and add a row to the index file
 (`emulators.txt`) with the program name set in step 1, an `image_key`, and a
-display name. See [The index file](#the-index-file-allow-list).
+display name. See [The index file](#the-index-file-allow-list). The row's
+position in the file is where the application appears in the menu.
+
+On a card that uses [categories](#categories), add the row to the config file of
+the category it belongs in instead — or to several, if it fits more than one.
 
 ### 3. Add images for the menu and screensaver
 

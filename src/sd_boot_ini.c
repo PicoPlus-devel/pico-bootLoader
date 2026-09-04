@@ -45,6 +45,9 @@ sd_boot_ini_status_t sd_boot_ini_load(const char *path,
     out->screensaver    = SS_MODE_STARFIELD;
     out->gui_graphical  = true;     /* same first-boot default .guimode had */
     out->theme          = 0;
+    out->view_categories = true;    /* open on the categories carousel */
+    out->category[0]    = '\0';
+    out->app[0]         = '\0';
     out->file_present   = false;
     out->seen_gui       = false;
     out->seen_theme     = false;
@@ -82,6 +85,9 @@ sd_boot_ini_status_t sd_boot_ini_load(const char *path,
     bool seen_basedir = false;
     bool seen_index   = false;
     bool seen_screen  = false;
+    bool seen_view    = false;
+    bool seen_cat     = false;
+    bool seen_app     = false;
 
     char line[256];
     int lineno = 0;
@@ -201,6 +207,47 @@ sd_boot_ini_status_t sd_boot_ini_load(const char *path,
             }
             out->theme = (uint8_t)(val[0] - '0');
             out->seen_theme = true;
+        } else if (strcasecmp(key, "VIEW") == 0) {
+            if (seen_view) {
+                snprintf_err(err, err_sz, "duplicate key VIEW at line %d", lineno);
+                f_close(&fil);
+                return SD_BOOT_INI_ERROR;
+            }
+            if (strcasecmp(val, "CATEGORIES") == 0) {
+                out->view_categories = true;
+            } else if (strcasecmp(val, "APPS") == 0) {
+                out->view_categories = false;
+            } else {
+                snprintf_err(err, err_sz, "invalid VIEW value at line %d", lineno);
+                f_close(&fil);
+                return SD_BOOT_INI_ERROR;
+            }
+            seen_view = true;
+        } else if (strcasecmp(key, "CATEGORY") == 0) {
+            if (seen_cat) {
+                snprintf_err(err, err_sz, "duplicate key CATEGORY at line %d", lineno);
+                f_close(&fil);
+                return SD_BOOT_INI_ERROR;
+            }
+            /* Too long is not fatal: a name the picker cannot match just
+             * falls back to the first category, which is what an unknown
+             * name does anyway. Truncate and carry on. */
+            size_t vl = strlen(val);
+            if (vl >= sizeof(out->category)) vl = sizeof(out->category) - 1;
+            memcpy(out->category, val, vl);
+            out->category[vl] = '\0';
+            seen_cat = true;
+        } else if (strcasecmp(key, "APP") == 0) {
+            if (seen_app) {
+                snprintf_err(err, err_sz, "duplicate key APP at line %d", lineno);
+                f_close(&fil);
+                return SD_BOOT_INI_ERROR;
+            }
+            size_t vl = strlen(val);
+            if (vl >= sizeof(out->app)) vl = sizeof(out->app) - 1;
+            memcpy(out->app, val, vl);
+            out->app[vl] = '\0';
+            seen_app = true;
         } else {
             snprintf_err(err, err_sz, "unknown key '%s' at line %d", key, lineno);
             f_close(&fil);
@@ -209,10 +256,14 @@ sd_boot_ini_status_t sd_boot_ini_load(const char *path,
     }
     f_close(&fil);
 
-    printf("[bootLoader] boot_ini: %s parsed OK (BASEDIR=%s INDEX=%s SCREENSAVER=%s GUI=%d THEME=%u)\n",
+    printf("[bootLoader] boot_ini: %s parsed OK (BASEDIR=%s INDEX=%s SCREENSAVER=%s "
+           "GUI=%d THEME=%u VIEW=%s CATEGORY=%s APP=%s)\n",
            path, out->base_dir, out->index_file,
            out->screensaver == SS_MODE_STARFIELD ? "STARFIELD" : "BLOCKS",
-           (int)out->gui_graphical, (unsigned)out->theme);
+           (int)out->gui_graphical, (unsigned)out->theme,
+           out->view_categories ? "CATEGORIES" : "APPS",
+           out->category[0] ? out->category : "(none)",
+           out->app[0]      ? out->app      : "(none)");
     return SD_BOOT_INI_OK;
 }
 
@@ -236,8 +287,9 @@ static bool write_str(FIL *f, const char *s)
     return write_raw(f, s, strlen(s));
 }
 
-/* 0 = not one of ours, 1 = GUI, 2 = THEME. Non-destructive: `line` is left
- * untouched so it can still be echoed verbatim. */
+/* 0 = not one of ours, 1 = GUI, 2 = THEME, 3 = VIEW, 4 = CATEGORY, 5 = APP.
+ * Non-destructive: `line` is left untouched so it can still be echoed
+ * verbatim. */
 static int classify(const char *line, char *work, size_t work_sz)
 {
     size_t n = 0;
@@ -249,8 +301,11 @@ static int classify(const char *line, char *work, size_t work_sz)
     work[n] = '\0';
     trim(work);
     if (work[0] == '#' || work[0] == ';') return 0;
-    if (strcasecmp(work, "GUI")   == 0) return 1;
-    if (strcasecmp(work, "THEME") == 0) return 2;
+    if (strcasecmp(work, "GUI")      == 0) return 1;
+    if (strcasecmp(work, "THEME")    == 0) return 2;
+    if (strcasecmp(work, "VIEW")     == 0) return 3;
+    if (strcasecmp(work, "CATEGORY") == 0) return 4;
+    if (strcasecmp(work, "APP")      == 0) return 5;
     return 0;
 }
 
@@ -286,7 +341,17 @@ bool sd_boot_ini_save(const char *path, const sd_boot_ini_t *ini)
     bool ok           = true;
     bool wrote_gui    = false;
     bool wrote_theme  = false;
+    bool wrote_view   = false;
+    bool wrote_cat    = false;
+    bool wrote_app    = false;
     bool last_had_eol = true;
+
+    /* An empty CATEGORY / APP is written by leaving the key out: the parser
+     * treats an empty value as a syntax error, so echoing "CATEGORY=" would
+     * produce a file that fails to load. Marking them "already written" is
+     * what drops both the existing line and the append below. */
+    if (!ini->category[0]) wrote_cat = true;
+    if (!ini->app[0])      wrote_app = true;
 
     if (f_open(&sc->fin, path, FA_READ) == FR_OK) {
         /* File present: copy through, substituting only our two keys. */
@@ -308,6 +373,19 @@ bool sd_boot_ini_save(const char *path, const sd_boot_ini_t *ini)
                 snprintf(sc->out, sizeof(sc->out), "THEME=%u\n", (unsigned)ini->theme);
                 ok = ok && write_str(&sc->fout, sc->out);
                 wrote_theme = true;
+            } else if (kind == 3 && !wrote_view) {
+                snprintf(sc->out, sizeof(sc->out), "VIEW=%s\n",
+                         ini->view_categories ? "CATEGORIES" : "APPS");
+                ok = ok && write_str(&sc->fout, sc->out);
+                wrote_view = true;
+            } else if (kind == 4 && !wrote_cat) {
+                snprintf(sc->out, sizeof(sc->out), "CATEGORY=%s\n", ini->category);
+                ok = ok && write_str(&sc->fout, sc->out);
+                wrote_cat = true;
+            } else if (kind == 5 && !wrote_app) {
+                snprintf(sc->out, sizeof(sc->out), "APP=%s\n", ini->app);
+                ok = ok && write_str(&sc->fout, sc->out);
+                wrote_app = true;
             } else if (kind != 0) {
                 /* Duplicate key -- drop it. The parser rejects duplicates, so
                  * echoing it would produce a file that fails to load. */
@@ -327,8 +405,8 @@ bool sd_boot_ini_save(const char *path, const sd_boot_ini_t *ini)
         ok = ok && write_str(&sc->fout,
                              "# pico-bootLoader configuration.\n"
                              "# Created by the bootloader. Edit freely -- comments and\n"
-                             "# any keys you add are preserved; only GUI and THEME are\n"
-                             "# rewritten when you change them from the menu.\n"
+                             "# any keys you add are preserved; only GUI, THEME, VIEW,\n"
+                             "# CATEGORY and APP are rewritten from the menu.\n"
                              "# See boot.txt in the project repository for the full reference.\n\n");
         snprintf(sc->out, sizeof(sc->out), "BASEDIR=%s\n", ini->base_dir);
         ok = ok && write_str(&sc->fout, sc->out);
@@ -352,6 +430,28 @@ bool sd_boot_ini_save(const char *path, const sd_boot_ini_t *ini)
         snprintf(sc->out, sizeof(sc->out),
                  "\n# Artwork theme 0..9 (UP/DOWN in graphical mode).\nTHEME=%u\n",
                  (unsigned)ini->theme);
+        ok = ok && write_str(&sc->fout, sc->out);
+    }
+    if (!wrote_view) {
+        snprintf(sc->out, sizeof(sc->out),
+                 "\n# Where the menu was left: CATEGORIES or APPS.\nVIEW=%s\n",
+                 ini->view_categories ? "CATEGORIES" : "APPS");
+        ok = ok && write_str(&sc->fout, sc->out);
+    }
+    /* One shared comment for the pair -- either may be absent (an empty value
+     * is written by omitting the key), so the header is emitted by whichever
+     * of the two comes first. */
+    if (!wrote_cat || !wrote_app) {
+        ok = ok && write_str(&sc->fout,
+                             "\n# Last category and application, so the menu comes back\n"
+                             "# where you left it.\n");
+    }
+    if (!wrote_cat) {
+        snprintf(sc->out, sizeof(sc->out), "CATEGORY=%s\n", ini->category);
+        ok = ok && write_str(&sc->fout, sc->out);
+    }
+    if (!wrote_app) {
+        snprintf(sc->out, sizeof(sc->out), "APP=%s\n", ini->app);
         ok = ok && write_str(&sc->fout, sc->out);
     }
 
@@ -384,7 +484,10 @@ bool sd_boot_ini_save(const char *path, const sd_boot_ini_t *ini)
     }
 
     frens_f_free(sc);
-    printf("[bootLoader] boot_ini: saved %s (GUI=%d THEME=%u)\n",
-           path, (int)ini->gui_graphical, (unsigned)ini->theme);
+    printf("[bootLoader] boot_ini: saved %s (GUI=%d THEME=%u VIEW=%s CATEGORY=%s APP=%s)\n",
+           path, (int)ini->gui_graphical, (unsigned)ini->theme,
+           ini->view_categories ? "CATEGORIES" : "APPS",
+           ini->category[0] ? ini->category : "(none)",
+           ini->app[0]      ? ini->app      : "(none)");
     return true;
 }

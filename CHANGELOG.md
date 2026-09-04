@@ -6,6 +6,48 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 
 [Binaries for each configuration and PCB design are at the end of this page](#downloads___).
 
+## v0.6
+
+Download the new `pico-bootLoader_sdcard.zip` as well as the loader `.uf2` for
+your board: this release adds files to the card.
+
+### Changes
+
+**Categories.** The menu can now group applications instead of showing them all
+in one long list. It opens on a set of categories — Computer, Console,
+Handheld, Ports and Settings — and opening one shows what is in it.
+
+- LEFT / RIGHT (UP / DOWN in the text menu) moves between categories.
+- The first button (`A` on a NES pad) opens the highlighted category, and
+  starts an application once you are inside one.
+- The second button (`B`) goes back to the categories.
+- **Settings** is a category with nothing behind it: opening it brings up the
+  same options screen SELECT does.
+
+A category that has nothing in it still appears, and says so when you open it,
+so nothing quietly disappears from the menu.
+
+Categories are optional. They come from a `categories.txt` file on the card;
+delete it and the menu is the single list it always was. Each category has its
+own list file, so you decide what goes where — see the README if you want to
+build your own arrangement.
+
+**The menu remembers where you were.** Whichever category and application you
+were last on is where the menu comes back the next time you switch the board on.
+
+**Applications appear in the order you list them.** Previously the order came
+from the card's own file order, which was effectively arbitrary. The bundled
+lists are now grouped sensibly, with the Game Boy alongside the other handhelds.
+
+**More room.** A list file may now hold 32 applications instead of 16.
+
+### Note
+
+`/boot.txt` gains three new settings that record your position in the menu. An
+older bootloader does not know them and will report `BOOT.TXT INVALID` if you
+put the card back in a board running one; delete the `VIEW`, `CATEGORY` and
+`APP` lines to use it there again.
+
 ## v0.5
 
 A loader-only release. The SD card is unchanged, so the

@@ -7,7 +7,7 @@
 
 #include "ff.h"
 
-#define MAX_ROWS         16
+#define MAX_ROWS         32
 #define PROG_NAME_MAX    32
 #define IMAGE_KEY_MAX    16
 #define DISPLAY_NAME_MAX 40
@@ -92,6 +92,28 @@ bool emulators_txt_load(const char *path)
 
     printf("[bootLoader] emulators_txt: %d row(s) loaded from %s\n", s_row_count, path);
     return s_row_count > 0;
+}
+
+int emulators_txt_count(void) { return s_row_count; }
+
+bool emulators_txt_row(int i,
+                       char *prog_name, size_t prog_sz,
+                       char *image_key, size_t key_sz,
+                       char *display_name, size_t name_sz,
+                       char *aux_uf2, size_t aux_sz)
+{
+    if (prog_name && prog_sz)    prog_name[0]    = '\0';
+    if (image_key && key_sz)     image_key[0]    = '\0';
+    if (display_name && name_sz) display_name[0] = '\0';
+    if (aux_uf2 && aux_sz)       aux_uf2[0]      = '\0';
+
+    if (i < 0 || i >= s_row_count) return false;
+
+    if (prog_name && prog_sz)    copy_field(prog_name,    prog_sz, s_rows[i].prog_name);
+    if (image_key && key_sz)     copy_field(image_key,    key_sz,  s_rows[i].image_key);
+    if (display_name && name_sz) copy_field(display_name, name_sz, s_rows[i].display_name);
+    if (aux_uf2 && aux_sz)       copy_field(aux_uf2,      aux_sz,  s_rows[i].aux_uf2);
+    return true;
 }
 
 bool emulators_txt_lookup(const char *prog_name,

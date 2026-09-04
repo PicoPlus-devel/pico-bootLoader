@@ -1,0 +1,12 @@
+# Console category. Same format as emulators.txt:
+#
+#   <program_name>;<image_key>;<display_name>[;<aux_uf2>]
+#
+# Only .uf2 files whose embedded program name matches a row below appear in
+# this category, in the order the rows are written. Max 32 rows.
+piconesPlus;nes;Nintendo Entertainment System
+picosnesPlus;snes;Super Nintendo/Famicom
+picopcePlus;pce_cd;Nec Pc Engine
+picosmsPlus;sms_gg;Sega Master System/Game Gear
+picogenesisPlus;md;Sega Genesis/Mega Drive
+picoPacPlus;videopac;Philips Videpac/Magnavox Odessey2

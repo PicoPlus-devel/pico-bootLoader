@@ -1,0 +1,10 @@
+# Handheld category. Same format as emulators.txt:
+#
+#   <program_name>;<image_key>;<display_name>[;<aux_uf2>]
+#
+# Only .uf2 files whose embedded program name matches a row below appear in
+# this category, in the order the rows are written. Max 32 rows.
+#
+# The Master System / Game Gear emulator is one binary covering both, so it
+# lives under Console rather than here.
+PicoPeanutGB;gb_gbc;Nintendo Game Boy/Game Boy Color
