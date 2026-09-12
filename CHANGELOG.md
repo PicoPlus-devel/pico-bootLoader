@@ -14,7 +14,7 @@ your board: this release adds files to the card.
 ### Changes
 
 **Categories.** The menu can now group applications instead of showing them all
-in one long list. It opens on a set of categories — Computer, Console,
+in one long list. It opens on a set of categories — Arcade, Computer, Console,
 Handheld, Ports and Settings — and opening one shows what is in it.
 
 - LEFT / RIGHT (UP / DOWN in the text menu) moves between categories.
@@ -31,6 +31,24 @@ Categories are optional. They come from a `categories.txt` file on the card;
 delete it and the menu is the single list it always was. Each category has its
 own list file, so you decide what goes where — see the README if you want to
 build your own arrangement.
+
+**The TI-99/4A has been added**, and fills the new Computer category. It is a
+Texas Instruments home computer emulator and is built for every board. Put your
+cartridges in `/roms/TI99` on the card, as `.rpk` files or as the classic `.bin`
+sets, and the console files `994aROM.bin` and `994aGROM.bin` in `/bios` — the
+emulator does not run without those two. A USB keyboard works as the TI
+keyboard, and TI BASIC is there without a cartridge.
+
+**OutRun has been added**, and fills the new Arcade category. It is a port of
+SEGA's arcade game and runs on the Adafruit Fruit Jam, the Adafruit DVI +
+microSD breakouts or the PicoNES PCB, the Murmulator M2, and the Adafruit
+Feather RP2350 with a TLV320DAC3100. All four need PSRAM.
+
+The game ROMs are not included — they are copyright SEGA — so you have to
+supply them yourself. Copy the unzipped MAME `outrun` (revision B) ROM set to
+`/roms/ORUN` on the card and the game does the rest, taking a few seconds at
+every start to prepare. Without them it shows a screen telling you what is
+missing. USB drive mode is the easiest way to get the files onto the card.
 
 **The menu remembers where you were.** Whichever category and application you
 were last on is where the menu comes back the next time you switch the board on.

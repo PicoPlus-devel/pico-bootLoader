@@ -92,6 +92,8 @@ declare -A REPO_OF=(
     [picosmsPlus]=pico-smsplus
     [picoPacPlus]=pico-pacPlus
     [picosnesPlus]=pico-snesPlus
+    [pico994A]=pico-994A
+    [picoOutRun]=pico-outrun
     [doom_tiny]=pico-doom
     [doom_tiny_full]=pico-doom
     [duke3d_game]=pico-duke3D
@@ -223,9 +225,16 @@ PIOUSB_CONFIGS=(7 8 9 14)
 # (DefaultSS160_444, see pico_shared/DefaultSS.h) is never linked in. Listing
 # them here turns four noisy FAILs into clean SKIPs and keeps an unsupported
 # binary off the card.
+#
+# picoOutRun is restricted to the same four boards, for its own reasons: the
+# engine's buffers come out of PSRAM through Frens::f_malloc, and HSTX is
+# required because the bit-banged PicoDVI path ties the system clock to the
+# pixel clock (capped at 324 MHz, where the engine is too slow) and puts the
+# sound chain back on core0. See pico-outrun/buildAll.sh.
 declare -A EXCLUDE_HWCONFIGS=(
     [picogenesisPlus]="7"
     [picosnesPlus]="1 5 6 7 9"
+    [picoOutRun]="1 5 6 7 9"
 )
 
 die()  { echo "ERROR: $*" >&2; exit 1; }

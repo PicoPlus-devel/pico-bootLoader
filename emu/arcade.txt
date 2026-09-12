@@ -5,6 +5,8 @@
 # Only .uf2 files whose embedded program name matches a row below appear in
 # this category, in the order the rows are written. Max 32 rows.
 #
-# No arcade emulator is part of the bundle yet, so this category is empty:
-# opening it reports that it lists no applications. Add a row here (and the
-# matching row in emulators.txt) once one ships.
+# picoOutRun needs PSRAM and HSTX, so it is built for HW_CONFIG 2, 8, 13 and 14
+# only. The OutRun ROM set is copyright SEGA and is not distributable, so no
+# data image ships with the bundle: the game reads the ROM set from /roms/ORUN
+# on the card and prepares the data itself at startup.
+picoOutRun;outrun;OutRun

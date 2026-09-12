@@ -65,13 +65,26 @@ its own repository and identified by the program name embedded in its `.uf2`.
 | Nintendo Game Boy / Game Boy Color | `PicoPeanutGB` | [pico-peanutGB](https://github.com/fhoedemakers/pico-peanutGB) | <img width="280" alt="Nintendo Game Boy menu artwork" src="https://github.com/user-attachments/assets/4954bcba-9e51-4ef1-a45e-02ecc408dbc2" /> |
 | Sega Master System / Game Gear | `picosmsPlus` | [pico-smsplus](https://github.com/fhoedemakers/pico-smsplus) | <img width="280" alt="Sega Master System / Game Gear menu artwork" src="https://github.com/user-attachments/assets/a3c223c6-8f52-412d-b7ca-25dfe33f1740" />|
 | Philips Videopac / Magnavox Odyssey² | `picoPacPlus` | [pico-pacPlus](https://github.com/fhoedemakers/pico-pacPlus) | <img width="280" alt="Philips Videopac / Magnavox Odyssey II menu artwork" src="https://github.com/user-attachments/assets/838ba7b0-3360-4020-a83c-5113aa0efb4a" />|
+| Texas Instruments TI-99/4A | `pico994A` | [pico-994A](https://github.com/PicoPlus-devel/pico-994A) | <img width="280" alt="TI-99/4A menu artwork" src="emu/assets/themes/0/ti99.png" /> |
 | **Doom** (native port, not emulated) | `doom_tiny` | [pico-doom](https://github.com/fhoedemakers/pico-doom) | <img width="280" alt="Doom menu artwork" src="https://github.com/user-attachments/assets/112fb4f3-a806-4f60-83fb-59f70fbffbff" />|
 | **Duke Nukem 3D** (native port, not emulated) | `duke3d_game` | [pico-duke3D](https://github.com/fhoedemakers/pico-duke3D) |<img width="280" alt="Duke Nukem 3D menu artwork" src="https://github.com/user-attachments/assets/79798fb3-5517-41cf-bfcb-62c0aa0dc00e" />  |
+| **OutRun** (native port, not emulated) | `picoOutRun` | [pico-outrun](https://github.com/PicoPlus-devel/pico-outrun) | <img width="280" alt="OutRun menu artwork" src="emu/assets/themes/0/outrun.png" /> |
 
 The following emulators need a bios in `/bios` on SD:
 - *Nintendo Entertainment System* : For Famicom Dsik System games `fds-bios.rom`
 - *Philips Videopac / Magnavox Odyssey²*: `o2rom.bin`
 - *PCEngine CD* : `Super CD-ROM System (Japan) (v3.0).pce` or another variant.
+- *Texas Instruments TI-99/4A*: `994aROM.bin` and `994aGROM.bin`, both required —
+  nothing runs without them. `994aDISK.bin` (disk controller) and `spchrom.bin`
+  (speech vocabulary) are optional.
+
+*TI-99/4A* is built for every board the loader supports. Cartridges go in
+`/roms/TI99` as `.rpk` Rom PacKs (preferred — one file per cartridge) or as the
+classic C/D/G `.bin` sets; the emulator's own `tools/mkrpk.py` converts between
+them. TI BASIC is reachable without a cartridge. A USB keyboard acts as the TI
+keyboard, and joysticks come from USB gamepads, NES/SNES pads or Wii
+controllers. **PSRAM** is not required, but without it the disk drives are
+unavailable and cartridge ROM is capped at 32 KB.
 
 *Doom* runs on four boards: Adafruit Fruit Jam (HW_CONFIG 8), the Adafruit DVI +
 MicroSD breakout combination (2), Murmulator M2 (13) and Adafruit Feather RP2350
@@ -89,6 +102,20 @@ image: `DUKE3D.GRP` — shareware or registered/Atomic — is streamed from
 `/roms/duke3d/` on the SD card, with savegames and `duke3d.cfg` written next to
 it. Only the Fruit Jam has been tested on hardware; boards 2 and 13 build clean
 but are untested.
+
+*OutRun* is a port of the Cannonball engine and is the only entry in the
+**Arcade** category. It runs on four boards: Adafruit Fruit Jam (HW_CONFIG 8),
+the Adafruit DVI + MicroSD breakout combination (2, on a Pimoroni Pico Plus 2),
+Murmulator M2 (13) and Adafruit Feather RP2350 with a TLV320DAC3100 (14). It
+needs **PSRAM** on all four, and an **HSTX** board: on the bit-banged PicoDVI
+configurations the system clock is tied to the pixel clock and the engine is too
+slow, so those boards are not built. There is no companion data image. The
+OutRun ROM set is copyright SEGA and is not distributed with the bundle: copy
+the unzipped MAME `outrun` (revision B) set to `/roms/ORUN` on the SD card and
+the game prepares its data in PSRAM at startup, which takes a few seconds on
+every boot. If the ROMs are missing the game says so on screen rather than
+failing silently. The loader's own [USB drive mode](#usb-drive-mode) is the
+easiest way to put them on the card without taking it out of the board.
 
 *PCEngine CD* needs PSRAM
 

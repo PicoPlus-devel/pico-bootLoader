@@ -17,6 +17,9 @@
 # file is not read by the loader. Every program_name used in a category file
 # must still appear here.
 
+# --- Arcade ---
+picoOutRun;outrun;OutRun
+
 # --- Computer ---
 pico994A;ti99;TI99/4A
 
