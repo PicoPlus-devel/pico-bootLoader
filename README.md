@@ -612,6 +612,7 @@ driven by `INDEX`. The file's presence is the only switch; there is no key in
 
 ```
 # category_name ; image_key ; config_file
+Arcade          ; arcade    ; arcade.txt
 Computer        ; computer  ; computer.txt
 Console         ; console   ; console.txt
 Handheld        ; handheld  ; handheld.txt
@@ -670,7 +671,23 @@ On first use each source image is converted and cached next to it as
 HSTX boards). Both are always written, so the same card works in every supported
 board. The `.444`/`.555` files must not be authored by hand; when a source image
 is replaced under the same name, its stale `.444`/`.555` files should be deleted
-so they regenerate.
+so they regenerate. Nothing detects a cache that no longer matches its source:
+the board converts an image only when a cache is missing, so a card that already
+holds the old `.444`/`.555` keeps showing the old artwork until they are removed.
+
+Two host-side tools in [`tools/`](tools/) support this, both needing only
+`ffmpeg` and `numpy`. Neither is part of any build; they are run by hand.
+
+- [`tools/png2raw.py`](tools/png2raw.py) writes the `.444`/`.555` caches for an
+  image or a folder of them, byte-identically to the board, so the SD-card
+  bundle can ship them ready-made. `--check` compares against the committed
+  caches instead of writing, which is the quickest way to confirm a source and
+  its caches are still in step. Point it at a specific folder, never at a theme
+  root — it converts every image it finds, including unused spares.
+- [`tools/make_category_art.py`](tools/make_category_art.py) generates the six
+  category tiles shipped for themes `0` and `1`, each in that theme's own visual
+  idiom. It is the source of record for that artwork; the tiles are regenerated
+  from it rather than edited as images.
 
 The released SD-card archive ships the cached `.444`/`.555` files rather than the
 source images — they are far smaller, and shipping both would roughly double the
