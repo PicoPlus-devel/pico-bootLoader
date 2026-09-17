@@ -204,30 +204,28 @@ with UP / DOWN, confirm with A, and return with B.
 
 ### USB drive mode
 
-While the card is presented over USB the bootloader has released the
-filesystem, and the card must not be removed. Copy or delete files, then eject
-the drive on the computer; the menu returns on its own. Pressing B leaves
-immediately, and the screen closes by itself if no computer connects within
-twenty seconds.
 
-If anything was written to the card, the bootloader restarts on the way out so
-that the application list, the artwork and the cached conversions are read
-again.
+USB drive mode presents the SD card to a computer as a USB mass storage device, so games can be added or
+removed without taking the card out of the console. Connect the console to the computer, open the
+[options menu](#the-options-menu) and choose **USB Drive Mode**. The card
+appears on the computer as a removable drive.
 
-What this means for the board in front of you depends on whether it has a
-separate port for game controllers:
+When you are finished, eject the drive on the computer. The console notices this and leaves USB drive
+mode by itself. Pressing B on the console leaves as well, for when no computer is attached. The game
+list is re-read on the way out, so files added from the computer appear without having to restart.
 
-- Boards without PIO USB — hardware configurations 1, 2, 6 and 13 — read a USB
-  game controller through the very port that USB drive mode needs for the
-  connection to the computer. Only one of the two can be attached at a time, so
-  on these boards **the menu has to be operated with a controller on a NES/SNES
-  port or with a Wii Classic controller**; without one there is no button left
-  to close the screen with, and the only way back is to eject the drive on the
-  computer. The board also restarts on the way out, because the USB host
-  controller has to take the port back.
-- Boards with PIO USB — hardware configurations 5, 7, 8, 9 and 14 — read game
-  controllers through a second, separate port. Those controllers keep working
-  while the card is on the computer, and the menu comes straight back.
+> [!NOTE]
+> Transfers are slow. The console is a USB full-speed device and reaches the card a sector at a time
+> over SPI, so copying is far slower than reading the card in a card reader. USB drive mode is meant
+> for adding or replacing a few games. For filling a card, or for copying a large amount of data, take
+> the card out and use a card reader.
+
+Behaviour depends on where controllers are connected on your board.
+
+| Board | Behaviour |
+| ----- | --------- |
+| Controllers on a separate USB port (boards built with PIO USB, such as the Fruit Jam) | The console's own USB port is free, so controllers keep working and the screen stays on. The menu returns to the game list when you are done. |
+| Controllers on the console's own USB port | That port is the one connected to the computer, so a USB controller cannot be used while the card is mounted. Press B on a controller in the NES port, or eject the drive on the computer. The console restarts afterwards. |
 
 USB drive mode is available on every released binary, the Pico 2 W included —
 see [Pico 2 W](#pico-2-w) for what that board does and does not do.
