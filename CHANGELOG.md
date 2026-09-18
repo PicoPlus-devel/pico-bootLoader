@@ -50,6 +50,11 @@ supply them yourself. Copy the unzipped MAME `outrun` (revision B) ROM set to
 every start to prepare. Without them it shows a screen telling you what is
 missing. USB drive mode is the easiest way to get the files onto the card.
 
+**The ColecoVision has been added** to the Console category, for the Adafruit
+Fruit Jam. It uses [ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam).
+Put the BIOS, `COLECO.BIN`, and your games (`.ROM` files) in `/coleco` on the
+card. Neither is included.
+
 **The menu remembers where you were.** Whichever category and application you
 were last on is where the menu comes back the next time you switch the board on.
 

@@ -65,6 +65,7 @@ its own repository and identified by the program name embedded in its `.uf2`.
 | Nintendo Game Boy / Game Boy Color | `PicoPeanutGB` | [pico-peanutGB](https://github.com/fhoedemakers/pico-peanutGB) | <img width="280" alt="Nintendo Game Boy menu artwork" src="https://github.com/user-attachments/assets/4954bcba-9e51-4ef1-a45e-02ecc408dbc2" /> |
 | Sega Master System / Game Gear | `picosmsPlus` | [pico-smsplus](https://github.com/fhoedemakers/pico-smsplus) | <img width="280" alt="Sega Master System / Game Gear menu artwork" src="https://github.com/user-attachments/assets/a3c223c6-8f52-412d-b7ca-25dfe33f1740" />|
 | Philips Videopac / Magnavox Odyssey² | `picoPacPlus` | [pico-pacPlus](https://github.com/fhoedemakers/pico-pacPlus) | <img width="280" alt="Philips Videopac / Magnavox Odyssey II menu artwork" src="https://github.com/user-attachments/assets/838ba7b0-3360-4020-a83c-5113aa0efb4a" />|
+| ColecoVision | `colecojam` | [Adafruit_ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam) | <img width="280" alt="ColecoVision menu artwork" src="emu/assets/themes/0/col.png" /> |
 | Texas Instruments TI-99/4A | `pico994A` | [pico-994A](https://github.com/PicoPlus-devel/pico-994A) | <img width="280" alt="TI-99/4A menu artwork" src="emu/assets/themes/0/ti99.png" /> |
 | **Doom** (native port, not emulated) | `doom_tiny` | [pico-doom](https://github.com/fhoedemakers/pico-doom) | <img width="280" alt="Doom menu artwork" src="https://github.com/user-attachments/assets/112fb4f3-a806-4f60-83fb-59f70fbffbff" />|
 | **Duke Nukem 3D** (native port, not emulated) | `duke3d_game` | [pico-duke3D](https://github.com/fhoedemakers/pico-duke3D) |<img width="280" alt="Duke Nukem 3D menu artwork" src="https://github.com/user-attachments/assets/79798fb3-5517-41cf-bfcb-62c0aa0dc00e" />  |
@@ -85,6 +86,12 @@ them. TI BASIC is reachable without a cartridge. A USB keyboard acts as the TI
 keyboard, and joysticks come from USB gamepads, NES/SNES pads or Wii
 controllers. **PSRAM** is not required, but without it the disk drives are
 unavailable and cartridge ROM is capped at 32 KB.
+
+*ColecoVision* runs on the Adafruit Fruit Jam (HW_CONFIG 8) only. The emulator,
+[Adafruit_ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam), is
+maintained outside this project. It expects everything in `/coleco/` on the SD
+card: the 8 KB ColecoVision BIOS as `COLECO.BIN`, and the games as `.ROM` files.
+Neither the BIOS nor any game is included.
 
 *Doom* runs on four boards: Adafruit Fruit Jam (HW_CONFIG 8), the Adafruit DVI +
 MicroSD breakout combination (2), Murmulator M2 (13) and Adafruit Feather RP2350
@@ -910,21 +917,31 @@ stamps a version.
 > of `emu/versions.txt` now agree. They will differ again whenever a repository
 > is tagged against an older `pico_shared`, which is what the behaviour is for.
 
-The native ports are the exception to all of the above. Neither
-[pico-doom](https://github.com/fhoedemakers/pico-doom) nor
-[pico-duke3D](https://github.com/fhoedemakers/pico-duke3D) has a `pico_shared`,
-so there is no `SWVERSION` to stamp, and both build through their own per-board
-`<board>-build-forbootloader.sh` scripts rather than `bld.sh`. Each targets only
-the boards it has a script for — *Doom* 2, 8, 13 and 14, *Duke Nukem 3D* 2, 8 and
-13 — and is reported as `SKIP` for every other configuration.
+The native ports and *ColecoVision* are the exception to all of the above.
+[pico-doom](https://github.com/fhoedemakers/pico-doom),
+[pico-duke3D](https://github.com/fhoedemakers/pico-duke3D) and
+[Adafruit_ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam) have no
+`pico_shared`, so there is no `SWVERSION` to stamp, and all three build through
+their own per-board `<board>-build-forbootloader.sh` scripts rather than
+`bld.sh`. Each targets only the boards it has a script for — *Doom* 2, 8, 13 and
+14, *Duke Nukem 3D* 2, 8 and 13, *ColecoVision* 8 — and is reported as `SKIP` for
+every other configuration. The *ColecoVision* build downloads its own
+dependencies, so it needs network access.
 
-Both repositories are tagged and are built from their latest tag like the
+All three repositories are tagged and are built from their latest tag like the
 emulators, so `versions.txt` records a real version for `doom_tiny`,
-`doom_tiny_full` and `duke3d_game`. They use the same `v*.*` convention, so later
-tags are picked up with no change here. The `SCRIPTED_BRANCH` table in
-[`build_emulators.sh`](build_emulators.sh) — `main` for *Doom*,
-`fix/audio-production-rate` for *Duke Nukem 3D* — is now only the fallback for a
-repository that has no tag at all.
+`doom_tiny_full`, `duke3d_game` and `colecojam`. The tag is simply the newest by
+version order, whether or not it carries a `v` prefix (Adafruit_ColecoJam's
+tags do not), so later tags are picked up with no change here. The
+`SCRIPTED_BRANCH` table in [`build_emulators.sh`](build_emulators.sh) — `main`
+for *Doom* and *ColecoVision*, `fix/audio-production-rate` for *Duke Nukem 3D* —
+is now only the fallback for a repository that has no tag at all.
+
+Repositories are cloned from the `PicoPlus-devel` organisation by default. An
+entry in the `REPO_OF` table of [`build_emulators.sh`](build_emulators.sh) may
+name a repository elsewhere as `owner/repo`, as the *ColecoVision* entry
+(`cogliano/Adafruit_ColecoJam`) does; `versions.txt` then records it in that same
+form.
 
 *Doom* additionally needs `PICO_EXTRAS_PATH` pointing at a
 [pico-extras](https://github.com/raspberrypi/pico-extras) checkout, since it

@@ -77,13 +77,16 @@ cd "$(dirname "$0")"
 LOADER_DIR="$(pwd)"
 # Keep the clone+build tree OUTSIDE this repo so it doesn't pollute git status.
 BUILD_DIR="$(dirname "$LOADER_DIR")/emu-build"
+# Default GitHub owner: every REPO_OF entry without an owner of its own, and
+# pico_shared, live here.
 GITHUB_OWNER="PicoPlus-devel"
 
 NPROC=$(nproc)
 PER_PROC=$(( NPROC / JOBS ))
 (( PER_PROC < 1 )) && PER_PROC=1
 
-# prog_name -> GitHub repo name. Source of truth: workflow file.
+# prog_name -> GitHub repo. A bare name is a repo under $GITHUB_OWNER; a repo
+# hosted by someone else is written owner/repo. Source of truth: workflow file.
 declare -A REPO_OF=(
     [piconesPlus]=pico-infonesPlus
     [picogenesisPlus]=pico-genesisPlus
@@ -97,14 +100,25 @@ declare -A REPO_OF=(
     [doom_tiny]=pico-doom
     [doom_tiny_full]=pico-doom
     [duke3d_game]=pico-duke3D
+    [colecojam]=cogliano/Adafruit_ColecoJam
 )
 
+# Clone URL of a prog_name's repo, with the owner defaulting to $GITHUB_OWNER.
+repo_url() {
+    local r="${REPO_OF[$1]}"
+    [[ "$r" == */* ]] || r="$GITHUB_OWNER/$r"
+    echo "https://github.com/$r.git"
+}
+# The repo's bare name, without any owner: what its clone directory is called.
+repo_name() { echo "${REPO_OF[$1]##*/}"; }
+
 # --- Script-built apps -------------------------------------------------------
-# The native ports (Doom!, Duke Nukem 3D) are special cases. Unlike the
-# emulators above they target only a handful of specific boards, carry no
-# pico_shared (so there is no SWVERSION to stamp), and use a per-board build
-# script instead of bld.sh. They are built by _build_scripted(); membership in
-# the family is exactly "has a SCRIPTED_BRANCH entry".
+# The native ports (Doom!, Duke Nukem 3D) and the ColecoVision emulator
+# (Adafruit_ColecoJam) are special cases. Unlike the emulators above they target
+# only a handful of specific boards, carry no pico_shared (so there is no
+# SWVERSION to stamp), and use a per-board build script instead of bld.sh. They
+# are built by _build_scripted(); membership in the family is exactly "has a
+# SCRIPTED_BRANCH entry".
 #
 # pico-doom ships two variants from the same repo and from the same *ref*: since
 # full-version was merged, main carries the -build-forbootloader.sh and
@@ -126,6 +140,13 @@ declare -A REPO_OF=(
 # pico-extras or Pico-PIO-USB as submodules — they come from the environment —
 # so a clone is small. (pico-duke3D does track an 11 MB DUKE3D.GRP, which a
 # --depth 1 clone still pulls; the clone is reused across boards within a run.)
+#
+# Adafruit_ColecoJam ships one, colecojam, for the Fruit Jam only. It is hosted
+# outside $GITHUB_OWNER and its tags carry no "v" prefix (1.3), which
+# latest_tag_of handles as is. Its build script fetches FatFs, Pico-PIO-USB,
+# pico_hdmi and tusb_xinput into third_party/ itself (tools/fetch_deps.sh), so it
+# needs network access, and it writes colecojam.uf2 to the root of its build
+# tree rather than to a subdirectory.
 
 # The branch to build when the repo has no release tag yet. Once the repo is
 # tagged, tag mode picks the tag up automatically (see resolve_refs) and this is
@@ -134,11 +155,13 @@ declare -A SCRIPTED_BRANCH=(
     [doom_tiny]=main
     [doom_tiny_full]=main
     [duke3d_game]=fix/audio-production-rate
+    [colecojam]=main
 )
 declare -A SCRIPTED_CLONE_OF=(
     [doom_tiny]=pico-doom
     [doom_tiny_full]=pico-doom-full
     [duke3d_game]=pico-duke3D
+    [colecojam]=Adafruit_ColecoJam
 )
 # The git ref each variant is actually cloned at — a tag when one exists, else
 # the SCRIPTED_BRANCH above. Filled in by resolve_refs; REF_OF keeps the display
@@ -149,18 +172,22 @@ declare -A SCRIPTED_SCRIPT_FMT=(
     [doom_tiny]="%s-build-forbootloader.sh"
     [doom_tiny_full]="%s-build-full-forbootloader.sh"
     [duke3d_game]="%s-build-forbootloader.sh"
+    [colecojam]="%s-build-forbootloader.sh"
 )
 declare -A SCRIPTED_BUILD_FMT=(
     [doom_tiny]="build_bl_%s"
     [doom_tiny_full]="build_bl_full_%s"
     [duke3d_game]="build_bl_%s"
+    [colecojam]="build_bl_%s"
 )
 # Where under the build tree the produced UF2s land. pico-doom puts them in
-# src/; pico-duke3D one level deeper, in src/pico/.
+# src/; pico-duke3D one level deeper, in src/pico/; Adafruit_ColecoJam in the
+# build tree itself.
 declare -A SCRIPTED_OUT_SUBDIR=(
     [doom_tiny]="src"
     [doom_tiny_full]="src"
     [duke3d_game]="src/pico"
+    [colecojam]="."
 )
 # Companion DATA-family UF2 the variant must produce (emulators.txt aux_uf2
 # column), or "" when it needs none. Every per-board build script that emits one
@@ -169,18 +196,20 @@ declare -A SCRIPTED_AUX_OF=(
     [doom_tiny]="doom1-whx.uf2"
     [doom_tiny_full]=""
     [duke3d_game]=""
+    [colecojam]=""
 )
 # 1 for a variant whose build resolves its toolchain through pico-extras.
-# pico-doom does (via its pico-env.sh); pico-duke3D does not, so it must still
-# build when PICO_EXTRAS_PATH is unset.
+# pico-doom does (via its pico-env.sh); pico-duke3D and Adafruit_ColecoJam do
+# not, so they must still build when PICO_EXTRAS_PATH is unset.
 declare -A SCRIPTED_NEEDS_EXTRAS=(
     [doom_tiny]=1
     [doom_tiny_full]=1
     [duke3d_game]=0
+    [colecojam]=0
 )
 # HW_CONFIG -> board "tag" naming the per-board build script and build tree.
-# Shared across the family: the tag is the board's canonical short name and both
-# repos use the same spelling. Each tag <T> implies, for a variant with script
+# Shared across the family: the tag is the board's canonical short name and every
+# repo uses the same spelling. Each tag <T> implies, for a variant with script
 # format <SF>, build format <BF>, output subdir <SD> and program name <P>:
 #                   build script   printf <SF> <T>
 #                   build output    printf <BF> <T>/<SD>/<P>.uf2   (app)
@@ -197,6 +226,7 @@ declare -A SCRIPTED_HWCONFIGS=(
     [doom_tiny]="2 8 13 14"
     [doom_tiny_full]="2 8 13 14"
     [duke3d_game]="2 8 13"
+    [colecojam]="8"
 )
 
 # Supported RP2350-ARM hwconfigs + descriptors from pico_shared/bld.sh case
@@ -334,7 +364,7 @@ done < "$LOADER_DIR/emu/emulators.txt"
 echo
 info "Emulators discovered in emu/emulators.txt (${#PROG_NAMES[@]}):"
 for prog in "${PROG_NAMES[@]}"; do
-    step "$prog  ->  https://github.com/${GITHUB_OWNER}/${REPO_OF[$prog]}.git"
+    step "$prog  ->  $(repo_url "$prog")"
 done
 
 # --- Determine hwconfig(s) to build ------------------------------------------
@@ -459,8 +489,7 @@ elif (( MAIN_MODE )); then
     info "pico_shared default branch: $SHARED_BRANCH"
 else
     # --- Ask: emulator branch (probed against first repo) --------------------
-    PROBE_REPO="${REPO_OF[${PROG_NAMES[0]}]}"
-    EMU_BRANCH="$(pick_branch "emulator repos" "https://github.com/${GITHUB_OWNER}/${PROBE_REPO}.git" "bootloader")"
+    EMU_BRANCH="$(pick_branch "emulator repos" "$(repo_url "${PROG_NAMES[0]}")" "bootloader")"
     info "Emulator branch: $EMU_BRANCH"
 
     # --- Ask: pico_shared branch ---------------------------------------------
@@ -497,7 +526,7 @@ resolve_refs() {
     step "$(printf '%-16s %-20s %s' "pico_shared" "pico_shared" "${SHARED_BRANCH}${SHARED_SHA:+ @ $SHARED_SHA}")"
     for prog in "${PROG_NAMES[@]}"; do
         repo="${REPO_OF[$prog]}"
-        url="https://github.com/${GITHUB_OWNER}/${repo}.git"
+        url="$(repo_url "$prog")"
         ref=""
         if [ -n "${SCRIPTED_BRANCH[$prog]+x}" ]; then
             # A script-built port builds from a tag when its repo has one — they
@@ -536,7 +565,7 @@ resolve_refs() {
 }
 resolve_refs
 
-# --- Build a script-built port (Doom!, Duke Nukem 3D) ------------------------
+# --- Build a script-built app (Doom!, Duke Nukem 3D, ColecoVision) -----------
 # Handles every member of the family — the ref, build script, build tree, output
 # subdirectory and companion data image all come from the SCRIPTED_* tables
 # above. Builds for whichever HW_CONFIGs the variant lists in SCRIPTED_HWCONFIGS;
@@ -549,15 +578,17 @@ resolve_refs
 # variant's boards share one checkout.
 #
 # These repos take their toolchain from the environment: PICO_SDK_PATH,
-# PICO_PIO_USB_PATH for the PIO-USB boards, and — for the variants that say so in
-# SCRIPTED_NEEDS_EXTRAS — PICO_EXTRAS_PATH.
+# PICO_PIO_USB_PATH for the PIO-USB boards (Adafruit_ColecoJam fetches its own
+# copy instead), and — for the variants that say so in SCRIPTED_NEEDS_EXTRAS —
+# PICO_EXTRAS_PATH.
 _build_scripted() {
     local prog="$1" status_file="$2" t0="$3"
     local repo="${REPO_OF[$prog]}" branch="${SCRIPTED_BRANCH[$prog]}"
     # The git ref to check out: a tag if the repo has one, else the branch.
     local cloneref="${SCRIPTED_CLONE_REF[$prog]:-$branch}"
     local dest="$BUILD_DIR/${SCRIPTED_CLONE_OF[$prog]}"
-    local url="https://github.com/${GITHUB_OWNER}/${repo}.git"
+    local url
+    url="$(repo_url "$prog")"
     local aux="${SCRIPTED_AUX_OF[$prog]:-}"
     local elapsed
 
@@ -722,9 +753,9 @@ build_one_emulator() {
     local t0 elapsed
     t0=$SECONDS
 
-    # The native ports build nothing like the emulators (a few specific boards,
-    # no pico_shared, their own per-board script, maybe an aux data UF2). Hand
-    # them off entirely.
+    # The script-built apps build nothing like the emulators (a few specific
+    # boards, no pico_shared, their own per-board script, maybe an aux data
+    # UF2). Hand them off entirely.
     if [ -n "${SCRIPTED_BRANCH[$prog]+x}" ]; then
         _build_scripted "$prog" "$status_file" "$t0"
         return 0
@@ -743,8 +774,9 @@ build_one_emulator() {
     done
 
     local repo="${REPO_OF[$prog]}"
-    local dest="$BUILD_DIR/$repo"
-    local url="https://github.com/${GITHUB_OWNER}/${repo}.git"
+    local dest url
+    dest="$BUILD_DIR/$(repo_name "$prog")"
+    url="$(repo_url "$prog")"
 
     # The ref was resolved once for every repo by resolve_refs() before the
     # hwconfig loop started, so every board in a -c all run builds the same
@@ -1126,6 +1158,8 @@ write_versions_manifest() {
         echo "# generated by build_emulators.sh; do not edit by hand"
         echo "#"
         echo "# Format: <program_name>;<repo>;<ref>;<pico_shared>"
+        echo "#   repo         the repository name under ${GITHUB_OWNER}, or"
+        echo "#                <owner>/<repo> for one hosted elsewhere."
         echo "#   ref          the release tag the emulator was built from, or"
         echo "#                <branch>@<shortsha> for a repo that has no tag yet."
         echo "#   pico_shared  the shared-framework revision it was built against."
@@ -1137,8 +1171,8 @@ write_versions_manifest() {
             [ -n "${REF_OF[$prog]:-}" ] || continue
             for hw in "${HWCONFIGS_TO_BUILD[@]}"; do
                 if [ -s "$LOADER_DIR/emu/$hw/${prog}.uf2" ]; then
-                    # The native ports vendor no pico_shared, so that column
-                    # stays empty for them.
+                    # The script-built apps vendor no pico_shared, so that
+                    # column stays empty for them.
                     local shared="$SHARED_SHA"
                     [ -n "${SCRIPTED_BRANCH[$prog]+x}" ] && shared=""
                     echo "${prog};${REPO_OF[$prog]};${REF_OF[$prog]};${shared}"

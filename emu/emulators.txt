@@ -30,6 +30,7 @@ picopcePlus;pce_cd;Nec Pc Engine
 picosmsPlus;sms_gg;Sega Master System/Game Gear
 picogenesisPlus;md;Sega Genesis/Mega Drive
 picoPacPlus;videopac;Philips Videpac/Magnavox Odessey2
+colecojam;col;ColecoVision
 
 # --- Handheld ---
 PicoPeanutGB;gb_gbc;Nintendo Game Boy/Game Boy Color

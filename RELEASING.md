@@ -78,7 +78,7 @@ changes but the board does not need re-flashing.
 Check the grand summary before going further. Every emulator should be `BUILT`
 for the boards it supports. `SKIP` is expected for excluded combinations
 (`picogenesisPlus` on HW 7; Doom outside boards 2, 8, 13, 14; `duke3d_game`
-outside boards 2, 8, 13). Any `FAIL` or `MISSING` means the archive is
+outside boards 2, 8, 13; `colecojam` outside board 8). Any `FAIL` or `MISSING` means the archive is
 incomplete — fix it and re-run rather than shipping a partial card.
 
 The packer refuses to build an archive containing a 0-byte `.uf2`, so a failed
