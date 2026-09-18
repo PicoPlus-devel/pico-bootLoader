@@ -89,7 +89,8 @@ unavailable and cartridge ROM is capped at 32 KB.
 
 *ColecoVision* runs on the Adafruit Fruit Jam (HW_CONFIG 8) only. The emulator,
 [Adafruit_ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam), is
-maintained outside this project. It expects everything in `/coleco/` on the SD
+written and maintained by Dan Cogliano ([@cogliano](https://github.com/cogliano))
+outside this project. It expects everything in `/coleco/` on the SD
 card: the 8 KB ColecoVision BIOS as `COLECO.BIN`, and the games as `.ROM` files.
 Neither the BIOS nor any game is included.
 
@@ -988,6 +989,10 @@ gh release upload v0.2.1 releases/pico-bootLoader_sdcard.zip
 - The emulator cores and the native ports are the work of their upstream authors;
   see the repository links under [Bootable
   applications](#bootable-applications).
+- The ColecoVision emulator,
+  [ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam), is the work of
+  Dan Cogliano ([@cogliano](https://github.com/cogliano)). Many thanks to him for
+  writing it and for making it available to this project.
 - The [PicoNES PCB](#picones-pcb-hw_config-2) was designed by [John Edgar
   Park](https://twitter.com/johnedgarpark).
 - The [PicoNES Mini](#picones-mini-pcb-hw_config-6) and

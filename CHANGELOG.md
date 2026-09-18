@@ -86,10 +86,11 @@ copy the unzipped MAME `outrun` (revision B) set to `/roms/ORUN`. The game takes
 a few seconds at every start to prepare them, and tells you on screen if any are
 missing.
 
-**ColecoVision** joins the Console category on the Adafruit Fruit Jam, using
-[ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam). Put the BIOS,
-`COLECO.BIN`, and your games (`.ROM` files) in `/coleco` on the card. Neither is
-included.
+**ColecoVision** joins the Console category on the Adafruit Fruit Jam. It is
+[ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam) by Dan Cogliano
+([@cogliano](https://github.com/cogliano)) — a big thank you to Dan for this
+emulator and for making it available here. Put the BIOS, `COLECO.BIN`, and your
+games (`.ROM` files) in `/coleco` on the card. Neither is included.
 
 ### Updated emulators
 
