@@ -10,6 +10,10 @@
  * special: it is the default, and it is what gui.cpp falls back to when the
  * active theme has no artwork for a given key.
  *
+ * Each theme may also hold a Categories/ subfolder with one image per category
+ * (column 2 of categories.txt, see categories.h). Same naming rules, same
+ * theme-0 fallback -- only the directory differs.
+ *
  * Screensaver images are NOT themed -- they stay in <BASEDIR>/assets/screensaver
  * and are reached through screensaver_set_asset_dir(), which builds its own path.
  *
@@ -31,6 +35,11 @@ extern "C" {
 #endif
 
 #define THEME_MAX 10   /* themes 0..9 */
+
+/* Subdirectory inside a theme holding the category carousel's artwork, keyed
+ * by column 2 of categories.txt. Application artwork stays in the theme root.
+ * Shared with gui.cpp through gui_set_image_subdir(). */
+#define THEMES_CATEGORY_SUBDIR "Categories"
 
 /* Remember "<base>/assets" and "<base>/assets/themes". Call once at boot,
  * right after gui_set_asset_dir(). NULL / empty input is a silent no-op. */
@@ -75,10 +84,11 @@ void     themes_set_active(int n);    /* clamped to a theme that exists */
  * on purpose: callers need to hold two theme paths at once. */
 void     themes_dir_of(int n, char *out, size_t out_sz);
 
-/* Batch-convert any PNG/JPG lacking its .444/.555 cache in EVERY present theme.
- * Boards without PSRAM must call this at boot: the converter needs ~53 KB of
- * SRAM heap that stops being available once the GUI slide buffers are
- * allocated, so a theme converted lazily at switch time would fail. */
+/* Batch-convert any PNG/JPG lacking its .444/.555 cache in EVERY present theme,
+ * its Categories/ subfolder included. Boards without PSRAM must call this at
+ * boot: the converter needs ~53 KB of SRAM heap that stops being available once
+ * the GUI slide buffers are allocated, so a theme converted lazily at switch
+ * time would fail. */
 void     themes_convert_all(void);
 
 #ifdef __cplusplus

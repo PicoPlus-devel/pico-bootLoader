@@ -1,20 +1,41 @@
 # Index / allow-list: only .uf2 files whose embedded program name matches a
-# row below are shown in the picker. Max 16 rows.
+# row below are shown in the picker. Max 32 rows.
 #
 # Format: <program_name>;<image_key>;<display_name>[;<aux_uf2>]
 #   program_name  matched (case-insensitive) against pico_set_program_name()
 #                 read from the .uf2's binary_info; the filename is irrelevant
-#   image_key     menu artwork basename: assets/<image_key>.png|.jpg
+#   image_key     menu artwork basename: assets/themes/n/<image_key>.png|.jpg
 #   display_name  label shown in the picker
 #   aux_uf2       optional companion data .uf2 (UF2 family RP2350 DATA),
 #                 flashed alongside the app (e.g. Doom's WAD)
+#
+# Applications are shown in the order they appear below.
+#
+# This file is the master list: it is what build_emulators.sh builds and what
+# the SD-card archive packs. It is also the picker's index when the card has no
+# categories.txt; with categories, each one names its own config file and this
+# file is not read by the loader. Every program_name used in a category file
+# must still appear here.
+
+# --- Arcade ---
+picoOutRun;outrun;OutRun
+
+# --- Computer ---
+pico994A;ti99;TI99/4A
+
+# --- Consoles ---
 piconesPlus;nes;Nintendo Entertainment System
+picosnesPlus;snes;Super Nintendo/Famicom
 picopcePlus;pce_cd;Nec Pc Engine
-PicoPeanutGB;gb_gbc;Nintendo Game Boy/Game Boy Color
 picosmsPlus;sms_gg;Sega Master System/Game Gear
 picogenesisPlus;md;Sega Genesis/Mega Drive
 picoPacPlus;videopac;Philips Videpac/Magnavox Odessey2
+colecojam;col;ColecoVision
+
+# --- Handheld ---
+PicoPeanutGB;gb_gbc;Nintendo Game Boy/Game Boy Color
+
+# --- Ports ---
 doom_tiny;doom;Doom!;doom1-whx.uf2
 doom_tiny_full;doom_full;Doom Full!
-picosnesPlus;snes;Super Nintendo/Famicom
 duke3d_game;duke3d;Duke Nukem 3D

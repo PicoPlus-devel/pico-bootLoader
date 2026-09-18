@@ -65,13 +65,33 @@ its own repository and identified by the program name embedded in its `.uf2`.
 | Nintendo Game Boy / Game Boy Color | `PicoPeanutGB` | [pico-peanutGB](https://github.com/fhoedemakers/pico-peanutGB) | <img width="280" alt="Nintendo Game Boy menu artwork" src="https://github.com/user-attachments/assets/4954bcba-9e51-4ef1-a45e-02ecc408dbc2" /> |
 | Sega Master System / Game Gear | `picosmsPlus` | [pico-smsplus](https://github.com/fhoedemakers/pico-smsplus) | <img width="280" alt="Sega Master System / Game Gear menu artwork" src="https://github.com/user-attachments/assets/a3c223c6-8f52-412d-b7ca-25dfe33f1740" />|
 | Philips Videopac / Magnavox Odyssey² | `picoPacPlus` | [pico-pacPlus](https://github.com/fhoedemakers/pico-pacPlus) | <img width="280" alt="Philips Videopac / Magnavox Odyssey II menu artwork" src="https://github.com/user-attachments/assets/838ba7b0-3360-4020-a83c-5113aa0efb4a" />|
+| ColecoVision | `colecojam` | [Adafruit_ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam) | <img width="280" alt="ColecoVision menu artwork" src="emu/assets/themes/0/col.png" /> |
+| Texas Instruments TI-99/4A | `pico994A` | [pico-994A](https://github.com/PicoPlus-devel/pico-994A) | <img width="280" alt="TI-99/4A menu artwork" src="emu/assets/themes/0/ti99.png" /> |
 | **Doom** (native port, not emulated) | `doom_tiny` | [pico-doom](https://github.com/fhoedemakers/pico-doom) | <img width="280" alt="Doom menu artwork" src="https://github.com/user-attachments/assets/112fb4f3-a806-4f60-83fb-59f70fbffbff" />|
 | **Duke Nukem 3D** (native port, not emulated) | `duke3d_game` | [pico-duke3D](https://github.com/fhoedemakers/pico-duke3D) |<img width="280" alt="Duke Nukem 3D menu artwork" src="https://github.com/user-attachments/assets/79798fb3-5517-41cf-bfcb-62c0aa0dc00e" />  |
+| **OutRun** (native port, not emulated) | `picoOutRun` | [pico-outrun](https://github.com/PicoPlus-devel/pico-outrun) | <img width="280" alt="OutRun menu artwork" src="emu/assets/themes/0/outrun.png" /> |
 
 The following emulators need a bios in `/bios` on SD:
 - *Nintendo Entertainment System* : For Famicom Dsik System games `fds-bios.rom`
 - *Philips Videopac / Magnavox Odyssey²*: `o2rom.bin`
 - *PCEngine CD* : `Super CD-ROM System (Japan) (v3.0).pce` or another variant.
+- *Texas Instruments TI-99/4A*: `994aROM.bin` and `994aGROM.bin`, both required —
+  nothing runs without them. `994aDISK.bin` (disk controller) and `spchrom.bin`
+  (speech vocabulary) are optional.
+
+*TI-99/4A* is built for every board the loader supports. Cartridges go in
+`/roms/TI99` as `.rpk` Rom PacKs (preferred — one file per cartridge) or as the
+classic C/D/G `.bin` sets; the emulator's own `tools/mkrpk.py` converts between
+them. TI BASIC is reachable without a cartridge. A USB keyboard acts as the TI
+keyboard, and joysticks come from USB gamepads, NES/SNES pads or Wii
+controllers. **PSRAM** is not required, but without it the disk drives are
+unavailable and cartridge ROM is capped at 32 KB.
+
+*ColecoVision* runs on the Adafruit Fruit Jam (HW_CONFIG 8) only. The emulator,
+[Adafruit_ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam), is
+maintained outside this project. It expects everything in `/coleco/` on the SD
+card: the 8 KB ColecoVision BIOS as `COLECO.BIN`, and the games as `.ROM` files.
+Neither the BIOS nor any game is included.
 
 *Doom* runs on four boards: Adafruit Fruit Jam (HW_CONFIG 8), the Adafruit DVI +
 MicroSD breakout combination (2), Murmulator M2 (13) and Adafruit Feather RP2350
@@ -89,6 +109,20 @@ image: `DUKE3D.GRP` — shareware or registered/Atomic — is streamed from
 `/roms/duke3d/` on the SD card, with savegames and `duke3d.cfg` written next to
 it. Only the Fruit Jam has been tested on hardware; boards 2 and 13 build clean
 but are untested.
+
+*OutRun* is a port of the Cannonball engine and is the only entry in the
+**Arcade** category. It runs on four boards: Adafruit Fruit Jam (HW_CONFIG 8),
+the Adafruit DVI + MicroSD breakout combination (2, on a Pimoroni Pico Plus 2),
+Murmulator M2 (13) and Adafruit Feather RP2350 with a TLV320DAC3100 (14). It
+needs **PSRAM** on all four, and an **HSTX** board: on the bit-banged PicoDVI
+configurations the system clock is tied to the pixel clock and the engine is too
+slow, so those boards are not built. There is no companion data image. The
+OutRun ROM set is copyright SEGA and is not distributed with the bundle: copy
+the unzipped MAME `outrun` (revision B) set to `/roms/ORUN` on the SD card and
+the game prepares its data in PSRAM at startup, which takes a few seconds on
+every boot. If the ROMs are missing the game says so on screen rather than
+failing silently. The loader's own [USB drive mode](#usb-drive-mode) is the
+easiest way to put them on the card without taking it out of the board.
 
 *PCEngine CD* needs PSRAM
 
@@ -146,17 +180,62 @@ Classic controller (over I²C) are also supported and use their own buttons.
 | Move through the list (text mode) | D-pad UP / DOWN | ↑ / ↓ |
 | Slide between applications (graphical mode) | D-pad LEFT / RIGHT | ← / → |
 | Change artwork theme (graphical mode) | D-pad UP / DOWN | ↑ / ↓ |
-| Launch the selected application | A | Z |
-| Toggle text / graphical mode | SELECT | A |
+| Launch the selected application | A | X |
+| Open the options menu | SELECT | A |
 | Open the help screen | START | S |
+| Confirm the highlighted option | A | X |
+| Return from a screen | B | Z |
 | Wake from screensaver | any button | any mapped key |
 
-START is used for the help screen because it is the only spare button present
-on every supported input device, including NES controllers.
+SELECT and START are used for the options and help screens because they are the
+only spare buttons present on every supported input device, including NES
+controllers. On controllers whose face buttons are labelled differently, the
+on-screen prompts follow the attached device: A and B appear as B and A on an
+XInput pad, and as ○ and ✕ on a DualShock or DualSense.
 
 The chosen menu mode and artwork theme are remembered across boots. Inside a running emulator built
 on the shared framework, **SELECT + START** opens its menu, which offers *Return
 to emulator selection* to reboot back into this menu.
+
+### The options menu
+
+**SELECT** opens a small menu on top of the application picker. Move through it
+with UP / DOWN, confirm with A, and return with B.
+
+| Entry | Effect |
+|---|---|
+| Help | Opens the help screen described under [On-screen help](#on-screen-help). |
+| Menu mode | Switches between the text list and the full-screen artwork view. The choice is written to `/boot.txt` and restored on the next boot. |
+| Enter BOOTSEL mode | Restarts the board into the RP2350 ROM bootloader, where it appears on a computer as a drive named `RP2350`. Copy a `.uf2` onto it to update the bootloader itself, or reset the board to return to the menu. |
+| USB drive mode | Presents the SD card to a computer as a USB mass-storage device, so applications, the index file and artwork can be changed without removing the card. |
+
+### USB drive mode
+
+
+USB drive mode presents the SD card to a computer as a USB mass storage device, so games can be added or
+removed without taking the card out of the console. Connect the console to the computer, open the
+[options menu](#the-options-menu) and choose **USB Drive Mode**. The card
+appears on the computer as a removable drive.
+
+When you are finished, eject the drive on the computer. The console notices this and leaves USB drive
+mode by itself. Pressing B on the console leaves as well, for when no computer is attached. The game
+list is re-read on the way out, so files added from the computer appear without having to restart.
+
+> [!NOTE]
+> Transfers are slow. The console is a USB full-speed device and reaches the card a sector at a time
+> over SPI, so copying is far slower than reading the card in a card reader. USB drive mode is meant
+> for adding or replacing a few games. For filling a card, or for copying a large amount of data, take
+> the card out and use a card reader.
+
+Behaviour depends on where controllers are connected on your board.
+
+| Board | Behaviour |
+| ----- | --------- |
+| Controllers on a separate USB port (boards built with PIO USB, such as the Fruit Jam) | The console's own USB port is free, so controllers keep working and the screen stays on. The menu returns to the game list when you are done. |
+| Controllers on the console's own USB port | That port is the one connected to the computer, so a USB controller cannot be used while the card is mounted. Press B on a controller in the NES port, or eject the drive on the computer. The console restarts afterwards. |
+
+USB drive mode is available on every released binary, the Pico 2 W included —
+see [Pico 2 W](#pico-2-w) for what that board does and does not do.
 
 ## Getting started
 
@@ -196,8 +275,8 @@ number names the SD-card folder the loader reads applications from
 
 | HW_CONFIG | Board | Bootloader binary |
 |---|---|---|
-| 1 | Pimoroni Pico DV Demo Base (Pico 2 / Pico 2 W) | `pico-bootLoader_PimoroniDVI_pico2_arm.uf2` / `..._pico2_w_arm.uf2` |
-| 2 | Adafruit DVI + microSD breakout, or the [PicoNES PCB](#picones-pcb-hw_config-2) (Pico 2 / Pico 2 W / Pimoroni Pico Plus 2) | `pico-bootLoader_AdafruitDVISD_pico2_arm.uf2` / `..._pico2_w_arm.uf2` |
+| 1 | Pimoroni Pico DV Demo Base (Pico 2 / Pico 2 W) | `pico-bootLoader_PimoroniDVI_pico2_arm.uf2` |
+| 2 | Adafruit DVI + microSD breakout, or the [PicoNES PCB](#picones-pcb-hw_config-2) (Pico 2 / Pico 2 W / Pimoroni Pico Plus 2) | `pico-bootLoader_AdafruitDVISD_pico2_arm.uf2` |
 | 5 | Adafruit Metro RP2350 | `pico-bootLoader_AdafruitMetroRP2350_arm.uf2` |
 | 6 | Waveshare RP2350-Zero with the [PicoNES Mini PCB](#picones-mini-pcb-hw_config-6) | `pico-bootLoader_WaveShareRP2350ZeroWithPCB_arm.uf2` |
 | 7 | Waveshare RP2350-PiZero | `pico-bootLoader_WaveShareRP2350PiZero_arm_piousb.uf2` |
@@ -211,6 +290,20 @@ to the RP2350 HSTX pins — HW_CONFIG 2, 5, 8, 13 and 14 — drive it through th
 HSTX peripheral; the others use PicoDVI. A single SD card
 serves both kinds — artwork is cached in both pixel formats (see
 [Artwork](#artwork)).
+
+### Pico 2 W
+
+The Pico 2 W runs the ordinary `pico2` binary for its hardware configuration;
+there is no separate build for it. Up to v0.4 there was one, purely so that the
+on-board LED would work: that LED hangs off the wireless chip and reaching it
+means linking the CYW43 driver, which filled the 512 KB bootloader partition to
+within a few kilobytes and left no room for USB drive mode.
+
+Everything on the board therefore works as it does on a Pico 2, except the
+on-board LED, which no longer blinks as a heartbeat or while an application is
+being flashed. A build with the LED can still be produced locally with
+`./bld.sh -2 -c <HW_CONFIG> -w`; it is not released and USB drive mode is off in
+it by default.
 
 ## Custom PCBs
 
@@ -312,12 +405,14 @@ NES controller in either port for player 2 works just as well.
 
 #### Which loader binary to flash
 
-- Pico 2 **and** Pimoroni Pico Plus 2 — `pico-bootLoader_AdafruitDVISD_pico2_arm.uf2`
-- Pico 2 W — `pico-bootLoader_AdafruitDVISD_pico2_w_arm.uf2`
+- Pico 2, Pico 2 W **and** Pimoroni Pico Plus 2 —
+  `pico-bootLoader_AdafruitDVISD_pico2_arm.uf2`
 
-The Pimoroni Pico Plus 2 needs no separate build. The loader reads the real
-flash size from the chip at boot and detects PSRAM at runtime, so the same
-`pico2` image adapts to whichever of the two is plugged in.
+None of the three needs a build of its own. The loader reads the real flash size
+from the chip at boot and detects PSRAM at runtime, so the same `pico2` image
+adapts to whichever board is plugged in. On a Pico 2 W the on-board LED stays
+dark, since that LED is driven by the wireless chip; see
+[Pico 2 W](#pico-2-w) below.
 
 #### What the Pimoroni Pico Plus 2 adds
 
@@ -417,8 +512,11 @@ The build guide is on Instructables:
 /emu/                                      BASEDIR (default /emu, override in boot.txt)
 /emu/<HW_CONFIG>/*.uf2                     applications for this board (e.g. /emu/8/)
 /emu/emulators.txt                         the index / allow-list (name set by INDEX)
+/emu/categories.txt                        optional category list (see Categories)
+/emu/<category>.txt                        one index file per category, named by categories.txt
 /emu/versions.txt                          which version each application was built from (informational)
 /emu/assets/themes/0/<image_key>.png|.jpg  default artwork theme, converted on first use
+/emu/assets/themes/0/Categories/*.png|.jpg category artwork (with categories.txt)
 /emu/assets/themes/1..9/                   optional extra themes (UP/DOWN to switch)
 /emu/assets/screensaver/*.png|.jpg         screensaver images (optional, not themed)
 ```
@@ -441,17 +539,28 @@ apply. A commented sample ships in the repository root: [`boot.txt`](boot.txt).
 | Key | Default | Meaning |
 |---|---|---|
 | `BASEDIR` | `/emu` | Absolute SD path (must start with `/`, max 63 characters) under which everything lives: application folders, the index, artwork, screensaver images. |
-| `INDEX` | `emulators.txt` | Bare file name (no slashes) of the index file inside `BASEDIR`. |
+| `INDEX` | `emulators.txt` | Bare file name (no slashes) of the index file inside `BASEDIR`. Only read when `BASEDIR` holds no `categories.txt` — see [Categories](#categories). |
 | `SCREENSAVER` | see note | `STARFIELD` — images fly outward from the screen centre, growing toward the camera. `BLOCKS` — images float and bounce off the edges; the on-screen set is re-picked every 15 s. The screensaver starts after ~30 s of inactivity and any button press exits it. |
 | `GUI` | `1` | `0` = text menu, `1` = graphical menu. Rewritten whenever SELECT toggles the mode. Replaces the `.guimode` file used by earlier releases, which is migrated and deleted automatically. |
 | `THEME` | `0` | Active artwork theme, `0`–`9` — see [Artwork themes](#artwork-themes). Rewritten whenever UP/DOWN changes the theme in graphical mode. A theme that is not on the card falls back to `0`. |
+| `VIEW` | `CATEGORIES` | Which level the menu was left on: `CATEGORIES` or `APPS`. Ignored without a `categories.txt`. |
+| `CATEGORY` | — | `category_name` of the category last opened. |
+| `APP` | — | `program_name` of the application last selected. |
+
+`VIEW`, `CATEGORY` and `APP` record where you were so the menu returns there on
+the next boot. The bootloader maintains them; there is normally no reason to
+edit them by hand. Both names are matched against what is actually on the card,
+so renaming a category or an application starts you at the first entry rather
+than at the wrong one. To remember nothing, leave the key out altogether — an
+empty value (`CATEGORY=` with nothing after it) is a syntax error.
 
 > **Screensaver default.** When `/boot.txt` is *absent* the default is
 > `STARFIELD`; when the file is *present* but the key is omitted, it is
 > `BLOCKS`. Set the key explicitly if the choice matters.
 
 **The bootloader writes this file.** Changing the menu mode or the artwork
-theme rewrites the corresponding `GUI=` / `THEME=` line. Nothing else is
+theme rewrites the corresponding `GUI=` / `THEME=` line, and moving around the
+menu rewrites `VIEW=`, `CATEGORY=` and `APP=`. Nothing else is
 touched: comments, blank lines, key order, spacing and any other keys are
 copied through unchanged, so the file stays yours to edit. If `/boot.txt` does
 not exist, the first such change creates it with the current effective value of
@@ -467,9 +576,10 @@ screen reports that it was not saved.
 ### The index file (allow-list)
 
 `<BASEDIR>/<INDEX>` — by default `/emu/emulators.txt` — determines what appears
-in the menu. Only `.uf2` files whose embedded program name matches a row are
-listed; anything else in the application folder is ignored. One row per
-application:
+in the menu, and in what order. Only `.uf2` files whose embedded program name
+matches a row are listed; anything else in the application folder is ignored.
+The same format is used by each category's config file (see
+[Categories](#categories)). One row per application:
 
 ```
 <program_name>;<image_key>;<display_name>[;<aux_uf2>]
@@ -483,7 +593,8 @@ doom_tiny       ; doom      ; Doom!                     ; doom1-whx.uf2
 ```
 
 - Fields are separated by `;`, whitespace is trimmed, and `#` starts a comment
-  line. A maximum of 16 rows is allowed.
+  line. A maximum of 32 rows is allowed.
+- Applications are shown in the order the rows are written.
 - **`program_name`** (max 32 characters) — matched case-insensitively against
   the name each `.uf2` embeds via `pico_set_program_name()` (read from its
   `binary_info`, without flashing anything). The `.uf2` *file name* is
@@ -495,6 +606,57 @@ doom_tiny       ; doom      ; Doom!                     ; doom1-whx.uf2
   `.uf2` in the same `<BASEDIR>/<HW_CONFIG>/` folder, flashed alongside the
   application (see [Auxiliary data images](#auxiliary-data-images)).
 
+### Categories
+
+With many applications on a card, one flat list becomes tedious to page
+through. Placing a file named `categories.txt` in `BASEDIR` adds a level above
+it: the menu opens on a list of categories, and opening one shows the
+applications it holds. Remove the file and the menu is a single flat list again,
+driven by `INDEX`. The file's presence is the only switch; there is no key in
+`boot.txt` for it.
+
+```
+# category_name ; image_key ; config_file
+Arcade          ; arcade    ; arcade.txt
+Computer        ; computer  ; computer.txt
+Console         ; console   ; console.txt
+Handheld        ; handheld  ; handheld.txt
+Ports           ; ports     ; ports.txt
+Settings        ; settings  ;
+```
+
+- Fields are separated by `;`, whitespace is trimmed, and `#` starts a comment
+  line. A maximum of 16 rows is allowed.
+- Categories are shown in the order the rows are written.
+- **`category_name`** (max 32 characters) — the label shown in the text menu.
+  The graphical menu does not draw it: the artwork carries its own label.
+- **`image_key`** (max 16 characters) — basename of the category artwork, in
+  the `Categories` subfolder of each theme:
+  `<BASEDIR>/assets/themes/<N>/Categories/<image_key>.png` (or `.jpg`/`.jpeg`).
+  Application artwork stays in the theme folder itself.
+- **`config_file`** (max 64 characters) — a file inside `BASEDIR` listing the
+  applications of this category, in exactly the format described in
+  [The index file](#the-index-file-allow-list) above. Leaving it empty makes
+  the entry open the options screen instead of an application list, which is
+  what the `Settings` row above does.
+
+An application may appear in more than one category, or in none. A category
+whose config file is missing, or whose applications are not on the card, is
+still shown — opening it reports that there is nothing in it — so a category
+never silently disappears from the menu.
+
+Controls, in both menu modes:
+
+| | Category list | Application list |
+|---|---|---|
+| LEFT / RIGHT (graphical), UP / DOWN (text) | choose a category | choose an application |
+| first button (`A` on a NES pad) | open the category | start the application |
+| second button (`B` on a NES pad) | — | back to the category list |
+
+The menu remembers which level you were on, which category, and which
+application, and returns there on the next boot — see `VIEW`, `CATEGORY` and
+`APP` in [Configuration](#configuration-boottxt).
+
 ### Artwork
 
 Ordinary images are placed on the card and converted by the bootloader itself:
@@ -502,6 +664,9 @@ Ordinary images are placed on the card and converted by the bootloader itself:
 - **Menu artwork** — `<BASEDIR>/assets/themes/<N>/<image_key>.png|.jpg|.jpeg`,
   one per index row, shown full-screen in graphical mode. `<N>` is the theme
   number; theme `0` is the default — see [Artwork themes](#artwork-themes).
+- **Category artwork** — `<BASEDIR>/assets/themes/<N>/Categories/<image_key>.png|.jpg|.jpeg`,
+  one per row of `categories.txt`. Same rules, same theme fallback; only the
+  folder differs.
 - **Screensaver images** — any `*.png|.jpg|.jpeg` in
   `<BASEDIR>/assets/screensaver/` (file names do not matter; more images give
   more variety). These are **not** themed.
@@ -511,7 +676,23 @@ On first use each source image is converted and cached next to it as
 HSTX boards). Both are always written, so the same card works in every supported
 board. The `.444`/`.555` files must not be authored by hand; when a source image
 is replaced under the same name, its stale `.444`/`.555` files should be deleted
-so they regenerate.
+so they regenerate. Nothing detects a cache that no longer matches its source:
+the board converts an image only when a cache is missing, so a card that already
+holds the old `.444`/`.555` keeps showing the old artwork until they are removed.
+
+Two host-side tools in [`tools/`](tools/) support this, both needing only
+`ffmpeg` and `numpy`. Neither is part of any build; they are run by hand.
+
+- [`tools/png2raw.py`](tools/png2raw.py) writes the `.444`/`.555` caches for an
+  image or a folder of them, byte-identically to the board, so the SD-card
+  bundle can ship them ready-made. `--check` compares against the committed
+  caches instead of writing, which is the quickest way to confirm a source and
+  its caches are still in step. Point it at a specific folder, never at a theme
+  root — it converts every image it finds, including unused spares.
+- [`tools/make_category_art.py`](tools/make_category_art.py) generates the six
+  category tiles shipped for themes `0` and `1`, each in that theme's own visual
+  idiom. It is the source of record for that artwork; the tiles are regenerated
+  from it rather than edited as images.
 
 The released SD-card archive ships the cached `.444`/`.555` files rather than the
 source images — they are far smaller, and shipping both would roughly double the
@@ -550,7 +731,9 @@ The graphical menu can carry up to ten sets of artwork. Each is a folder:
 
 A theme folder holds one image per application, named after the `image_key`
 from the index file — so a theme might contain `nes.png`, `md.png`, `doom.png`.
-Only the folders that exist are used; the numbers need not be contiguous.
+On a card with [categories](#categories) it also holds a `Categories` subfolder
+with one image per category. Only the folders that exist are used; the numbers
+need not be contiguous.
 
 **Switching** — press UP or DOWN in the graphical menu. Only themes that are
 actually on the card are reachable, so with themes `0`, `1` and `3` present,
@@ -572,10 +755,11 @@ images. The move is resumable: if it is interrupted, the next boot finishes it.
 
 ### On-screen help
 
-Press **START** in either menu mode for a full-screen summary of the controls,
-the meaning of the `*` and `!` markers, and the current mode, theme, board
-configuration and index file. Press START, the launch button, B or SELECT to
-return. It is also where a failed configuration write is reported.
+Press **START** in either menu mode, or choose *Help* from the options menu, for
+a full-screen summary of the controls, the meaning of the `*` and `!` markers,
+and the current mode, theme, board configuration and index file (or, on a card
+with categories, `categories.txt`). Press START, the launch button, B or SELECT
+to return. It is also where a failed configuration write is reported.
 
 ## Creating a bootable build of your own application
 
@@ -633,7 +817,11 @@ return to the menu.
 
 Copy the `.uf2` to `<BASEDIR>/<HW_CONFIG>/` and add a row to the index file
 (`emulators.txt`) with the program name set in step 1, an `image_key`, and a
-display name. See [The index file](#the-index-file-allow-list).
+display name. See [The index file](#the-index-file-allow-list). The row's
+position in the file is where the application appears in the menu.
+
+On a card that uses [categories](#categories), add the row to the config file of
+the category it belongs in instead — or to several, if it fits more than one.
 
 ### 3. Add images for the menu and screensaver
 
@@ -695,16 +883,17 @@ make -j
 # -> build/pico-bootLoader.uf2  (flash via BOOTSEL)
 ```
 
-The wrapper `./bld.sh -2 -c <HW_CONFIG>` performs the same build (add `-w` for
-Pico 2 W). `./buildAll.sh` builds every supported board into `releases/`
-(requires `picotool`).
+The wrapper `./bld.sh -2 -c <HW_CONFIG>` performs the same build; `-w` adds the
+CYW43 driver for the Pico 2 W LED, which is no longer released (see
+[Pico 2 W](#pico-2-w)). `./buildAll.sh` builds every supported board into
+`releases/` (requires `picotool`).
 
 The image must fit the 512 KB bootloader region; the linker errors out if it
-does not, and every link prints its occupancy. Most configurations sit near
-265 KB (~51%), but the Pico 2 W builds pull in the CYW43 driver and land around
-497 KB (~97%), leaving about 15 KB free — that is the configuration to check
-when adding code. It is tight enough that the whole project is compiled `-Os`;
-`-O2` no longer links for Pico 2 W (see the comment in `CMakeLists.txt`).
+does not, and every link prints its occupancy. The released binaries sit between
+50% and 57% with USB drive mode built in. A `-w` build is the tight one: it
+reaches 97.8% on HW_CONFIG 1 even with USB drive mode left out, which is why the
+whole project is compiled `-Os` — `-O2` no longer links there (see the comment
+in `CMakeLists.txt`).
 
 To build the emulators and the native ports themselves,
 [`build_emulators.sh`](build_emulators.sh) clones each source repository and
@@ -728,21 +917,31 @@ stamps a version.
 > of `emu/versions.txt` now agree. They will differ again whenever a repository
 > is tagged against an older `pico_shared`, which is what the behaviour is for.
 
-The native ports are the exception to all of the above. Neither
-[pico-doom](https://github.com/fhoedemakers/pico-doom) nor
-[pico-duke3D](https://github.com/fhoedemakers/pico-duke3D) has a `pico_shared`,
-so there is no `SWVERSION` to stamp, and both build through their own per-board
-`<board>-build-forbootloader.sh` scripts rather than `bld.sh`. Each targets only
-the boards it has a script for — *Doom* 2, 8, 13 and 14, *Duke Nukem 3D* 2, 8 and
-13 — and is reported as `SKIP` for every other configuration.
+The native ports and *ColecoVision* are the exception to all of the above.
+[pico-doom](https://github.com/fhoedemakers/pico-doom),
+[pico-duke3D](https://github.com/fhoedemakers/pico-duke3D) and
+[Adafruit_ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam) have no
+`pico_shared`, so there is no `SWVERSION` to stamp, and all three build through
+their own per-board `<board>-build-forbootloader.sh` scripts rather than
+`bld.sh`. Each targets only the boards it has a script for — *Doom* 2, 8, 13 and
+14, *Duke Nukem 3D* 2, 8 and 13, *ColecoVision* 8 — and is reported as `SKIP` for
+every other configuration. The *ColecoVision* build downloads its own
+dependencies, so it needs network access.
 
-Both repositories are tagged and are built from their latest tag like the
+All three repositories are tagged and are built from their latest tag like the
 emulators, so `versions.txt` records a real version for `doom_tiny`,
-`doom_tiny_full` and `duke3d_game`. They use the same `v*.*` convention, so later
-tags are picked up with no change here. The `SCRIPTED_BRANCH` table in
-[`build_emulators.sh`](build_emulators.sh) — `main` for *Doom*,
-`fix/audio-production-rate` for *Duke Nukem 3D* — is now only the fallback for a
-repository that has no tag at all.
+`doom_tiny_full`, `duke3d_game` and `colecojam`. The tag is simply the newest by
+version order, whether or not it carries a `v` prefix (Adafruit_ColecoJam's
+tags do not), so later tags are picked up with no change here. The
+`SCRIPTED_BRANCH` table in [`build_emulators.sh`](build_emulators.sh) — `main`
+for *Doom* and *ColecoVision*, `fix/audio-production-rate` for *Duke Nukem 3D* —
+is now only the fallback for a repository that has no tag at all.
+
+Repositories are cloned from the `PicoPlus-devel` organisation by default. An
+entry in the `REPO_OF` table of [`build_emulators.sh`](build_emulators.sh) may
+name a repository elsewhere as `owner/repo`, as the *ColecoVision* entry
+(`cogliano/Adafruit_ColecoJam`) does; `versions.txt` then records it in that same
+form.
 
 *Doom* additionally needs `PICO_EXTRAS_PATH` pointing at a
 [pico-extras](https://github.com/raspberrypi/pico-extras) checkout, since it

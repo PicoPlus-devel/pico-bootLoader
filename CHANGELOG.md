@@ -6,6 +6,116 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 
 [Binaries for each configuration and PCB design are at the end of this page](#downloads___).
 
+## v0.6
+
+Download the new `pico-bootLoader_sdcard.zip` as well as the loader `.uf2` for
+your board: this release adds files to the card.
+
+### Changes
+
+**Categories.** The menu can now group applications instead of showing them all
+in one long list. It opens on a set of categories — Arcade, Computer, Console,
+Handheld, Ports and Settings — and opening one shows what is in it.
+
+- LEFT / RIGHT (UP / DOWN in the text menu) moves between categories.
+- The first button (`A` on a NES pad) opens the highlighted category, and
+  starts an application once you are inside one.
+- The second button (`B`) goes back to the categories.
+- **Settings** is a category with nothing behind it: opening it brings up the
+  same options screen SELECT does.
+
+A category that has nothing in it still appears, and says so when you open it,
+so nothing quietly disappears from the menu.
+
+Categories are optional. They come from a `categories.txt` file on the card;
+delete it and the menu is the single list it always was. Each category has its
+own list file, so you decide what goes where — see the README if you want to
+build your own arrangement.
+
+**The TI-99/4A has been added**, and fills the new Computer category. It is a
+Texas Instruments home computer emulator and is built for every board. Put your
+cartridges in `/roms/TI99` on the card, as `.rpk` files or as the classic `.bin`
+sets, and the console files `994aROM.bin` and `994aGROM.bin` in `/bios` — the
+emulator does not run without those two. A USB keyboard works as the TI
+keyboard, and TI BASIC is there without a cartridge.
+
+**OutRun has been added**, and fills the new Arcade category. It is a port of
+SEGA's arcade game and runs on the Adafruit Fruit Jam, the Adafruit DVI +
+microSD breakouts or the PicoNES PCB, the Murmulator M2, and the Adafruit
+Feather RP2350 with a TLV320DAC3100. All four need PSRAM.
+
+The game ROMs are not included — they are copyright SEGA — so you have to
+supply them yourself. Copy the unzipped MAME `outrun` (revision B) ROM set to
+`/roms/ORUN` on the card and the game does the rest, taking a few seconds at
+every start to prepare. Without them it shows a screen telling you what is
+missing. USB drive mode is the easiest way to get the files onto the card.
+
+**The ColecoVision has been added** to the Console category, for the Adafruit
+Fruit Jam. It uses [ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam).
+Put the BIOS, `COLECO.BIN`, and your games (`.ROM` files) in `/coleco` on the
+card. Neither is included.
+
+**The menu remembers where you were.** Whichever category and application you
+were last on is where the menu comes back the next time you switch the board on.
+
+**Applications appear in the order you list them.** Previously the order came
+from the card's own file order, which was effectively arbitrary. The bundled
+lists are now grouped sensibly, with the Game Boy alongside the other handhelds.
+
+**More room.** A list file may now hold 32 applications instead of 16.
+
+### Note
+
+`/boot.txt` gains three new settings that record your position in the menu. An
+older bootloader does not know them and will report `BOOT.TXT INVALID` if you
+put the card back in a board running one; delete the `VIEW`, `CATEGORY` and
+`APP` lines to use it there again.
+
+## v0.5
+
+A loader-only release. The SD card is unchanged, so the
+`pico-bootLoader_sdcard.zip` from v0.4 stays valid and does not need to be
+downloaded again — only re-flash the board with the loader `.uf2` for your
+hardware.
+
+### Changes
+
+**SELECT now opens an options menu** instead of switching the menu mode
+directly. Move through it with UP / DOWN, confirm with A and return with B. It
+holds four entries:
+
+- **Help** — the same help screen, still also reachable with START.
+- **Menu mode** — switch between the text list and the artwork view, as SELECT
+  used to do on its own.
+- **Enter BOOTSEL mode** — restart the board into the RP2350 ROM bootloader,
+  where it appears on your computer as a drive named `RP2350`. This is how you
+  update the bootloader itself without unplugging the board and holding the
+  BOOTSEL button. Reset the board to return to the menu.
+- **USB drive mode** — show the SD card on your computer over USB, so you can
+  add applications or change artwork without taking the card out. Copy your
+  files, then eject the drive on the computer and the menu comes back. If
+  anything was written, the board restarts so that it reads the card afresh.
+
+One note on USB drive mode. On some boards a USB game controller uses the very
+port that USB drive mode needs for the cable to your computer: the Pimoroni Pico
+DV Demo Base, the Adafruit DVI/microSD breakouts and the PicoNES PCB, the
+Waveshare RP2350-Zero PCB and the Murmulator M2. Only one of the two can be
+plugged in at a time, so on those boards the menu has to be operated with a
+controller on a NES/SNES port or with a Wii Classic controller. Boards with a
+separate controller port — the Adafruit Metro RP2350 and Fruit Jam, the
+Waveshare RP2350-PiZero and RP2350-USB-A, and the Adafruit Feather RP2350 — are
+not affected: game controllers go into that port, while the built-in port is the
+one used for the cable to your computer.
+
+**The separate Pico 2 W builds are gone.** The only thing they added was a
+working on-board LED, which on that board is wired to the wireless chip and so
+pulled the whole CYW43 driver in, filling the 512 KB bootloader partition to
+within a few kilobytes. Pico 2 W boards are still supported: flash the ordinary
+Pico 2 binary for your hardware. What you lose there is the LED, which no longer
+blinks as a heartbeat or while an application is being flashed. What you gain is
+USB drive mode, which never fit alongside the wireless driver.
+
+
 ## v0.4
 
 A release of both halves: the loader **and** the SD card. The loader picks up the current shared

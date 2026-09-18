@@ -3,12 +3,14 @@
  *
  * Loads 320x240 raw 16-bit artwork from <BASEDIR>/assets/themes/<N>/<key>.{444|555}
  * (BASEDIR defaults to /emu; overridable at runtime via gui_set_asset_dir()
- * fed from /boot.txt, and the active theme directory via gui_set_theme_dir()).
+ * fed from /boot.txt, the active theme directory via gui_set_theme_dir(), and
+ * an optional subdirectory inside the theme via gui_set_image_subdir() --
+ * "Categories" for the category carousel, the theme root for applications).
  * Extension picked by the shared FILEXTFORSEARCH macro), holds two reusable image
- * buffers in PSRAM (current + incoming), composes a horizontal slide between
- * them per scanline, and writes the result straight into whichever framebuffer
- * the active display backend (PicoDVI line-stream / PicoDVI framebuffer / HSTX
- * framebuffer) is using.
+ * buffers in PSRAM (current + incoming), composes a horizontal or vertical
+ * slide between them per scanline, and writes the result straight into whichever
+ * framebuffer the active display backend (PicoDVI line-stream / PicoDVI
+ * framebuffer / HSTX framebuffer) is using.
  *
  * The artwork is otherwise un-decorated -- display name, in-flash marker,
  * etc. are intentionally absent so the picture fills the screen. The only
@@ -54,6 +56,13 @@ void gui_set_theme_dir(const char *dir);
  * then go straight to the caller's placeholder instead. */
 void gui_set_theme_fallback_dir(const char *dir);
 
+/* Subdirectory inside each theme that artwork is looked up in, e.g.
+ * "Categories" while the category carousel is on screen. Pass NULL or "" for
+ * the theme root, which is where application artwork lives. Applies to the
+ * active theme and the theme-0 fallback alike, and to the on-demand PNG/JPG
+ * conversion both loaders trigger. */
+void gui_set_image_subdir(const char *sub);
+
 /* Allocate the image buffers. The cur buffer is always full resolution
  * (320x240, ~150 KB). The next buffer is full resolution when PSRAM is
  * available, or half resolution (160x120, ~38 KB) when it isn't -- the
@@ -94,17 +103,37 @@ void gui_fill_solid(uint16_t *dest_320x240, uint16_t color);
 /* Half-res variant of the placeholder fill (160x120). */
 void gui_fill_solid_half_res(uint16_t *dest_160x120, uint16_t color);
 
+/* Slide directions for gui_draw_frame().
+ *
+ * Horizontal slides move between neighbours within one carousel. Vertical ones
+ * move between the two levels of the menu, which sit above one another:
+ * categories on top, the applications of a category below. Opening a category
+ * therefore travels UP into it, and backing out travels DOWN. */
+#define GUI_SLIDE_NONE    0
+#define GUI_SLIDE_RIGHT   1     /* b enters from the right  */
+#define GUI_SLIDE_LEFT  (-1)    /* b enters from the left   */
+#define GUI_SLIDE_UP      2     /* b enters from the bottom */
+#define GUI_SLIDE_DOWN  (-2)    /* b enters from the top    */
+
+/* Full travel of a slide along `direction`'s axis: the screen width for a
+ * horizontal slide, the screen height for a vertical one. Callers drive the
+ * animation themselves, so they need this to know when it has finished; it is
+ * a function rather than a macro so gui.h need not pull in the board's
+ * SCREENWIDTH / SCREENHEIGHT. Returns 0 for GUI_SLIDE_NONE. */
+int gui_slide_extent(int direction);
+
 /* Draw one frame to the active backend.
  *
  *   a, b        : current image (full 320x240) and incoming image. b may be
  *                 NULL when no slide is in progress (slide_px is then ignored).
- *   slide_px    : 0..320, number of pixels of b currently revealed.
- *   direction   : +1 = b enters from the right (RIGHT pressed),
- *                 -1 = b enters from the left  (LEFT pressed),
- *                  0 = no slide; only `a` is drawn.
+ *   slide_px    : how much of b is revealed, 0..gui_slide_extent(direction).
+ *                 Pixels for a horizontal slide, scanlines for a vertical one.
+ *   direction   : one of the GUI_SLIDE_* values above.
  *   b_half_res  : b is a 160x120 image instead of 320x240; the function
  *                 expands it 2x per axis on the fly. Pass false if b is
- *                 full resolution or NULL.
+ *                 full resolution or NULL. Vertical slides honour this too,
+ *                 so the animation costs no extra memory on boards without
+ *                 PSRAM.
  */
 void gui_draw_frame(const uint16_t *a, const uint16_t *b,
                     int slide_px, int direction, bool b_half_res);

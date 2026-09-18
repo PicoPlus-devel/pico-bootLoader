@@ -1,0 +1,7 @@
+# Computer category. Same format as emulators.txt:
+#
+#   <program_name>;<image_key>;<display_name>[;<aux_uf2>]
+#
+# Only .uf2 files whose embedded program name matches a row below appear in
+# this category, in the order the rows are written. Max 32 rows.
+pico994A;ti99;TI99/4A

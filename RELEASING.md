@@ -78,7 +78,7 @@ changes but the board does not need re-flashing.
 Check the grand summary before going further. Every emulator should be `BUILT`
 for the boards it supports. `SKIP` is expected for excluded combinations
 (`picogenesisPlus` on HW 7; Doom outside boards 2, 8, 13, 14; `duke3d_game`
-outside boards 2, 8, 13). Any `FAIL` or `MISSING` means the archive is
+outside boards 2, 8, 13; `colecojam` outside board 8). Any `FAIL` or `MISSING` means the archive is
 incomplete — fix it and re-run rather than shipping a partial card.
 
 The packer refuses to build an archive containing a 0-byte `.uf2`, so a failed
@@ -131,8 +131,8 @@ gh release delete v0.2.1-alpha --cleanup-tag
 gh release view v0.2.1
 ```
 
-- **11 loader `.uf2` assets** — one per board, plus the two `_pico2_w_` variants
-  for HW_CONFIG 1 and 2.
+- **9 loader `.uf2` assets** — one per board. The `_pico2_w_` variants for
+  HW_CONFIG 1 and 2 are no longer built; a Pico 2 W runs the `pico2` asset.
 - `pico-bootLoader_sdcard.zip` present, unless this is a Scenario A release.
 - **3 PCB gerber assets** — `pico_nesPCB_v2.6.zip`,
   `Gerber_PicoNES_Mini_PCB_v2.0.zip` and `Gerber_PicoNES_Micro_v1.2.zip`,
@@ -185,5 +185,10 @@ from `github.sha`, so it will point at whatever is current.
 - **`emu/<HW_CONFIG>/` is gitignored** — the built emulator UF2s live only in the
   archive. `emu/versions.txt` is tracked precisely so the shipped versions are
   recorded in git.
+- **`emu/emulators.txt` remains the master list** even on a card that uses
+  categories: `build_emulators.sh` and `pack_sdcard.sh` both work from it, so a
+  program listed only in a category file would never be built or packed. The
+  packer warns when it finds one. `emu/categories.txt` and the config files it
+  names are packed alongside it, as is each theme's `Categories/` artwork.
 - **The self-hosted runner hardcodes** `/datalocal/pico/pico-sdk` and
   `/datalocal/Pico-PIO-USB`; a GitHub-hosted runner cannot build this.

@@ -1,0 +1,20 @@
+# Categories: the top level of the picker. Present this file and the menu opens
+# on a carousel of categories; remove it and the menu is one flat list driven by
+# the INDEX file named in boot.txt.
+#
+# Format: <category_name>;<image_key>;<config_file>
+#   category_name Display name of the category
+#   image_key     menu artwork basename: assets/themes/n/Categories/<key>.png|.jpg
+#                 (note the Categories subfolder -- application artwork sits in
+#                 the theme folder itself)
+#   config_file   File in the same format as emulators.txt holding the
+#                 applications of this category, relative to BASEDIR.
+#                 Leave it empty to make the entry open the options screen.
+#
+# Categories are shown in the order they appear below. Max 16 rows.
+Arcade;arcade;arcade.txt
+Computer;computer;computer.txt
+Console;console;console.txt
+Handheld;handheld;handheld.txt
+Ports;ports;ports.txt
+Settings;settings;

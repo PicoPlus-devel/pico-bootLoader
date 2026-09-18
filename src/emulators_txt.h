@@ -33,9 +33,24 @@
 extern "C" {
 #endif
 
-/* Read and parse the file. Safe to call once at startup. Returns false if the
- * file is missing or unreadable; in that case lookups will always miss. */
+/* Read and parse the file. Returns false if the file is missing or unreadable;
+ * in that case lookups will always miss. Called once at startup for the INDEX
+ * file, and again for each category's config file as the user enters it -- the
+ * rows of the previously loaded file are discarded on every call. */
 bool emulators_txt_load(const char *path);
+
+/* Number of rows in the currently loaded file. */
+int emulators_txt_count(void);
+
+/* Read row `i` (0-based, in FILE ORDER). This is what the picker builds its
+ * list from: the display order is the order the user wrote, not the order
+ * FatFs happened to return the .uf2 files in. Any output pointer may be NULL;
+ * every buffer written is NUL-terminated. Returns false when i is out of range. */
+bool emulators_txt_row(int i,
+                       char *prog_name, size_t prog_sz,
+                       char *image_key, size_t key_sz,
+                       char *display_name, size_t name_sz,
+                       char *aux_uf2, size_t aux_sz);
 
 /* Look up by program_name. Writes the matching image_key, display_name, and
  * (optional) aux_uf2 into the caller's buffers (always NUL-terminated;

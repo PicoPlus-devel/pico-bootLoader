@@ -11,10 +11,12 @@
 # so unzipping at the root of the card is all a user has to do):
 #   emu/<HW_CONFIG>/<prog_name>.uf2      plus any aux (WAD) UF2s alongside
 #   emu/emulators.txt
+#   emu/categories.txt                   (if present, with the config files it names)
 #   emu/boot.example.txt
 #   emu/versions.txt                     (if present; written by build_emulators.sh -z)
 #   emu/assets/themes/<0-9>/<image_key>.{444,555}   (or the .png/.jpg source,
 #                                        for a key that has no cache to ship)
+#   emu/assets/themes/<0-9>/Categories/<image_key>.{444,555}
 #   emu/assets/screensaver/<sprite>.{444,555}
 #
 # Usage: pack_sdcard.sh <loader_dir> <output_zip>
@@ -123,6 +125,48 @@ while IFS=';' read -r prog img _name aux || [ -n "${prog:-}" ]; do
 done < "$LOADER/emu/emulators.txt"
 [ ${#PROG_NAMES[@]} -gt 0 ] || die "no emulators listed in emu/emulators.txt"
 
+# --- Categories (optional) ---------------------------------------------------
+# Format: <category_name>;<image_key>;<config_file>; an empty config_file is the
+# options row and has no list behind it. Each config file uses the emulators.txt
+# format and ships alongside it; its artwork lives one level down, in each
+# theme's Categories/ subfolder.
+CAT_KEYS=()
+cat_count=0
+if [ -f "$LOADER/emu/categories.txt" ]; then
+    cp "$LOADER/emu/categories.txt" "$DEST/categories.txt"
+    while IFS=';' read -r name img cfg || [ -n "${name:-}" ]; do
+        [ -z "${name:-}" ] && continue
+        [[ "$name" == \#* ]] && continue
+        img="$(printf '%s' "${img:-}" | tr -d '[:space:]')"
+        cfg="$(printf '%s' "${cfg:-}" | tr -d '[:space:]')"
+        [ -n "$img" ] && CAT_KEYS+=("$img")
+        cat_count=$((cat_count + 1))
+
+        [ -z "$cfg" ] && continue        # the options row
+        if [ ! -f "$LOADER/emu/$cfg" ]; then
+            warn "categories.txt names '$cfg' for category '$name' but emu/$cfg does not exist — that category will report itself empty"
+            continue
+        fi
+        cp "$LOADER/emu/$cfg" "$DEST/$cfg"
+        echo "  pack $cfg  (category '$name')"
+
+        # A category may only name programs the master list also carries: the
+        # build and this packer both work from emulators.txt, so a program
+        # listed only in a category file would never have a UF2 to launch.
+        while IFS=';' read -r cprog _rest || [ -n "${cprog:-}" ]; do
+            [ -z "${cprog:-}" ] && continue
+            [[ "$cprog" == \#* ]] && continue
+            cprog="$(printf '%s' "$cprog" | tr -d '[:space:]')"
+            found=0
+            for p in "${PROG_NAMES[@]}"; do
+                [ "$p" = "$cprog" ] && { found=1; break; }
+            done
+            (( found )) || warn "$cfg lists '$cprog', which is not in emulators.txt — it will never be built or packed"
+        done < "$LOADER/emu/$cfg"
+    done < "$LOADER/emu/categories.txt"
+    echo "  pack categories.txt ($cat_count category/categories)"
+fi
+
 # --- Per-board binaries ------------------------------------------------------
 packed=0
 missing=0
@@ -229,6 +273,40 @@ for theme in "$LOADER/emu/assets/themes/"[0-9]; do
         # design (README: "Incomplete themes are fine") and stay quiet.
         if [ "$packed_src" -eq 0 ] && [ "$tnum" = 0 ]; then
             warn "theme 0 has no artwork for '$key' (no .444/.555 and no .png/.jpg) — it will show as a black tile"
+        fi
+    done
+
+    # Category artwork, same rules one level down. Skipped entirely on a card
+    # without categories.txt.
+    [ ${#CAT_KEYS[@]} -gt 0 ] || continue
+    [ -d "$theme/Categories" ] || continue
+    mkdir -p "$DEST/assets/themes/$tnum/Categories"
+    for ext in 444 555; do
+        for src in "$theme/Categories/"*."$ext"; do
+            base="$(basename "$src")"
+            case "$base" in
+                *" copy."*) continue ;;
+            esac
+            cp "$src" "$DEST/assets/themes/$tnum/Categories/$base"
+            asset_count=$((asset_count + 1))
+        done
+    done
+    for key in "${CAT_KEYS[@]}"; do
+        if [ -s "$theme/Categories/$key.444" ] || [ -s "$theme/Categories/$key.555" ]; then
+            continue
+        fi
+        packed_src=0
+        for ext in png jpg jpeg; do
+            if [ -s "$theme/Categories/$key.$ext" ]; then
+                cp "$theme/Categories/$key.$ext" "$DEST/assets/themes/$tnum/Categories/$key.$ext"
+                echo "  pack theme $tnum Categories/$key.$ext  (no .444/.555 cache; converted on first boot)"
+                src_count=$((src_count + 1))
+                packed_src=1
+                break
+            fi
+        done
+        if [ "$packed_src" -eq 0 ] && [ "$tnum" = 0 ]; then
+            warn "theme 0 has no category artwork for '$key' — it will show as a black tile"
         fi
     done
 done

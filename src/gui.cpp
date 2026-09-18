@@ -20,6 +20,10 @@ namespace {
     // from s_asset_dir so gui works even if the theme setters are never called.
     char      s_theme_dir[80]    = "/emu/assets/themes/0";
     char      s_theme_fb_dir[80] = "/emu/assets/themes/0";
+
+    // Subdirectory inside a theme, "" for the theme root. Application artwork
+    // sits in the root; the category carousel sets this to "Categories".
+    char      s_img_subdir[24]   = "";
 }
 
 // Half-resolution dimensions for the slide-only buffer used when there is
@@ -88,6 +92,12 @@ void gui_set_theme_fallback_dir(const char *dir)
     snprintf(s_theme_fb_dir, sizeof(s_theme_fb_dir), "%s", dir);
 }
 
+void gui_set_image_subdir(const char *sub)
+{
+    if (!sub || !*sub) { s_img_subdir[0] = '\0'; return; }
+    snprintf(s_img_subdir, sizeof(s_img_subdir), "%s", sub);
+}
+
 bool gui_buffers_alloc(void)
 {
     const size_t sz_full = SCREENWIDTH * SCREENHEIGHT * sizeof(uint16_t);
@@ -147,30 +157,46 @@ void gui_fill_solid_half_res(uint16_t *dest, uint16_t color)
     for (size_t i = 0; i < pixels; i++) dest[i] = color;
 }
 
-// Open "<theme>/<image_key><FILEXTFORSEARCH>", converting a same-named PNG/JPG
-// on demand (streaming, works on both PSRAM and SRAM-only builds). When the
-// active theme has no artwork for this key, falls back to the theme-0 dir.
-// Returns true with *fil open and positioned at offset 0.
+// Open "<theme>[/<subdir>]/<image_key><FILEXTFORSEARCH>", converting a
+// same-named PNG/JPG on demand (streaming, works on both PSRAM and SRAM-only
+// builds). When the active theme has no artwork for this key, falls back to the
+// theme-0 dir. Returns true with *fil open and positioned at offset 0.
 //
 // Both loaders below share this; before themes existed each of them built the
 // same two paths inline, verbatim.
 static bool gui_open_asset(const char *image_key, FIL *fil)
 {
     const char *dirs[2] = { s_theme_dir, s_theme_fb_dir };
-    char path[FF_MAX_LFN + 1];
+
+    // Sized from what can actually appear here rather than FF_MAX_LFN. This
+    // runs on the deepest stack path in the loader -- gui_load_image_half_res
+    // (a 640-byte scanline plus a ~560-byte FIL) calls it, and it in turn
+    // calls image_convert_ensure(), which builds three FF_MAX_LFN paths of its
+    // own. Two 256-byte buffers here cost more of the 3 KB stack than the
+    // inputs can ever need: a theme dir is bounded by s_theme_dir[80], the
+    // subdirectory by s_img_subdir[24], and an image_key by the 16-character
+    // column-2 limit in the index file.
+    char dir[sizeof(s_theme_dir) + sizeof(s_img_subdir)];       // 104
+    char path[sizeof(dir) + 40];                                // + "/<key>.444"
 
     for (int i = 0; i < 2; i++) {
-        const char *dir = dirs[i];
-        if (!dir || !*dir) continue;
-        if (i == 1 && strcmp(dir, dirs[0]) == 0) break;   // fallback == active
+        if (!dirs[i] || !*dirs[i]) continue;
+        if (i == 1 && strcmp(dirs[i], dirs[0]) == 0) break;   // fallback == active
+
+        // The subdirectory has to be part of the directory handed to
+        // image_convert_ensure(), not just of the path we open: that is what
+        // makes a hand-built card with only .png in Categories/ convert in
+        // place on first view.
+        if (s_img_subdir[0]) snprintf(dir, sizeof(dir), "%s/%s", dirs[i], s_img_subdir);
+        else                 snprintf(dir, sizeof(dir), "%s", dirs[i]);
 
         image_convert_ensure(dir, image_key, SCREENWIDTH, SCREENHEIGHT, /*letterbox=*/true);
         snprintf(path, sizeof(path), "%s/%s%s", dir, image_key, FILEXTFORSEARCH);
         if (f_open(fil, path, FA_READ) == FR_OK) return true;
     }
 
-    printf("[bootLoader] gui: no artwork for '%s' in %s (or theme 0)\n",
-           image_key, s_theme_dir);
+    printf("[bootLoader] gui: no artwork for '%s' in %s%s%s (or theme 0)\n",
+           image_key, s_theme_dir, s_img_subdir[0] ? "/" : "", s_img_subdir);
     return false;
 }
 
@@ -320,6 +346,33 @@ static inline void compose_row(uint16_t *dst, int y,
         return;
     }
 
+    // Vertical slides pick a whole row from one image or the other -- there is
+    // no split within a row, unlike the horizontal case below. `src_y` is the
+    // row to take, in the 240-row output space; the half-res expansion is the
+    // same >>1 the horizontal path uses, just applied to the row index too.
+    if (dir == GUI_SLIDE_UP || dir == GUI_SLIDE_DOWN) {
+        if (p > SCREENHEIGHT) p = SCREENHEIGHT;
+        bool from_b;
+        int  src_y;
+        if (dir == GUI_SLIDE_UP) {
+            // b enters along the bottom edge; a scrolls off the top.
+            from_b = (y >= SCREENHEIGHT - p);
+            src_y  = from_b ? y - (SCREENHEIGHT - p) : y + p;
+        } else {
+            // b enters along the top edge; a scrolls off the bottom.
+            from_b = (y < p);
+            src_y  = from_b ? SCREENHEIGHT - p + y : y - p;
+        }
+        if (!from_b) {
+            memcpy(dst, a + src_y * SCREENWIDTH, SCREENWIDTH * sizeof(uint16_t));
+        } else if (b_half_res) {
+            copy_b_half(dst, b + (src_y >> 1) * GUI_HALF_W, 0, SCREENWIDTH);
+        } else {
+            copy_b_full(dst, b + src_y * SCREENWIDTH, 0, SCREENWIDTH);
+        }
+        return;
+    }
+
     // Locate b's row for this output scanline.
     const uint16_t *brow = b_half_res
         ? (b + (y >> 1) * GUI_HALF_W)
@@ -344,12 +397,27 @@ static inline void compose_row(uint16_t *dst, int y,
     }
 }
 
+int gui_slide_extent(int direction)
+{
+    switch (direction) {
+    case GUI_SLIDE_UP:
+    case GUI_SLIDE_DOWN:  return SCREENHEIGHT;
+    case GUI_SLIDE_LEFT:
+    case GUI_SLIDE_RIGHT: return SCREENWIDTH;
+    default:              return 0;
+    }
+}
+
 void gui_draw_frame(const uint16_t *a, const uint16_t *b,
                     int slide_px, int direction, bool b_half_res)
 {
     if (!a) return;
+    // Clamp along the slide's own axis: a vertical slide runs to SCREENHEIGHT,
+    // which is shorter than SCREENWIDTH, so clamping to the width would let it
+    // overrun.
+    const int extent = gui_slide_extent(direction);
     if (slide_px < 0) slide_px = 0;
-    if (slide_px > SCREENWIDTH) slide_px = SCREENWIDTH;
+    if (extent && slide_px > extent) slide_px = extent;
 
     for (int y = 0; y < SCREENHEIGHT; y++) {
         uint16_t *dst;

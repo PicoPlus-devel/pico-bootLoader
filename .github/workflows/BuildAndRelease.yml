@@ -123,7 +123,9 @@ jobs:
                       } >> release-notes.md
                       while IFS=';' read -r prog repo ref shared || [ -n "$prog" ]; do
                           case "$prog" in ''|\#*) continue ;; esac
-                          echo "| \`$prog\` | [$repo](https://github.com/${{ github.repository_owner }}/$repo) | $ref | ${shared:-–} |" >> release-notes.md
+                          # A bare repo name lives under this owner; owner/repo is hosted elsewhere.
+                          case "$repo" in */*) repo_path="$repo" ;; *) repo_path="${{ github.repository_owner }}/$repo" ;; esac
+                          echo "| \`$prog\` | [$repo](https://github.com/$repo_path) | $ref | ${shared:-–} |" >> release-notes.md
                       done < emu/versions.txt
                  else
                       echo "NOTE: emu/versions.txt is absent; release notes carry no emulator version table." >&2
