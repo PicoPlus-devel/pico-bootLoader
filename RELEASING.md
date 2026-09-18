@@ -5,11 +5,11 @@ they have different lifecycles:
 
 | Artifact | Built by | How it gets onto the release |
 | --- | --- | --- |
-| `pico-bootLoader_<board>_arm[_piousb].uf2` (11 files) | CI, on the self-hosted runner | attached automatically by the workflow |
+| `pico-bootLoader_<board>_arm[_piousb].uf2` (9 files) | CI, on the self-hosted runner | attached automatically by the workflow |
 | `pico-bootLoader_sdcard.zip` | **locally**, by `build_emulators.sh -c all -z` | `gh release upload`, by hand |
 | PCB gerbers (3 zips: PicoNES v2.6, Mini v2.0, Micro v1.2) | nobody — vendored in the `pico_shared` submodule | attached automatically by the workflow |
 
-The archive is not built in CI because it needs all nine emulator toolchains and
+The archive is not built in CI because it needs every application's toolchain and
 takes hours; the loader builds take minutes. That split is why step 4 below is
 manual.
 
@@ -77,8 +77,9 @@ changes but the board does not need re-flashing.
 
 Check the grand summary before going further. Every emulator should be `BUILT`
 for the boards it supports. `SKIP` is expected for excluded combinations
-(`picogenesisPlus` on HW 7; Doom outside boards 2, 8, 13, 14; `duke3d_game`
-outside boards 2, 8, 13; `colecojam` outside board 8). Any `FAIL` or `MISSING` means the archive is
+(`picogenesisPlus` on HW 7; `picosnesPlus` and `picoOutRun` on HW 1, 5, 6, 7, 9;
+Doom outside boards 2, 8, 13, 14; `duke3d_game` outside boards 2, 8, 13;
+`colecojam` outside board 8). Any `FAIL` or `MISSING` means the archive is
 incomplete — fix it and re-run rather than shipping a partial card.
 
 The packer refuses to build an archive containing a 0-byte `.uf2`, so a failed
@@ -169,12 +170,13 @@ from `github.sha`, so it will point at whatever is current.
   both refs in the manifest. The reason was historical: `bld.sh` gained `-b`
   (`BUILD_FOR_BOOTLOADER`) only in `pico_shared` `f2c8be9`, and the emulator tags
   of the time predated it, so their pinned revision rejected `-b` outright.
-  **As of the v0.4 tag set that is no longer true** — every emulator tag now pins
-  `3e19ce0`, a descendant of `f2c8be9`, and `main` is at that same revision, so
-  the substitution is a no-op and both columns of `emu/versions.txt` agree. The
-  behaviour is kept because it is what makes a bundle buildable at all when a
-  repo is tagged against an older `pico_shared`; when the two columns differ,
-  that is the reason.
+  That reason no longer applies — every current tag pins a descendant of
+  `f2c8be9` — but the substitution is still not a no-op. The tags pin different
+  revisions (for v0.6: `3e19ce0` for Videopac and Game Boy, `3873764` for PC
+  Engine, `1b88043` for SNES and Genesis, `63e983c` for the rest), while the
+  whole bundle is built against the one `pico_shared` `main` that
+  `emu/versions.txt` records. An older tag that no longer builds against `main`
+  shows up as a `FAIL` in the grand summary.
 - **A tag pushed from CI would not trigger this workflow** — GitHub does not fire
   workflows for events created with the default `GITHUB_TOKEN`. That is why the
   release step passes `tag_name` + `target_commitish` and creates the tag itself

@@ -8,10 +8,17 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 
 ## v0.6
 
-Download the new `pico-bootLoader_sdcard.zip` as well as the loader `.uf2` for
-your board: this release adds files to the card.
+A release of both halves, the loader and the SD card, and the first since v0.4:
+there was no v0.5. The menu gains categories, an options menu and USB drive
+mode; the card gains the TI-99/4A, OutRun and the ColecoVision, and newer
+versions of five emulators.
 
-### Changes
+> **Do you need to update?** Yes, both parts. Re-flash the board with the
+> loader `.uf2` for your hardware, and replace the `/emu` folder on your card
+> with the one in the new `pico-bootLoader_sdcard.zip`. Your ROMs, save states
+> and everything else outside `/emu` are untouched.
+
+### The loader
 
 **Categories.** The menu can now group applications instead of showing them all
 in one long list. It opens on a set of categories — Arcade, Computer, Console,
@@ -21,48 +28,99 @@ Handheld, Ports and Settings — and opening one shows what is in it.
 - The first button (`A` on a NES pad) opens the highlighted category, and
   starts an application once you are inside one.
 - The second button (`B`) goes back to the categories.
-- **Settings** is a category with nothing behind it: opening it brings up the
-  same options screen SELECT does.
+- **Settings** opens the options menu described below.
 
-A category that has nothing in it still appears, and says so when you open it,
-so nothing quietly disappears from the menu.
+A category that has nothing in it still appears, and says so when you open it.
+Categories come from a `categories.txt` file on the card, with one list file
+per category, so you decide what goes where; delete it and the menu is the
+single list it always was. The README explains how to build your own
+arrangement.
 
-Categories are optional. They come from a `categories.txt` file on the card;
-delete it and the menu is the single list it always was. Each category has its
-own list file, so you decide what goes where — see the README if you want to
-build your own arrangement.
+**SELECT opens an options menu** instead of switching the menu mode directly.
+Move through it with UP / DOWN, confirm with A and return with B:
 
-**The TI-99/4A has been added**, and fills the new Computer category. It is a
-Texas Instruments home computer emulator and is built for every board. Put your
-cartridges in `/roms/TI99` on the card, as `.rpk` files or as the classic `.bin`
-sets, and the console files `994aROM.bin` and `994aGROM.bin` in `/bios` — the
-emulator does not run without those two. A USB keyboard works as the TI
-keyboard, and TI BASIC is there without a cartridge.
+- **Help** — the help screen, still also reachable with START.
+- **Menu mode** — switch between the text list and the artwork view.
+- **Enter BOOTSEL mode** — restart the board as the `RP2350` drive, so the
+  loader itself can be updated without unplugging the board and holding the
+  BOOTSEL button.
+- **USB drive mode** — show the SD card on your computer over USB, so you can
+  add applications, ROMs or artwork without taking the card out. Eject the
+  drive on the computer when you are done and the menu comes back.
 
-**OutRun has been added**, and fills the new Arcade category. It is a port of
-SEGA's arcade game and runs on the Adafruit Fruit Jam, the Adafruit DVI +
-microSD breakouts or the PicoNES PCB, the Murmulator M2, and the Adafruit
-Feather RP2350 with a TLV320DAC3100. All four need PSRAM.
-
-The game ROMs are not included — they are copyright SEGA — so you have to
-supply them yourself. Copy the unzipped MAME `outrun` (revision B) ROM set to
-`/roms/ORUN` on the card and the game does the rest, taking a few seconds at
-every start to prepare. Without them it shows a screen telling you what is
-missing. USB drive mode is the easiest way to get the files onto the card.
-
-**The ColecoVision has been added** to the Console category, for the Adafruit
-Fruit Jam. It uses [ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam).
-Put the BIOS, `COLECO.BIN`, and your games (`.ROM` files) in `/coleco` on the
-card. Neither is included.
+On some boards a USB game controller uses the same port as the cable to your
+computer, so only one of the two can be plugged in at a time: the Pimoroni Pico
+DV Demo Base, the Adafruit DVI + microSD breakouts and the PicoNES PCB, the
+Waveshare RP2350-Zero PCB and the Murmulator M2. On those, operate the menu with
+a controller on a NES/SNES port or a Wii Classic controller. Boards with a
+separate controller port are not affected.
 
 **The menu remembers where you were.** Whichever category and application you
 were last on is where the menu comes back the next time you switch the board on.
 
-**Applications appear in the order you list them.** Previously the order came
-from the card's own file order, which was effectively arbitrary. The bundled
-lists are now grouped sensibly, with the Game Boy alongside the other handhelds.
+**Applications appear in the order you list them**, instead of in the card's
+own, effectively arbitrary, file order. A list may now hold 32 applications
+instead of 16.
 
-**More room.** A list file may now hold 32 applications instead of 16.
+**PSRAM is recognised reliably at start-up.** The check could occasionally miss
+the chip, and the board then behaved as if it had none.
+
+**Pico 2 W boards use the ordinary Pico 2 binary.** The separate Pico 2 W
+builds are gone: all they added was the on-board LED, whose driver left no room
+for USB drive mode. On a Pico 2 W the LED no longer blinks.
+
+### New on the card
+
+**TI-99/4A** fills the new Computer category and runs on every board. Put your
+cartridges in `/roms/TI99` on the card, as `.rpk` files or as the classic `.bin`
+sets, and the console files `994aROM.bin` and `994aGROM.bin` in `/bios` — the
+emulator does not run without those two. A USB keyboard works as the TI
+keyboard, and TI BASIC is there without a cartridge. Without PSRAM the disk
+drives are unavailable and cartridges are limited to 32 KB.
+
+**OutRun**, a port of SEGA's arcade game, fills the new Arcade category. It runs
+on the Adafruit Fruit Jam, the Adafruit DVI + microSD breakouts or the PicoNES
+PCB, the Murmulator M2, and the Adafruit Feather RP2350 with a TLV320DAC3100,
+and needs PSRAM on all four. The game ROMs are copyright SEGA and not included:
+copy the unzipped MAME `outrun` (revision B) set to `/roms/ORUN`. The game takes
+a few seconds at every start to prepare them, and tells you on screen if any are
+missing.
+
+**ColecoVision** joins the Console category on the Adafruit Fruit Jam, using
+[ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam). Put the BIOS,
+`COLECO.BIN`, and your games (`.ROM` files) in `/coleco` on the card. Neither is
+included.
+
+### Updated emulators
+
+All five below now have **USB drive mode** in their own settings menu, opened
+with SELECT from the game list, so games can be copied onto the card without
+taking it out. Each version links to that emulator's own release notes.
+
+- **Nintendo Entertainment System**
+  [v0.50](https://github.com/PicoPlus-devel/pico-infonesPlus/releases/tag/v0.50):
+  new mappers and fixes for dozens of games, among them *Mike Tyson's
+  Punch-Out!!*, *Castlevania III* and *Romance of the Three Kingdoms II*. Saved
+  games in battery-backed MMC5 cartridges are kept, and no more than 8 sprites
+  per line are shown, as on a real NES.
+- **Super Nintendo**
+  [v0.5](https://github.com/PicoPlus-devel/pico-snesPlus/releases/tag/v0.5):
+  *Super Mario RPG* no longer freezes during battles.
+- **PC Engine**
+  [v0.6](https://github.com/PicoPlus-devel/pico-pcePlus/releases/tag/v0.6):
+  a save state of a CD game can now be loaded after leaving the game and
+  starting it again.
+- **Master System / Game Gear**
+  [v0.29](https://github.com/PicoPlus-devel/pico-smsplus/releases/tag/v0.29):
+  also plays **Sega SG-1000** games — `.sg` files, with a lowercase extension,
+  next to your Master System and Game Gear ROMs.
+- **Genesis / Mega Drive**
+  [v0.15](https://github.com/PicoPlus-devel/pico-genesisPlus/releases/tag/v0.15):
+  USB drive mode only; the emulator itself is unchanged.
+
+Videopac, Game Boy, *Doom!* and *Duke Nukem 3D* are the same versions as
+before. The exact version of every application on the card is in the table at
+the end of this page and in `/emu/versions.txt`.
 
 ### Note
 
@@ -71,191 +129,22 @@ older bootloader does not know them and will report `BOOT.TXT INVALID` if you
 put the card back in a board running one; delete the `VIEW`, `CATEGORY` and
 `APP` lines to use it there again.
 
-## v0.5
-
-A loader-only release. The SD card is unchanged, so the
-`pico-bootLoader_sdcard.zip` from v0.4 stays valid and does not need to be
-downloaded again — only re-flash the board with the loader `.uf2` for your
-hardware.
-
-### Changes
-
-**SELECT now opens an options menu** instead of switching the menu mode
-directly. Move through it with UP / DOWN, confirm with A and return with B. It
-holds four entries:
-
-- **Help** — the same help screen, still also reachable with START.
-- **Menu mode** — switch between the text list and the artwork view, as SELECT
-  used to do on its own.
-- **Enter BOOTSEL mode** — restart the board into the RP2350 ROM bootloader,
-  where it appears on your computer as a drive named `RP2350`. This is how you
-  update the bootloader itself without unplugging the board and holding the
-  BOOTSEL button. Reset the board to return to the menu.
-- **USB drive mode** — show the SD card on your computer over USB, so you can
-  add applications or change artwork without taking the card out. Copy your
-  files, then eject the drive on the computer and the menu comes back. If
-  anything was written, the board restarts so that it reads the card afresh.
-
-One note on USB drive mode. On some boards a USB game controller uses the very
-port that USB drive mode needs for the cable to your computer: the Pimoroni Pico
-DV Demo Base, the Adafruit DVI/microSD breakouts and the PicoNES PCB, the
-Waveshare RP2350-Zero PCB and the Murmulator M2. Only one of the two can be
-plugged in at a time, so on those boards the menu has to be operated with a
-controller on a NES/SNES port or with a Wii Classic controller. Boards with a
-separate controller port — the Adafruit Metro RP2350 and Fruit Jam, the
-Waveshare RP2350-PiZero and RP2350-USB-A, and the Adafruit Feather RP2350 — are
-not affected: game controllers go into that port, while the built-in port is the
-one used for the cable to your computer.
-
-**The separate Pico 2 W builds are gone.** The only thing they added was a
-working on-board LED, which on that board is wired to the wireless chip and so
-pulled the whole CYW43 driver in, filling the 512 KB bootloader partition to
-within a few kilobytes. Pico 2 W boards are still supported: flash the ordinary
-Pico 2 binary for your hardware. What you lose there is the LED, which no longer
-blinks as a heartbeat or while an application is being flashed. What you gain is
-USB drive mode, which never fit alongside the wireless driver.
-
-
 ## v0.4
 
-A release of both halves: the loader **and** the SD card. The loader picks up the current shared
-menu and support code, and every application on the card is rebuilt from its latest release. The
-headline is Sega Genesis/Mega Drive, which now runs at full speed on HSTX boards.
-
-> **Do you need to update?** Yes, both parts — download the new `pico-bootLoader_sdcard.zip`
-> below and replace the `/emu` folder on your card, and re-flash the board with the loader `.uf2`
-> for your hardware. The card is where nearly all of this release is: Genesis went from
-> struggling to full speed, every emulator gained a **recently played** list, and DVI-only
-> monitors that stayed black now show a picture. Your ROMs, save states and artwork are
-> untouched — only `/emu` is replaced.
-
-### The loader
-
-- **DVI-only monitors show a picture again.** In DVI mode, some older screens that accept DVI but not HDMI stayed black.
-- **Steadier start-up.** The board lets its power settle before switching to the higher clock speed.
-
-### What's new on the card
-
-All ten applications are rebuilt from their newest releases — the exact versions are in the table
-at the end of this page and in `/emu/versions.txt` on the card. Every emulator picks up the same
-shared fixes the loader did, and two things the loader has no use for:
-
-- **A recently played list.** The last 20 games you started, newest first, kept separately for
-  each emulator. Open it with **X** in the ROM browser — that is button 3 on any pad: X on a SNES
-  controller, Y on XInput, Triangle on PlayStation, C on Genesis — or from the new **Recently
-  played** entry at the top of the settings menu, which is the route for pads without a button 3.
-  In the list **A** starts the game, **SELECT** removes it, **START** shows its artwork and **B**
-  closes the list. Each list is plain text at the root of the card (`/recent_NES.txt`,
-  `/recent_SNES.txt` and so on), so it survives a reboot and can be edited or deleted on a PC. A
-  game that is no longer on the card is reported as missing rather than started. A damaged list
-  simply comes up empty — unlike the settings file, nothing else is reset.
-- **No more waiting for a re-flash you don't need.** On boards without PSRAM, starting a game
-  always rewrote it into flash, even when that exact game was already there. The emulator now
-  records what it wrote and skips programming when the selected game is exactly the image already
-  in flash — verified with a checksum, not just a file name — which saves several seconds of black
-  screen every time you restart the same title. That game is marked **[READY]** in the recently
-  played list.
-
-**Sega Genesis/Mega Drive is transformed.** pico-genesisPlus v0.14 rebuilds the emulator core:
-
-- **Full speed on HSTX boards**, including in games with heavy sound — a Raspberry Pi Pico 2 or
-  Pimoroni Pico Plus 2 (on the PicoNES PCB or on a breadboard), the Adafruit Fruit Jam, the
-  Adafruit Metro RP2350 and the Murmulator M2. Sound is now produced on the second processor
-  core, which leaves far more room for the game itself.
-- **Sound works properly at last** — music, noise effects, the "SEGAAA!" voice and the audio of
-  SGDK games, without dropouts in busy scenes.
-- **Games can save your progress**, PAL (European) games run at the right speed, 256-wide games
-  fill the screen, and starting one game after another is stable.
-- Still slow on boards **without** HSTX — the Pimoroni Pico DV Demo Base, Waveshare RP2350-Zero /
-  PicoNES Mini, Waveshare RP2350-USB-A / PicoNES Micro, the Spotpear HDMI board and the
-  Murmulator M1. Putting the picture on screen takes so much of the board's attention that too
-  little is left for the emulator. The games are playable but the action, music and sound all
-  drag, and this is not something that can be tuned away.
-
-The rest:
-
-- **Nintendo Entertainment System** (v0.47) gains **beta support for the NES Zapper light gun** in
-  controller port 2. It needs the custom PicoNES PCB (design v2.1 or later) and so is only in the
-  `piconesPlus` build for the Adafruit DVI + MicroSD breakout / PicoNES PCB — on every other board
-  those two pins are already in use, and the Murmulator M1 and M2 leave them unconnected
-  entirely. There is nothing to switch on; the gun is detected when plugged in, and a normal pad
-  in port 2 keeps working alongside it. Two things to know before buying one: games need the
-  LCD-lag correction patches from [neslcdmod.com](https://neslcdmod.com/), and an **original
-  Nintendo Zapper does not work on a flat panel** — it is built around the bright flash of a CRT.
-  A third-party gun made for modern displays is required; the Tomee Zapp Gun is what this was
-  developed and tested with. See
-  [NES Zapper](https://github.com/fhoedemakers/pico-infonesPlus#nes-zapper-light-gun) for patching
-  and calibration. Also in this release: a `.nes` file claiming **mapper 31** correctly reports
-  "unsupported" again instead of booting into the NSF player, and the framerate overlay now shows
-  a resync counter (`R<n>`) — a steadily rising number means the display is struggling to hold
-  sync.
-- **Doom!** (v0.2) and **Duke Nukem 3D** (v0.3) — a new **BOOTSEL Mode** item at the bottom of
-  the Options menu restarts the board as the USB firmware drive, so you can re-flash it without
-  unplugging it and holding the BOOT button.
-- **Super Nintendo, PC Engine, Master System/Game Gear, Game Boy and Videopac** — the shared menu
-  and controller work above; the emulator cores themselves are unchanged. On the SNES the 504 MHz
-  overclock option is now documented as not advised, and the 378 MHz default is unchanged.
-- **Controllers.** A SNES pad wired straight to a NES controller port now uses **A and B** as you
-  would expect, in games as well as in the menu — previously the pad reported B and Y where a NES
-  pad has A and B, so physical A did nothing at all and "choose" landed on B. In the menu **A**
-  chooses, **B** goes back and **X** opens the recently played list, as on USB and Wii pads; on a
-  Genesis pad **C** opens it. The Controller Test now names the buttons for the kind of pad it
-  detects and shows the raw data the pad sends, which makes an adapter cable that quietly
-  converts the signal easy to spot, and leaving that screen no longer drops into the screensaver.
+Sega Genesis at full speed on HSTX boards, a recently played list in every
+emulator, and DVI-only monitors working again. See the
+[v0.4 release notes](https://github.com/PicoPlus-devel/pico-bootLoader/releases/tag/v0.4).
 
 ## v0.3
 
-A release about the hardware around the bootloader rather than the bootloader
-itself. Nothing in the loader's behaviour changed since v0.2.
-
-> **Do you need to update?** Nothing here changes what the board does. The
-> loader `.uf2`s differ from v0.2 only in the version shown in the menu title
-> and on the help screen, and the SD-card archive is a rebuild of the same
-> emulators from their current release tags — they behave as before, they just
-> report a version instead of an older one. Re-flashing and replacing `/emu`
-> are both optional; the interesting part of this release is the documentation
-> and the PCB gerbers below.
-
-### Added
-
-- **The three custom PCB designs are documented and shipped with the release.**
-  The README has a [Custom PCBs](https://github.com/fhoedemakers/pico-bootLoader#custom-pcbs)
-  chapter covering all of them — PicoNES (HW_CONFIG 2), PicoNES Mini (6) and
-  PicoNES Micro (9) — with the parts each one needs, how the board is mounted,
-  which loader binary to flash and the matching 3D-printed case. The Gerber
-  archives are now release assets alongside the binaries: `pico_nesPCB_v2.6.zip`,
-  `Gerber_PicoNES_Mini_PCB_v2.0.zip` and `Gerber_PicoNES_Micro_v1.2.zip`.
-- **PicoNES PCB design v2.6 takes a Pimoroni Pico Plus 2.** The design gained
-  through-holes, so instead of soldering the board flat you can fit male headers
-  and plug in a Pico 2, Pico 2 W or a Pimoroni Pico Plus 2. On HW_CONFIG 2 the
-  Pimoroni Pico Plus 2 is what unlocks the entries that need PSRAM — *Duke Nukem
-  3D*, *PCEngine CD* and `doom_tiny_full` — and its 16 MB of flash gives the
-  full 15.5 MB application partition instead of 3.5 MB. No separate binary is
-  needed: the loader reads the flash size and detects PSRAM at boot, so the
-  existing `pico2` image covers both. When the Pico is mounted on headers, print
-  the **latest** top cover from Thingiverse — the older ones assume a board
-  soldered flat and leave no room for the USB cable.
-- **The README opens with the list of boards the loader runs on**, each entry
-  linking to its binary in
-  [Supported hardware](https://github.com/fhoedemakers/pico-bootLoader#supported-hardware)
-  and, where one exists, to its PCB design.
-
-### Changed
-
-- **`duke3d_game` is built from pico-duke3D's first release tag, `v0.1`.**  The game itself is unchanged — relative to what  v0.2 shipped, the tag adds only a build fix for gcc 14 and a controller diagnostic that is compiled out by default.
-- **`piconesPlus` is built from pico-infonesPlus `v0.45`.** That release carries
-  the PCB v2.6 design and nothing else: its emulator binaries are the ones
-  `v0.44` shipped, which is what was on the v0.2 card.
-- **The SNES emulator is no longer shipped for a board that cannot run it.**
-  pico-snesPlus needs 8 MB of PSRAM and supports only HW_CONFIG 2, 8, 13 and 14,
-  but the v0.2 archive also carried a `picosnesPlus.uf2` for the Adafruit Metro
-  RP2350 (HW_CONFIG 5). That build cannot work on the board, so `emu/5/` no
-  longer contains one and the entry disappears from the picker there.
+Documentation and Gerber files for the three custom PCBs; the loader itself did
+not change. See the
+[v0.3 release notes](https://github.com/PicoPlus-devel/pico-bootLoader/releases/tag/v0.3).
 
 ## v0.2
 
 The first release with the SD-card archive, artwork themes, on-screen help and *Duke Nukem 3D*.
-See the [v0.2 release notes](https://github.com/fhoedemakers/pico-bootLoader/releases/tag/v0.2)
+See the [v0.2 release notes](https://github.com/PicoPlus-devel/pico-bootLoader/releases/tag/v0.2)
 for the full list.
 
 ## Getting started
