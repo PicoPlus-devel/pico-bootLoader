@@ -2461,23 +2461,30 @@ int main()
                 // Wraps around at the ends so the user can keep cycling.
                 // gui_buf_next() is NULL on SRAM-only builds (no PSRAM) --
                 // in that case we snap-load the new image instead of sliding.
+                //
+                // A lone entry wraps onto itself: its own image slides out and
+                // back in, so the press visibly registers instead of looking
+                // ignored. Nothing changes, so there is nothing to persist.
                 bool right = (pushed & Btn::RIGHT) != 0;
                 bool left  = (pushed & Btn::LEFT)  != 0;
-                if ((right || left) && count > 1) {
+                if ((right || left) && count > 0) {
+                    const bool moved = count > 1;
                     cursor = right ? (cursor + 1) % count
                                    : (cursor + count - 1) % count;
                     LOG("%s -> %s=%d (%s)", right ? "RIGHT" : "LEFT",
                         level == LVL_CATEGORIES ? "cat" : "sel", cursor,
                         level == LVL_CATEGORIES ? categories_name(cursor)
                                                 : g_emus[cursor].label);
-                    pos_dirty  = true;
-                    pos_settle = POS_SETTLE_FRAMES;
+                    if (moved) {
+                        pos_dirty  = true;
+                        pos_settle = POS_SETTLE_FRAMES;
+                    }
                     uint16_t *next_buf = gui_buf_next();
                     if (next_buf) {
                         load_image_into(cursor, next_buf, gui_next_is_half_res());
                         slide_dir = right ? GUI_SLIDE_RIGHT : GUI_SLIDE_LEFT;
                         slide_p   = 0;
-                    } else {
+                    } else if (moved) {
                         // No slide buffer at all: just reload cur with the new image.
                         load_image_into(cursor, gui_buf_cur(), false);
                     }
