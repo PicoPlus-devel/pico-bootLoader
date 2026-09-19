@@ -36,6 +36,8 @@ per category, so you decide what goes where; delete it and the menu is the
 single list it always was. The README explains how to build your own
 arrangement.
 
+Additional theme and category artwork were done [Gavin Knight](https://github.com/DynaMight1124). Thanks Gavin!
+
 **SELECT opens an options menu** instead of switching the menu mode directly.
 Move through it with UP / DOWN, confirm with A and return with B:
 
