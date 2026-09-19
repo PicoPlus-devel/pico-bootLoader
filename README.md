@@ -986,6 +986,7 @@ gh release upload v0.2.1 releases/pico-bootLoader_sdcard.zip
 
 - Menu and screensaver artwork is taken from **Ducalex — retro-go**
   ([github.com/ducalex/retro-go](https://github.com/ducalex/retro-go)).
+- Additional theme and metadata done by [Gavin Knight](https://github.com/DynaMight1124)
 - The emulator cores and the native ports are the work of their upstream authors;
   see the repository links under [Bootable
   applications](#bootable-applications).
