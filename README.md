@@ -986,7 +986,7 @@ gh release upload v0.2.1 releases/pico-bootLoader_sdcard.zip
 
 - Menu and screensaver artwork is taken from **Ducalex — retro-go**
   ([github.com/ducalex/retro-go](https://github.com/ducalex/retro-go)).
-- Additional theme and metadata done by [Gavin Knight](https://github.com/DynaMight1124)
+- Additional theme and category artwork, metadata and testing done by [Gavin Knight](https://github.com/DynaMight1124)
 - The emulator cores and the native ports are the work of their upstream authors;
   see the repository links under [Bootable
   applications](#bootable-applications).
@@ -999,8 +999,7 @@ gh release upload v0.2.1 releases/pico-bootLoader_sdcard.zip
 - The [PicoNES Mini](#picones-mini-pcb-hw_config-6) and
   [PicoNES Micro](#picones-micro-pcb-hw_config-9) PCBs, and the 3D-printed cases
   for all three designs and for the Waveshare RP2350-PiZero, were designed by
-  [Gavin Knight](https://github.com/DynaMight1124), who also contributed
-  additional artwork and testing of the loader.
+  [Gavin Knight](https://github.com/DynaMight1124).
 - This project was developed with the assistance of AI
   (Anthropic Claude / Claude Code).
 
