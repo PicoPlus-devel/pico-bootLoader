@@ -11,16 +11,16 @@
 #                pin: bld.sh gained -b only in f2c8be9, so an older
 #                tag cannot build for the loader from its own pin.
 #                Since the v0.4 tag set the two are the same anyway.
-picoOutRun;pico-outrun;v0.2;63e983c
-pico994A;pico-994A;v0.1;63e983c
-piconesPlus;pico-infonesPlus;v0.50;63e983c
-picosnesPlus;pico-snesPlus;v0.5;63e983c
-picopcePlus;pico-pcePlus;v0.6;63e983c
-picosmsPlus;pico-smsplus;v0.29;63e983c
-picogenesisPlus;pico-genesisPlus;v0.15;63e983c
-picoPacPlus;pico-pacPlus;v0.4;63e983c
+picoOutRun;pico-outrun;v0.2;745212f
+pico994A;pico-994A;v0.1;745212f
+piconesPlus;pico-infonesPlus;v0.51;745212f
+picosnesPlus;pico-snesPlus;v0.5;745212f
+picopcePlus;pico-pcePlus;v0.6;745212f
+picosmsPlus;pico-smsplus;v0.29;745212f
+picogenesisPlus;pico-genesisPlus;v0.15;745212f
+picoPacPlus;pico-pacPlus;v0.4;745212f
 colecojam;cogliano/Adafruit_ColecoJam;1.3;
-PicoPeanutGB;pico-peanutGB;v0.13;63e983c
+PicoPeanutGB;pico-peanutGB;v0.13;745212f
 doom_tiny;pico-doom;v0.2;
 doom_tiny_full;pico-doom;v0.2;
 duke3d_game;pico-duke3D;v0.3;

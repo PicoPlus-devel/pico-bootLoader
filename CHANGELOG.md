@@ -6,6 +6,44 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 
 [Binaries for each configuration and PCB design are at the end of this page](#downloads___).
 
+## v0.6.1
+
+An SD-card update: a new version of the NES emulator, and a memory fix that every
+application on the card benefits from. The loader itself is unchanged since v0.6.
+
+> **Do you need to update?** Only the card. Replace the `/emu` folder on it with
+> the one in the new `pico-bootLoader_sdcard.zip`. The board does not have to be
+> re-flashed, and your ROMs, save states and everything else outside `/emu` are
+> untouched.
+
+### Updated emulator
+
+- **Nintendo Entertainment System**
+  [v0.51](https://github.com/PicoPlus-devel/pico-infonesPlus/releases/tag/v0.51):
+  the 8-sprites-per-line limit introduced in v0.50 can now be switched off in the
+  settings menu, under **Sprite Limit (8 per line)**. The limit is what a real NES
+  does, but it makes some games flicker; turning it off reduces the flicker. It
+  stays on by default, because games such as *Felix the Cat* need it. Your
+  existing settings keep the limit on.
+
+  Two fixes as well. The *Arkanoid* paddle was stuck at the right of the screen
+  and ignored the D-pad on the custom PCB and on the Adafruit breadboard setup.
+  And games that use the sound chip's sample channel as a timer now run: *Over
+  Obj* no longer shows a black screen, although a black bar still appears in the
+  middle of the screen while playing it.
+
+### All applications
+
+Every application on the card was rebuilt, so all of them pick up one fix in the
+shared code: on boards without PSRAM, a game that had already been copied to the
+board could fail to start the second time with an out-of-memory error. It was
+reported on the NES emulator, with games such as *Castlevania III* and *Just
+Breed*, but the cause was shared and so is the fix. Boards with PSRAM were not
+affected.
+
+Apart from the NES, no emulator changed version; the exact version of each
+application is in the table at the end of this page and in `/emu/versions.txt`.
+
 ## v0.6
 
 A release of both halves, the loader and the SD card, and the first since v0.4:
