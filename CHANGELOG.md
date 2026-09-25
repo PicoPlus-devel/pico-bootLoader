@@ -6,43 +6,79 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 
 [Binaries for each configuration and PCB design are at the end of this page](#downloads___).
 
-## v0.6.1
+## v0.6.2
 
-An SD-card update: a new version of the NES emulator, and a memory fix that every
-application on the card benefits from. The loader itself is unchanged since v0.6.
+An SD-card update with new versions of ten applications. Most of them get a new
+setting for TVs that cut off the edges of the screen. The loader itself is
+unchanged since v0.6.
 
 > **Do you need to update?** Only the card. Replace the `/emu` folder on it with
 > the one in the new `pico-bootLoader_sdcard.zip`. The board does not have to be
 > re-flashed, and your ROMs, save states and everything else outside `/emu` are
 > untouched.
 
-### Updated emulator
+### New in the settings menu
+
+All applications on the card except the ColecoVision, *Doom!* and *Duke Nukem 3D*:
+
+- **Overscan fix in menu**, for TVs that cut off the edges of the screen. It
+  leaves the top and bottom rows of the menus blank, and optionally the first
+  and last columns too. Games are not affected. The loader's own menu does not
+  have this setting yet.
+- **More options on one page.** The color palette only appears while a menu
+  color option is selected, so less scrolling is needed.
+- **SELECT jumps to SAVE**, so a changed setting can be saved straight away.
+- The **Controller Test** screen shows the controller outline and the list of
+  controllers correctly again.
+
+### Updated emulators
 
 - **Nintendo Entertainment System**
-  [v0.51](https://github.com/PicoPlus-devel/pico-infonesPlus/releases/tag/v0.51):
-  the 8-sprites-per-line limit introduced in v0.50 can now be switched off in the
-  settings menu, under **Sprite Limit (8 per line)**. The limit is what a real NES
-  does, but it makes some games flicker; turning it off reduces the flicker. It
-  stays on by default, because games such as *Felix the Cat* need it. Your
-  existing settings keep the limit on.
+  [v0.52](https://github.com/PicoPlus-devel/pico-infonesPlus/releases/tag/v0.52):
+  fixes for many games, among them *1942*, *Pin Bot*, *High Speed*, *Seicross*
+  and *Ganbare Goemon Gaiden 2*. *Dragon Ball Z II* and *III* and several other
+  Japanese games no longer stay on a black screen, and can now save. On boards
+  without PSRAM, Famicom Disk System saves are kept in one file per game;
+  existing saves are picked up automatically.
+- **Master System / Game Gear**
+  [v0.30](https://github.com/PicoPlus-devel/pico-smsplus/releases/tag/v0.30):
+  Codemasters games such as *Micro Machines* and the *Dizzy* games now work, and
+  most MSX conversions and Korean releases start instead of showing a black
+  screen. Fewer crashes and black screens in other games, among them *Ecco the
+  Dolphin* on Game Gear.
+- **Videopac**
+  [v0.5](https://github.com/PicoPlus-devel/pico-pacPlus/releases/tag/v0.5) and
+  **Game Boy**
+  [v0.14](https://github.com/PicoPlus-devel/pico-peanutGB/releases/tag/v0.14):
+  **USB drive mode** in their own settings menu, as the other emulators got in
+  v0.6.
+- **ColecoVision**
+  [1.5](https://github.com/cogliano/Adafruit_ColecoJam/releases/tag/1.5):
+  pressing button 1 during a game returns to the cartridge menu without a
+  restart. The cartridge menu shows the ColecoJam logo and the version number,
+  and a screensaver after two minutes without input.
+- **Super Nintendo**
+  [v0.6](https://github.com/PicoPlus-devel/pico-snesPlus/releases/tag/v0.6),
+  **PC Engine**
+  [v0.7](https://github.com/PicoPlus-devel/pico-pcePlus/releases/tag/v0.7),
+  **Genesis / Mega Drive**
+  [v0.16](https://github.com/PicoPlus-devel/pico-genesisPlus/releases/tag/v0.16),
+  **TI-99/4A**
+  [v0.2](https://github.com/PicoPlus-devel/pico-994A/releases/tag/v0.2) and
+  **OutRun**
+  [v0.3](https://github.com/PicoPlus-devel/pico-outrun/releases/tag/v0.3):
+  the settings menu changes above only.
 
-  Two fixes as well. The *Arkanoid* paddle was stuck at the right of the screen
-  and ignored the D-pad on the custom PCB and on the Adafruit breadboard setup.
-  And games that use the sound chip's sample channel as a timer now run: *Over
-  Obj* no longer shows a black screen, although a black bar still appears in the
-  middle of the screen while playing it.
+*Doom!*, *Doom Full!* and *Duke Nukem 3D* are the same versions as before. The
+exact version of every application is in the table at the end of this page and
+in `/emu/versions.txt`.
 
-### All applications
+## v0.6.1
 
-Every application on the card was rebuilt, so all of them pick up one fix in the
-shared code: on boards without PSRAM, a game that had already been copied to the
-board could fail to start the second time with an out-of-memory error. It was
-reported on the NES emulator, with games such as *Castlevania III* and *Just
-Breed*, but the cause was shared and so is the fix. Boards with PSRAM were not
-affected.
-
-Apart from the NES, no emulator changed version; the exact version of each
-application is in the table at the end of this page and in `/emu/versions.txt`.
+A new version of the NES emulator, with a setting to switch off the
+8-sprites-per-line limit, and a fix for games that failed to start a second time
+on boards without PSRAM. See the
+[v0.6.1 release notes](https://github.com/PicoPlus-devel/pico-bootLoader/releases/tag/v0.6.1).
 
 ## v0.6
 
