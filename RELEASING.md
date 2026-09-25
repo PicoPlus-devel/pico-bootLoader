@@ -20,8 +20,9 @@ manual.
 | `v0.N` | bootloader firmware changed | re-flash the board **and** refresh the card |
 | `v0.N.M` | same firmware, refreshed emulator binaries | replace `/emu` on the card only |
 
-A three-component tag makes the workflow lead the release notes with a banner
-saying the firmware is unchanged since `v0.N`, so users know not to re-flash.
+A three-component tag makes the workflow add a banner to the release notes,
+after the CHANGELOG, saying the firmware is unchanged since `v0.N`, so users know
+not to re-flash.
 Both forms are matched by the existing `push:` tag globs, and `v*.*-alpha` is
 available for dry runs.
 
@@ -52,7 +53,7 @@ explicitly in the release notes, otherwise users will hunt for a missing asset.
 
 ```bash
 # 1. Update CHANGELOG.md — its whole contents become the release body,
-#    below the generated header and version table.
+#    followed by the generated version table.
 $EDITOR CHANGELOG.md
 git commit -am "Changelog for v0.3" && git push
 
@@ -139,7 +140,8 @@ gh release view v0.2.1
   `Gerber_PicoNES_Mini_PCB_v2.0.zip` and `Gerber_PicoNES_Micro_v1.2.zip`,
   attached by the workflow from the `pico_shared` submodule. See
   [Custom PCBs](README.md#custom-pcbs).
-- Notes open with the "SD-card content update" banner for a `v0.N.M` tag.
+- For a `v0.N.M` tag, the "SD-card content update" banner follows the
+  CHANGELOG text, just above the version table.
 - The version table lists every emulator with a real tag — no `VX.X`, no blanks
   in the Version column.
 - On hardware: unzip the archive at the root of a FAT32/exFAT card, boot, confirm
@@ -181,9 +183,10 @@ from `github.sha`, so it will point at whatever is current.
   workflows for events created with the default `GITHUB_TOKEN`. That is why the
   release step passes `tag_name` + `target_commitish` and creates the tag itself
   rather than pushing one, and why no PAT is needed.
-- **`CHANGELOG.md` is used whole** as the release body, appended below the
-  generated banner and version table. There is no per-tag extraction, so prune it
-  when it grows unwieldy.
+- **`CHANGELOG.md` is used whole** as the start of the release body; the
+  generated banner (for `v0.N.M`) and version table are appended after it, so
+  the table sits just above the asset list. There is no per-tag extraction, so
+  prune it when it grows unwieldy.
 - **`emu/<HW_CONFIG>/` is gitignored** — the built emulator UF2s live only in the
   archive. `emu/versions.txt` is tracked precisely so the shipped versions are
   recorded in git.
