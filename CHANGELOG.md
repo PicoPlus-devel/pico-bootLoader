@@ -8,10 +8,8 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 
 ## v0.6.3
 
-An SD-card update. The Master System / Game Gear emulator now also appears in
-the **Handheld** category, as **Game Gear**, with its own artwork in both
-themes. It is the same emulator as the one under **Console**, so Master System
-and Game Gear games can be started from either place. The loader itself is
+An SD-card update: a new version of the Master System / Game Gear emulator,
+which now also appears in the **Handheld** category. The loader itself is
 unchanged since v0.6.
 
 > **Do you need to update?** Only the card. Replace the `/emu` folder on it with
@@ -19,8 +17,24 @@ unchanged since v0.6.
 > re-flashed, and your ROMs, save states and everything else outside `/emu` are
 > untouched.
 
-The exact version of every application is in the table at the end of this page
-and in `/emu/versions.txt`.
+### Game Gear in the Handheld category
+
+The Master System / Game Gear emulator now also appears in the **Handheld**
+category, as **Game Gear**, with its own artwork in both themes. It is the same
+emulator as the one under **Console**, so Master System and Game Gear games can
+be started from either place.
+
+### Updated emulator
+
+- **Master System / Game Gear**
+  [v0.31](https://github.com/PicoPlus-devel/pico-smsplus/releases/tag/v0.31):
+  more homebrew games and Game Gear betas now start, among them *Pong Master*,
+  *Snail2*, *Bomberman Boom*, *Ultima III* and the *Batman & Robin* and
+  *The Lion King* betas.
+
+Every other application is the same version as in v0.6.2. The exact version of
+every application is in the table at the end of this page and in
+`/emu/versions.txt`.
 
 ## v0.6.2
 

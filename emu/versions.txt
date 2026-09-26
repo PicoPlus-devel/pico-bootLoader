@@ -16,7 +16,7 @@ pico994A;pico-994A;v0.2;df683bf
 piconesPlus;pico-infonesPlus;v0.52;df683bf
 picosnesPlus;pico-snesPlus;v0.6;df683bf
 picopcePlus;pico-pcePlus;v0.7;df683bf
-picosmsPlus;pico-smsplus;v0.30;df683bf
+picosmsPlus;pico-smsplus;v0.31;df683bf
 picogenesisPlus;pico-genesisPlus;v0.16;df683bf
 picoPacPlus;pico-pacPlus;v0.5;df683bf
 colecojam;cogliano/Adafruit_ColecoJam;1.5;
