@@ -153,10 +153,17 @@ if [ -f "$LOADER/emu/categories.txt" ]; then
         # A category may only name programs the master list also carries: the
         # build and this packer both work from emulators.txt, so a program
         # listed only in a category file would never have a UF2 to launch.
-        while IFS=';' read -r cprog _rest || [ -n "${cprog:-}" ]; do
+        # Its artwork key may differ from the master list's (Handheld shows the
+        # SMS/GG emulator as Game Gear), so collect it for the artwork pass.
+        while IFS=';' read -r cprog cimg _rest || [ -n "${cprog:-}" ]; do
             [ -z "${cprog:-}" ] && continue
             [[ "$cprog" == \#* ]] && continue
             cprog="$(printf '%s' "$cprog" | tr -d '[:space:]')"
+            cimg="$(printf '%s' "${cimg:-}" | tr -d '[:space:]')"
+            if [ -n "$cimg" ] && [ -z "${SEEN_KEY[$cimg]+x}" ]; then
+                SEEN_KEY[$cimg]=1
+                IMAGE_KEYS+=("$cimg")
+            fi
             found=0
             for p in "${PROG_NAMES[@]}"; do
                 [ "$p" = "$cprog" ] && { found=1; break; }
@@ -230,7 +237,8 @@ fi
 # the loader can only convert what is there — so for those, and only those, the
 # source image ships instead and the first boot converts it.
 #
-# Sources are looked up by image_key from emulators.txt rather than globbed:
+# Sources are looked up by image_key from emulators.txt and the category files
+# rather than globbed:
 # theme folders also hold unused icons (2600.png, gba.png, recent.png, ...) and
 # alternates (md-alt.png, sms_gg_alt.png). Globbing would ship those and, worse,
 # make the loader convert them at boot — it converts every image in every theme,

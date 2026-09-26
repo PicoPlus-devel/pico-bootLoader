@@ -6,10 +6,12 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 
 [Binaries for each configuration and PCB design are at the end of this page](#downloads___).
 
-## v0.6.2
+## v0.6.3
 
-An SD-card update with new versions of ten applications. Most of them get a new
-setting for TVs that cut off the edges of the screen. The loader itself is
+An SD-card update. The Master System / Game Gear emulator now also appears in
+the **Handheld** category, as **Game Gear**, with its own artwork in both
+themes. It is the same emulator as the one under **Console**, so Master System
+and Game Gear games can be started from either place. The loader itself is
 unchanged since v0.6.
 
 > **Do you need to update?** Only the card. Replace the `/emu` folder on it with
@@ -17,61 +19,14 @@ unchanged since v0.6.
 > re-flashed, and your ROMs, save states and everything else outside `/emu` are
 > untouched.
 
-### New in the settings menu
+The exact version of every application is in the table at the end of this page
+and in `/emu/versions.txt`.
 
-All applications on the card except the ColecoVision, *Doom!* and *Duke Nukem 3D*:
+## v0.6.2
 
-- **Overscan fix in menu**, for TVs that cut off the edges of the screen. It
-  leaves the top and bottom rows of the menus blank, and optionally the first
-  and last columns too. Games are not affected. The loader's own menu does not
-  have this setting yet.
-- **More options on one page.** The color palette only appears while a menu
-  color option is selected, so less scrolling is needed.
-- **SELECT jumps to SAVE**, so a changed setting can be saved straight away.
-- The **Controller Test** screen shows the controller outline and the list of
-  controllers correctly again.
-
-### Updated emulators
-
-- **Nintendo Entertainment System**
-  [v0.52](https://github.com/PicoPlus-devel/pico-infonesPlus/releases/tag/v0.52):
-  fixes for many games, among them *1942*, *Pin Bot*, *High Speed*, *Seicross*
-  and *Ganbare Goemon Gaiden 2*. *Dragon Ball Z II* and *III* and several other
-  Japanese games no longer stay on a black screen, and can now save. On boards
-  without PSRAM, Famicom Disk System saves are kept in one file per game;
-  existing saves are picked up automatically.
-- **Master System / Game Gear**
-  [v0.30](https://github.com/PicoPlus-devel/pico-smsplus/releases/tag/v0.30):
-  Codemasters games such as *Micro Machines* and the *Dizzy* games now work, and
-  most MSX conversions and Korean releases start instead of showing a black
-  screen. Fewer crashes and black screens in other games, among them *Ecco the
-  Dolphin* on Game Gear.
-- **Videopac**
-  [v0.5](https://github.com/PicoPlus-devel/pico-pacPlus/releases/tag/v0.5) and
-  **Game Boy**
-  [v0.14](https://github.com/PicoPlus-devel/pico-peanutGB/releases/tag/v0.14):
-  **USB drive mode** in their own settings menu, as the other emulators got in
-  v0.6.
-- **ColecoVision**
-  [1.5](https://github.com/cogliano/Adafruit_ColecoJam/releases/tag/1.5):
-  pressing button 1 during a game returns to the cartridge menu without a
-  restart. The cartridge menu shows the ColecoJam logo and the version number,
-  and a screensaver after two minutes without input.
-- **Super Nintendo**
-  [v0.6](https://github.com/PicoPlus-devel/pico-snesPlus/releases/tag/v0.6),
-  **PC Engine**
-  [v0.7](https://github.com/PicoPlus-devel/pico-pcePlus/releases/tag/v0.7),
-  **Genesis / Mega Drive**
-  [v0.16](https://github.com/PicoPlus-devel/pico-genesisPlus/releases/tag/v0.16),
-  **TI-99/4A**
-  [v0.2](https://github.com/PicoPlus-devel/pico-994A/releases/tag/v0.2) and
-  **OutRun**
-  [v0.3](https://github.com/PicoPlus-devel/pico-outrun/releases/tag/v0.3):
-  the settings menu changes above only.
-
-*Doom!*, *Doom Full!* and *Duke Nukem 3D* are the same versions as before. The
-exact version of every application is in the table at the end of this page and
-in `/emu/versions.txt`.
+New versions of ten applications, most of them with a setting for TVs that cut
+off the edges of the screen. See the
+[v0.6.2 release notes](https://github.com/PicoPlus-devel/pico-bootLoader/releases/tag/v0.6.2).
 
 ## v0.6.1
 

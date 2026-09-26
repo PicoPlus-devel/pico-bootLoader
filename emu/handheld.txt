@@ -5,6 +5,7 @@
 # Only .uf2 files whose embedded program name matches a row below appear in
 # this category, in the order the rows are written. Max 32 rows.
 #
-# The Master System / Game Gear emulator is one binary covering both, so it
-# lives under Console rather than here.
+# The Game Gear row is the same Master System / Game Gear binary that Console
+# lists; here it carries the Game Gear artwork.
 PicoPeanutGB;gb_gbc;Nintendo Game Boy/Game Boy Color
+picosmsPlus;gg;Sega Game Gear
