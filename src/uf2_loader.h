@@ -35,8 +35,9 @@ typedef struct {
 #define UF2_PROGRESS_ERASE 0
 #define UF2_PROGRESS_WRITE 1
 
-/* Optional progress callback. done/total are in arbitrary per-phase units:
- *   UF2_PROGRESS_ERASE : called twice with (0,1) and (1,1) bracketing the erase.
+/* Optional progress callback. done/total count per-phase units:
+ *   UF2_PROGRESS_ERASE : called once with done=0, then once per 4 KB sector
+ *                        erased, done=1..total.
  *   UF2_PROGRESS_WRITE : called once per page programmed, done=1..total.
  * May be NULL. */
 typedef void (*uf2_progress_cb)(int phase, uint32_t done, uint32_t total);

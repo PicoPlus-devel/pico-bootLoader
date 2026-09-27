@@ -112,7 +112,6 @@ add_executable(${projectname}
     src/gui.cpp
     src/themes.cpp
     src/screensaver.cpp
-    src/progress_bar.cpp
     src/image_convert.cpp
     src/third_party/PNGdec/PNGdec.cpp
     src/third_party/PNGdec/adler32.c

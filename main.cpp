@@ -41,6 +41,7 @@
 #include "hardware/clocks.h"
 #include "hardware/watchdog.h"
 #include "hardware/vreg.h"
+#include "hardware/flash.h"
 
 #include "FrensHelpers.h"
 #include "usb_msc.h"         // C++ linkage (namespace Frens); FRENS_USB_MSC gates it
@@ -1387,10 +1388,32 @@ void logAppPartitionState(const char *when)
         when, (unsigned)sp, (unsigned)reset, (int)present);
 }
 
+// Status-line words for flashProgress(). __not_in_flash puts them in .data:
+// a plain const array would land in flash .rodata, and the callback reads
+// nothing from flash (see uf2_loader.h).
+static const char __not_in_flash("pb_status") PB_TXT_ERASING[] = "Erasing ";
+static const char __not_in_flash("pb_status") PB_TXT_WRITING[] = "Writing ";
+
+// Unsigned decimal into dst without printf, for the flash callback. Returns
+// the number of digits written; no terminator.
+static int __not_in_flash_func(pbPutDec)(char *dst, uint32_t v)
+{
+    char tmp[10];
+    int n = 0;
+    do { tmp[n++] = (char)('0' + v % 10u); v /= 10u; } while (v);
+    for (int i = 0; i < n; i++) dst[i] = tmp[n - 1 - i];
+    return n;
+}
+
 // __not_in_flash_func: the whole callback path is SRAM-resident so we never
 // have to worry about XIP state. No printf/LOG inside -- bookend logging
 // happens in flashAndLaunch around uf2_load_file. The throttle (done & 0x3F)
 // keeps redraw cost down for large images (otherwise ~16 K calls).
+//
+// Each phase fills the bar on its own -- 0..100 for the erase, then again for
+// the write -- and the status line above it names the phase and how far it
+// has got, e.g. "Erasing 512/2048 KB". Units per uf2_loader.h: erase ticks
+// are 4 KB sectors, write ticks 256-byte pages.
 //
 // LED heartbeat: on picoDVI HW configs the DVI receiver loses sync during the
 // ~50 ms-per-sector erase windows even with the full SRAM audit -- HSTX's
@@ -1402,19 +1425,36 @@ void logAppPartitionState(const char *when)
 // so the LED is just bonus.
 extern "C" void __not_in_flash_func(flashProgress)(int phase, uint32_t done, uint32_t total)
 {
-    // Combined percentage: erase contributes 0..10, write contributes 10..100.
-    uint32_t pct;
-    if (phase == UF2_PROGRESS_ERASE) {
-        pct = (total > 0) ? (done * 10u / total) : 0;
-    } else {
-        uint32_t w = (total > 0) ? (done * 90u / total) : 0;
-        pct = 10u + w;
+    bool erase = (phase == UF2_PROGRESS_ERASE);
+    if (!erase) {
         // Throttle write-phase redraws: a 2 MB image is ~8192 pages, plenty
-        // of opportunity to skip frames where pct didn't move visibly.
-        bool boundary = (done == 0 || done == total);
+        // of opportunity to skip frames where the bar didn't move visibly.
+        // done == 1 is drawn so the status switches to "Writing" at once.
+        bool boundary = (done <= 1 || done == total);
         if (!boundary && (done & 0x3F) != 0) return;
     }
-    progress_bar_draw(pct, 100, PB_COL_FILL, PB_COL_EMPTY, PB_COL_BORDER);
+
+    // Write pages round up, so the last tick reads N/N KB.
+    uint32_t kb, tkb;
+    if (erase) {
+        kb  = done  * (FLASH_SECTOR_SIZE / 1024u);
+        tkb = total * (FLASH_SECTOR_SIZE / 1024u);
+    } else {
+        const uint32_t per_kb = 1024u / FLASH_PAGE_SIZE;
+        kb  = (done  + per_kb - 1u) / per_kb;
+        tkb = (total + per_kb - 1u) / per_kb;
+    }
+    const char *what = erase ? PB_TXT_ERASING : PB_TXT_WRITING;
+    char st[40];
+    int n = 0;
+    while (what[n]) { st[n] = what[n]; n++; }
+    n += pbPutDec(st + n, kb);
+    st[n++] = '/';
+    n += pbPutDec(st + n, tkb);
+    st[n++] = ' '; st[n++] = 'K'; st[n++] = 'B'; st[n] = '\0';
+    progress_bar_draw_status(st, PB_COL_BORDER, PB_COL_EMPTY);
+
+    progress_bar_draw(done, total, PB_COL_FILL, PB_COL_EMPTY, PB_COL_BORDER);
 
     // LED heartbeat -- toggle on every accepted callback so the user sees
     // activity even while the picoDVI signal is gone.
