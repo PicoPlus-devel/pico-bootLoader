@@ -581,34 +581,43 @@ uint32_t readPads(bool pace = true)
 #endif
     uint32_t btns = io::getCurrentGamePadState(0).buttons |
                     io::getCurrentGamePadState(1).buttons;
-    // nespad_states[] and wiipad_read() use their own bit layouts (NES
-    // bus order / Wii nunchuk layout). Translate them into the same
+    // nespad_states_ext[] and wiipad_read() use their own bit layouts (wire
+    // order / Wii nunchuk layout). Translate them into the same
     // io::GamePadState::Button bits the callers check via Btn::*.
 #if NES_PIN_CLK != -1 || NES_PIN_CLK_1 != -1
-    auto nesToBtn = [](uint8_t s) -> uint32_t {
-        // nespad_states is LSB-first wire order (A clocked out first lands
-        // in bit 0): 0x01=A, 0x02=B, 0x04=Select, 0x08=Start, 0x10=Up,
-        // 0x20=Down, 0x40=Left, 0x80=Right. The header comment in
-        // pico_shared/nespad.cpp claims the reverse and is wrong --
-        // infonesPlus ORs nespad_states[] straight into a bitmask with
-        // A=1<<0..RIGHT=1<<7, which only works under this layout.
+    auto nesToBtn = [](uint16_t ext, uint8_t type) -> uint32_t {
+        // nespad_states_ext is LSB-first wire order. A NES pad shifts out
+        // 0x01=A, 0x02=B, 0x04=Select, 0x08=Start, 0x10=Up, 0x20=Down,
+        // 0x40=Left, 0x80=Right. A SNES pad puts B and Y in bits 0/1 and its
+        // A and X in bits 8/9, so its face buttons are named rather than
+        // taken positionally -- otherwise SNES B chooses and Y goes back.
+        // Mirrors nespadMenuBits() in pico_shared/menu.cpp: a pad that has
+        // not yet proven itself SNES (only it drives bits 8-11) keeps NES
+        // order, which is also right for a SNES->NES adapter cable.
         uint32_t b = 0;
-        if (s & 0x01) b |= Btn::A;
-        if (s & 0x02) b |= Btn::B;
-        if (s & 0x04) b |= Btn::SELECT;
-        if (s & 0x08) b |= Btn::START;
-        if (s & 0x10) b |= Btn::UP;
-        if (s & 0x20) b |= Btn::DOWN;
-        if (s & 0x40) b |= Btn::LEFT;
-        if (s & 0x80) b |= Btn::RIGHT;
+        if (ext & 0x04) b |= Btn::SELECT;
+        if (ext & 0x08) b |= Btn::START;
+        if (ext & 0x10) b |= Btn::UP;
+        if (ext & 0x20) b |= Btn::DOWN;
+        if (ext & 0x40) b |= Btn::LEFT;
+        if (ext & 0x80) b |= Btn::RIGHT;
+        if (type == NESPAD_TYPE_SNES) {
+            if (ext & 0x100) b |= Btn::A;
+            if (ext & 0x001) b |= Btn::B;
+            if (ext & 0x200) b |= Btn::X;
+            if (ext & 0x002) b |= Btn::Y;
+        } else {
+            if (ext & 0x01) b |= Btn::A;
+            if (ext & 0x02) b |= Btn::B;
+        }
         return b;
     };
 #endif
 #if NES_PIN_CLK != -1
-    btns |= nesToBtn(nespad_states[0]);
+    btns |= nesToBtn(nespad_states_ext[0], nespad_padtype[0]);
 #endif
 #if NES_PIN_CLK_1 != -1
-    btns |= nesToBtn(nespad_states[1]);
+    btns |= nesToBtn(nespad_states_ext[1], nespad_padtype[1]);
 #endif
 #if WII_PIN_SDA >= 0 and WII_PIN_SCL >= 0
     {
