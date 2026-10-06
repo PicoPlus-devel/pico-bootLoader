@@ -6,6 +6,25 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 
 [Binaries for each configuration and PCB design are at the end of this page](#downloads___).
 
+## v0.6.4
+
+An SD-card update: **Phoenix** joins the **Arcade** category. The loader itself
+is unchanged since v0.6.
+
+> **Do you need to update?** Only the card. Replace the `/emu` folder on it with
+> the one in the new `pico-bootLoader_sdcard.zip`. The board does not have to be
+> re-flashed, and your ROMs, save states and everything else outside `/emu` are
+> untouched.
+
+### New on the card
+
+**Phoenix**, Amstar's 1980 arcade shooter, runs on every board. The game ROMs
+are copyright Amstar and not included: copy MAME's `phoenix.zip` to
+`/roms/arcade/PHOENIX` on the card, as it is or unzipped. The game tells you on
+screen if any files are missing. Phoenix was made for a monitor standing on its
+side; on a normal screen the picture is turned upright, and the new **Tate
+mode** setting shows it unrotated for a monitor turned on its side.
+
 ## v0.6.3
 
 An SD-card update: a new version of the Master System / Game Gear emulator,

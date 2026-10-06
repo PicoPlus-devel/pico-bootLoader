@@ -19,6 +19,7 @@
 
 # --- Arcade ---
 picoOutRun;outrun;OutRun
+picoPhoenix;phoenix;Phoenix
 
 # --- Computer ---
 pico994A;ti99;TI99/4A
