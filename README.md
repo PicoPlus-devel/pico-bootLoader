@@ -71,6 +71,7 @@ its own repository and identified by the program name embedded in its `.uf2`.
 | **Duke Nukem 3D** (native port, not emulated) | `duke3d_game` | [pico-duke3D](https://github.com/fhoedemakers/pico-duke3D) |<img width="280" alt="Duke Nukem 3D menu artwork" src="https://github.com/user-attachments/assets/79798fb3-5517-41cf-bfcb-62c0aa0dc00e" />  |
 | **OutRun** (native port, not emulated) | `picoOutRun` | [pico-outrun](https://github.com/PicoPlus-devel/pico-outrun) | <img width="280" alt="OutRun menu artwork" src="emu/assets/themes/0/outrun.png" /> |
 | **Phoenix** (arcade) | `picoPhoenix` | [pico-phoenix](https://github.com/PicoPlus-devel/pico-phoenix) | <img width="280" alt="Phoenix menu artwork" src="emu/assets/themes/0/phoenix.png" /> |
+| **Moon Cresta** (arcade) | `picoMoonCresta` | [pico-mooncresta](https://github.com/PicoPlus-devel/pico-mooncresta) | <img width="280" alt="Moon Cresta menu artwork" src="emu/assets/themes/0/mooncresta.png" /> |
 
 The following emulators need a bios in `/bios` on SD:
 - *Nintendo Entertainment System* : For Famicom Dsik System games `fds-bios.rom`
@@ -112,7 +113,7 @@ image: `DUKE3D.GRP` — shareware or registered/Atomic — is streamed from
 it. Only the Fruit Jam has been tested on hardware; boards 2 and 13 build clean
 but are untested.
 
-*OutRun* is a port of the Cannonball engine and one of the two entries in the
+*OutRun* is a port of the Cannonball engine and one of the three entries in the
 **Arcade** category. It runs on four boards: Adafruit Fruit Jam (HW_CONFIG 8),
 the Adafruit DVI + MicroSD breakout combination (2, on a Pimoroni Pico Plus 2),
 Murmulator M2 (13) and Adafruit Feather RP2350 with a TLV320DAC3100 (14). It
@@ -126,7 +127,7 @@ every boot. If the ROMs are missing the game says so on screen rather than
 failing silently. The loader's own [USB drive mode](#usb-drive-mode) is the
 easiest way to put them on the card without taking it out of the board.
 
-*Phoenix* is the other **Arcade** entry: an emulation of Amstar's 1980 arcade
+*Phoenix* is the second **Arcade** entry: an emulation of Amstar's 1980 arcade
 board. It runs on every board the loader supports, and needs neither PSRAM nor
 HSTX. The Phoenix ROM set is copyright Amstar and is not distributed with the
 bundle: copy MAME's `phoenix.zip` (the Amstar parent set) to
@@ -134,6 +135,14 @@ bundle: copy MAME's `phoenix.zip` (the Amstar parent set) to
 are named on screen. Phoenix is a vertical game: by default the picture is
 turned upright for a normal monitor, and the *Tate mode* setting shows it
 unrotated for a monitor turned on its side.
+
+*Moon Cresta* is the third **Arcade** entry: an emulation of Nichibutsu's 1980
+arcade board, built on Galaxian hardware. Like Phoenix, it runs on every board
+the loader supports and needs neither PSRAM nor HSTX. The Moon Cresta ROM set is
+copyright Nichibutsu and is not distributed with the bundle: copy MAME's
+`mooncrst.zip` (the Nichibutsu parent set) to `/roms/arcade/MOONCRESTA` on the
+SD card, either as it is or unzipped. Missing files are named on screen. It has
+the same *Tate mode* setting as Phoenix.
 
 *PCEngine CD* needs PSRAM
 

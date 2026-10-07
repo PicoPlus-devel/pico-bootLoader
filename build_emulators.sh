@@ -98,6 +98,7 @@ declare -A REPO_OF=(
     [pico994A]=pico-994A
     [picoOutRun]=pico-outrun
     [picoPhoenix]=pico-phoenix
+    [picoMoonCresta]=pico-mooncresta
     [doom_tiny]=pico-doom
     [doom_tiny_full]=pico-doom
     [duke3d_game]=pico-duke3D

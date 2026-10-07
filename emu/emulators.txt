@@ -20,6 +20,7 @@
 # --- Arcade ---
 picoOutRun;outrun;OutRun
 picoPhoenix;phoenix;Phoenix
+picoMoonCresta;mooncresta;Moon Cresta
 
 # --- Computer ---
 pico994A;ti99;TI99/4A

@@ -13,5 +13,10 @@
 # picoPhoenix runs on every supported board, with or without PSRAM and HSTX.
 # The Phoenix ROM set is copyright Amstar and is not distributable either: the
 # game reads MAME's phoenix.zip (or its files unzipped) from /roms/arcade/PHOENIX.
+#
+# picoMoonCresta runs on every supported board as well. The Moon Cresta ROM set
+# is copyright Nichibutsu: the game reads MAME's mooncrst.zip (or its files
+# unzipped) from /roms/arcade/MOONCRESTA.
 picoOutRun;outrun;OutRun
 picoPhoenix;phoenix;Phoenix
+picoMoonCresta;mooncresta;Moon Cresta

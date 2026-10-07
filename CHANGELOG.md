@@ -8,8 +8,8 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 
 ## v0.6.4
 
-An SD-card update: **Phoenix** joins the **Arcade** category. The loader itself
-is unchanged since v0.6.
+An SD-card update: **Phoenix** and **Moon Cresta** join the **Arcade** category.
+The loader itself is unchanged since v0.6.
 
 > **Do you need to update?** Only the card. Replace the `/emu` folder on it with
 > the one in the new `pico-bootLoader_sdcard.zip`. The board does not have to be
@@ -24,6 +24,11 @@ are copyright Amstar and not included: copy MAME's `phoenix.zip` to
 screen if any files are missing. Phoenix was made for a monitor standing on its
 side; on a normal screen the picture is turned upright, and the new **Tate
 mode** setting shows it unrotated for a monitor turned on its side.
+
+**Moon Cresta**, Nichibutsu's 1980 arcade shooter, runs on every board as well.
+The game ROMs are copyright Nichibutsu and not included: copy MAME's
+`mooncrst.zip` to `/roms/arcade/MOONCRESTA` on the card, as it is or unzipped.
+Like Phoenix, it is a vertical game and has the same **Tate mode** setting.
 
 ## v0.6.3
 
