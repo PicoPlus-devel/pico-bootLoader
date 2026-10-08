@@ -1,0 +1,90 @@
+{
+  "databases": ["https://raw.githubusercontent.com/zakk4223/ArcadeROMsDB_MiSTer/db/arcade_roms_db.json.zip"],
+  "cores": [
+    {
+      "id": "outrun",
+      "name": "OutRun",
+      "set": "MAME outrun (revision B)",
+      "zips": ["outrun.zip"],
+      "destination": "/roms/ORUN",
+      "files": [
+        { "name": "epr-10380b.133", "size": 65536,  "crc": "1f6cadad" },
+        { "name": "epr-10382b.118", "size": 65536,  "crc": "c4c3fa1a" },
+        { "name": "epr-10381b.132", "size": 65536,  "crc": "be8c412b" },
+        { "name": "epr-10383b.117", "size": 65536,  "crc": "10a2014a" },
+        { "name": "epr-10327a.76",  "size": 65536,  "crc": "e28a5baf" },
+        { "name": "epr-10329a.58",  "size": 65536,  "crc": "da131c81" },
+        { "name": "epr-10328a.75",  "size": 65536,  "crc": "d5ec5e5d" },
+        { "name": "epr-10330a.57",  "size": 65536,  "crc": "ba9ec82a" },
+        { "name": "opr-10268.99",   "size": 32768,  "crc": "95344b04" },
+        { "name": "opr-10232.102",  "size": 32768,  "crc": "776ba1eb" },
+        { "name": "opr-10267.100",  "size": 32768,  "crc": "a85bb823" },
+        { "name": "opr-10231.103",  "size": 32768,  "crc": "8908bcbf" },
+        { "name": "opr-10266.101",  "size": 32768,  "crc": "9f6f1a74" },
+        { "name": "opr-10230.104",  "size": 32768,  "crc": "686f5e50" },
+        { "name": "opr-10185.11",   "size": 32768,  "crc": "22794426" },
+        { "name": "opr-10186.47",   "size": 32768,  "crc": "22794426" },
+        { "name": "mpr-10371.9",    "size": 131072, "crc": "7cc86208" },
+        { "name": "mpr-10373.10",   "size": 131072, "crc": "b0d26ac9" },
+        { "name": "mpr-10375.11",   "size": 131072, "crc": "59b60bd7" },
+        { "name": "mpr-10377.12",   "size": 131072, "crc": "17a1b04a" },
+        { "name": "mpr-10372.13",   "size": 131072, "crc": "b557078c" },
+        { "name": "mpr-10374.14",   "size": 131072, "crc": "8051e517" },
+        { "name": "mpr-10376.15",   "size": 131072, "crc": "f3b8f318" },
+        { "name": "mpr-10378.16",   "size": 131072, "crc": "a1062984" },
+        { "name": "epr-10187.88",   "size": 32768,  "crc": "a10abaa9" },
+        { "name": "opr-10193.66",   "size": 32768,  "crc": "bcd10dde" },
+        { "name": "opr-10192.67",   "size": 32768,  "crc": "770f1270" },
+        { "name": "opr-10191.68",   "size": 32768,  "crc": "20a284ab" },
+        { "name": "opr-10190.69",   "size": 32768,  "crc": "7cab70e2" },
+        { "name": "opr-10189.70",   "size": 32768,  "crc": "01366b54" },
+        { "name": "opr-10188.71",   "size": 32768,  "crc": "bad30ad9" }
+      ]
+    },
+    {
+      "id": "phoenix",
+      "name": "Phoenix",
+      "set": "MAME phoenix (Amstar, set 1)",
+      "zips": ["phoenix.zip"],
+      "destination": "/roms/arcade/PHOENIX",
+      "files": [
+        { "name": "ic45",         "size": 2048, "crc": "9f68086b" },
+        { "name": "ic46",         "size": 2048, "crc": "273a4a82" },
+        { "name": "ic47",         "size": 2048, "crc": "3d4284b9" },
+        { "name": "ic48",         "size": 2048, "crc": "cb5d9915" },
+        { "name": "h5-ic49.5a",   "size": 2048, "crc": "a105e4e7" },
+        { "name": "h6-ic50.6a",   "size": 2048, "crc": "ac5e9ec1" },
+        { "name": "h7-ic51.7a",   "size": 2048, "crc": "2eab35b4" },
+        { "name": "h8-ic52.8a",   "size": 2048, "crc": "aff8e9c5" },
+        { "name": "ic23.3d",      "size": 2048, "crc": "3c7e623f" },
+        { "name": "ic24.4d",      "size": 2048, "crc": "59916d3b" },
+        { "name": "b1-ic39.3b",   "size": 2048, "crc": "53413e8f" },
+        { "name": "b2-ic40.4b",   "size": 2048, "crc": "0be2ba91" },
+        { "name": "mmi6301.ic40", "size": 256,  "crc": "79350b25" },
+        { "name": "mmi6301.ic41", "size": 256,  "crc": "e176b768" }
+      ]
+    },
+    {
+      "id": "mooncresta",
+      "name": "Moon Cresta",
+      "set": "MAME mooncrst (Nichibutsu)",
+      "zips": ["mooncrst.zip"],
+      "destination": "/roms/arcade/MOONCRESTA",
+      "files": [
+        { "name": "mc1",        "size": 2048, "crc": "7d954a7a" },
+        { "name": "mc2",        "size": 2048, "crc": "44bb7cfa" },
+        { "name": "mc3",        "size": 2048, "crc": "9c412104" },
+        { "name": "mc4",        "size": 2048, "crc": "7e9b1ab5" },
+        { "name": "mc5.7r",     "size": 2048, "crc": "16c759af" },
+        { "name": "mc6.8d",     "size": 2048, "crc": "69bcafdb" },
+        { "name": "mc7.8e",     "size": 2048, "crc": "b50dbc46" },
+        { "name": "mc8",        "size": 2048, "crc": "18ca312b" },
+        { "name": "mcs_b",      "size": 2048, "crc": "fb0f1f81" },
+        { "name": "mcs_d",      "size": 2048, "crc": "13932a15" },
+        { "name": "mcs_a",      "size": 2048, "crc": "631ebb5a" },
+        { "name": "mcs_c",      "size": 2048, "crc": "24cfd145" },
+        { "name": "mmi6331.6l", "size": 32,   "crc": "6a0c7d87" }
+      ]
+    }
+  ]
+}
