@@ -4,7 +4,7 @@
 
 The ROM sets are copyright of their manufacturers. They are not included, and no download source is configured: the user supplies the zips, or a database to download them from, and is responsible for holding the rights to them.
 
-Two equivalent implementations are provided, `updateAll.py` (Python) and `updateAll.ps1` (PowerShell). Both read the same configuration file, `updateAll.json`.
+Three equivalent implementations are provided: `updateAll.exe`, a Windows program with a window, `updateAll.py` (Python) and `updateAll.ps1` (PowerShell). All three read the same configuration file, `updateAll.json`; the Windows program also carries a built-in copy of it.
 
 ## Supported sets
 
@@ -14,7 +14,21 @@ Two equivalent implementations are provided, `updateAll.py` (Python) and `update
 | `phoenix` | pico-phoenix | `phoenix.zip` | `/roms/arcade/PHOENIX` |
 | `mooncresta` | pico-mooncresta | `mooncrst.zip` | `/roms/arcade/MOONCRESTA` |
 
-## Usage
+## Windows program
+
+`updateAll.exe` is a single file of about 180 KB. It needs no installation and no runtime, and runs on Windows 10 and 11. The SD-card archive of pico-bootLoader holds it in the `updateAll` folder, next to `emu`.
+
+1. Start `updateAll.exe`. The SD card is selected for you: the card the program was started from, or else the first removable drive that holds a pico-bootLoader card (an `emu` folder), or else the first removable drive.
+2. Under **SD card**, choose another card if needed. Any existing folder can be chosen instead.
+3. Under **Zip folder**, choose the folder with the MAME zips you already have, if any. When **Download missing zips** is ticked, zips that are not in the folder are downloaded from the configured databases; without a zip folder they are downloaded into a temporary folder that is removed afterwards.
+4. Untick the sets that are not wanted. The **Status** column shows which sets are already complete on the card.
+5. Select **Install**. The log shows the same report as the scripts. **Dry run** reports what would be downloaded and written without doing it. **Cancel** stops a run before the next file.
+
+The program uses an `updateAll.json` that is next to it, and its built-in copy otherwise, so a set added to the file is used without a new program. Apart from the sets on the card, downloaded zips in the zip folder and its temporary folder, it writes nothing: no settings, no registry entries.
+
+The program is not signed, so Windows may show "Windows protected your PC" the first time it is started. Select **More info**, then **Run anyway**.
+
+## Scripts
 
 Python 3.6 or later, on Windows, Linux or macOS:
 
@@ -118,3 +132,21 @@ Sets are defined in `updateAll.json`; the scripts themselves do not change. Add 
 | `zips` | Zips to search, in order. For a clone in a split set, list the parent zip as well, since the clone zip does not contain the files it shares with the parent. |
 | `destination` | Folder on the SD card, relative to its root. |
 | `files` | Every file the application needs: the name it is written under, its size in bytes, and its CRC32 in hexadecimal. The values are those of the application's ROM table, and of `mame -listxml <set>`. |
+
+## Building the Windows program
+
+`updateAll.exe` is built on Linux with mingw-w64 (`apt install mingw-w64`). `updateAll.json` is built in, so it is rebuilt after a set is added:
+
+```sh
+win/build.sh                              # -> win/build/updateAll.exe
+```
+
+`build_emulators.sh -z` builds it before it packs the SD-card archive.
+
+`win/ua_core.c` is a port of `updateAll.py`. `win/hosttest/` builds it for Linux with AddressSanitizer and checks that both give the same output, exit status and files on the card, for local zips as well as for downloads from a local HTTP server:
+
+```sh
+win/hosttest/build.sh && win/hosttest/compare.py
+```
+
+A change to how one implementation behaves is made in all three. The icon is drawn by `win/make_icon.py`, which writes `win/updateAll.ico`.

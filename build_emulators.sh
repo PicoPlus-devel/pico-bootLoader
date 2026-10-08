@@ -44,8 +44,9 @@ Usage: $0 [-c N|all] [-j N] [-B|-m] [-z] [-h]
          for pico_shared, instead of using each repo's latest release tag.
   -m     non-interactively build each repo's default branch (main or master,
          whichever its remote HEAD points at), skipping the branch picker.
-  -z     after building, write emu/versions.txt and pack the SD-card archive
-         releases/pico-bootLoader_sdcard.zip. Requires -c all (a zip built from
+  -z     after building, write emu/versions.txt, build updateAll.exe and pack
+         the SD-card archive releases/pico-bootLoader_sdcard.zip (updateAll.exe
+         needs mingw-w64). Requires -c all (a zip built from
          one hwconfig would be missing every other board) and the default tag
          mode (a release bundle must be built from tags).
   -h     this help
@@ -1194,6 +1195,16 @@ if (( PACK_ZIP )); then
     echo " SD-card archive"
     hr
     write_versions_manifest
+
+    # updateAll.exe, the arcade ROM installer for Windows, ships in the archive
+    # next to emu/; the packer takes it from updateAll/win/build/.
+    echo
+    if bash "$LOADER_DIR/updateAll/win/build.sh"; then
+        info "built updateAll.exe"
+    else
+        warn "building updateAll.exe failed (apt install mingw-w64?) — the archive ships the updateAll scripts without it"
+        overall_rc=1
+    fi
 
     PACKER="$LOADER_DIR/.github/scripts/pack_sdcard.sh"
     [ -f "$PACKER" ] || die "packer not found: $PACKER"

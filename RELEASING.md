@@ -35,7 +35,10 @@ export PICO_EXTRAS_PATH=~/pico/pico-extras     # required by pico-doom only
 gh auth status                                  # needs repo write
 ```
 
-`zip` or `python3` must be present for the packer (either is fine).
+`zip` or `python3` must be present for the packer (either is fine), and
+mingw-w64 (`x86_64-w64-mingw32-gcc`, `apt install mingw-w64`) for
+`updateAll.exe`, which `-z` builds and packs into the archive's `updateAll/`
+folder.
 
 `PICO_EXTRAS_PATH` is a pico-doom requirement, not an emulator one — pico-doom
 takes its whole toolchain from the environment via its `pico-env.sh` rather than
@@ -136,6 +139,8 @@ gh release view v0.2.1
 - **9 loader `.uf2` assets** — one per board. The `_pico2_w_` variants for
   HW_CONFIG 1 and 2 are no longer built; a Pico 2 W runs the `pico2` asset.
 - `pico-bootLoader_sdcard.zip` present, unless this is a Scenario A release.
+  Its `updateAll/` folder holds `updateAll.exe` next to the scripts
+  (`unzip -l releases/pico-bootLoader_sdcard.zip | grep updateAll/`).
 - **3 PCB gerber assets** — `pico_nesPCB_v2.6.zip`,
   `Gerber_PicoNES_Mini_PCB_v2.0.zip` and `Gerber_PicoNES_Micro_v1.2.zip`,
   attached by the workflow from the `pico_shared` submodule. See

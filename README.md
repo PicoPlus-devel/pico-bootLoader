@@ -144,6 +144,12 @@ copyright Nichibutsu and is not distributed with the bundle: copy MAME's
 SD card, either as it is or unzipped. Missing files are named on screen. It has
 the same *Tate mode* setting as Phoenix.
 
+The ROM sets of the Arcade entries can also be installed with `updateAll`, which
+the SD-card archive holds in its `updateAll` folder: `updateAll.exe` for
+Windows, and equivalent Python and PowerShell scripts. It extracts each set from
+the MAME zips into the folder its game reads, and can download zips that are
+missing from a configured database. See [updateAll/README.md](updateAll/README.md).
+
 *PCEngine CD* needs PSRAM
 
 Additional emulators may be added over time.

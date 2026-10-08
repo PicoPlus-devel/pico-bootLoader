@@ -7,8 +7,8 @@
 # to keep in sync with pico_shared/bld.sh, and every board and program that got
 # built is packed automatically.
 #
-# Archive layout (matches boot.txt's BASEDIR=/emu; emu/ sits at the archive root,
-# so unzipping at the root of the card is all a user has to do):
+# Archive layout (matches boot.txt's BASEDIR=/emu; emu/ and updateAll/ sit at the
+# archive root, so unzipping at the root of the card is all a user has to do):
 #   emu/<HW_CONFIG>/<prog_name>.uf2      plus any aux (WAD) UF2s alongside
 #   emu/emulators.txt
 #   emu/categories.txt                   (if present, with the config files it names)
@@ -18,6 +18,10 @@
 #                                        for a key that has no cache to ship)
 #   emu/assets/themes/<0-9>/Categories/<image_key>.{444,555}
 #   emu/assets/screensaver/<sprite>.{444,555}
+#   updateAll/updateAll.exe              the arcade ROM installer for Windows,
+#                                        built by updateAll/win/build.sh
+#   updateAll/updateAll.{json,py,ps1}    its sets, and the same installer as scripts
+#   updateAll/README.md
 #
 # Usage: pack_sdcard.sh <loader_dir> <output_zip>
 set -euo pipefail
@@ -45,24 +49,26 @@ else
     exit 1
 fi
 
-# make_zip <staging_dir> <out_zip>   — archives the staging dir's emu/ subtree
-# with emu/ at the archive root, deflated.
+# make_zip <staging_dir> <out_zip>   — archives the staging dir's emu/ and
+# updateAll/ subtrees with both at the archive root, deflated.
 make_zip() {
-    local stage="$1" out="$2"
+    local stage="$1" out="$2" roots=(emu)
+    [ -d "$stage/updateAll" ] && roots+=(updateAll)
     case "$ZIP_IMPL" in
         zip)
-            ( cd "$stage" && zip -r -q "$out" emu )
+            ( cd "$stage" && zip -r -q "$out" "${roots[@]}" )
             ;;
         python3)
-            ( cd "$stage" && python3 - "$out" <<'PY'
+            ( cd "$stage" && python3 - "$out" "${roots[@]}" <<'PY'
 import os, sys, zipfile
 out = sys.argv[1]
 with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
-    for root, dirs, files in os.walk("emu"):
-        dirs.sort()
-        for name in sorted(files):
-            path = os.path.join(root, name)
-            zf.write(path, path)
+    for top in sys.argv[2:]:
+        for root, dirs, files in os.walk(top):
+            dirs.sort()
+            for name in sorted(files):
+                path = os.path.join(root, name)
+                zf.write(path, path)
 PY
             )
             ;;
@@ -336,14 +342,38 @@ if [ -d "$LOADER/emu/assets/screensaver" ]; then
 fi
 echo "  pack $ss_count screensaver sprite(s)"
 
+# --- updateAll ---------------------------------------------------------------
+# The arcade ROM installer travels with the card, in updateAll/ next to emu/:
+# updateAll.exe for Windows, and the equivalent scripts for everything else.
+UA_SRC="$LOADER/updateAll"
+if [ -d "$UA_SRC" ]; then
+    mkdir -p "$STAGE/updateAll"
+    ua_count=0
+    for f in README.md updateAll.json updateAll.py updateAll.ps1; do
+        if [ -f "$UA_SRC/$f" ]; then
+            cp "$UA_SRC/$f" "$STAGE/updateAll/$f"
+            ua_count=$((ua_count + 1))
+        else
+            warn "updateAll/$f not found — not packed"
+        fi
+    done
+    if [ -s "$UA_SRC/win/build/updateAll.exe" ]; then
+        cp "$UA_SRC/win/build/updateAll.exe" "$STAGE/updateAll/updateAll.exe"
+        ua_count=$((ua_count + 1))
+    else
+        warn "updateAll/win/build/updateAll.exe is not built (updateAll/win/build.sh) — the archive ships the updateAll scripts without it"
+    fi
+    echo "  pack $ua_count updateAll file(s)"
+fi
+
 # --- Zip it ------------------------------------------------------------------
 rm -f "$OUT_ZIP"
 mkdir -p "$(dirname "$OUT_ZIP")"
 make_zip "$STAGE" "$OUT_ZIP"
 [ -s "$OUT_ZIP" ] || die "zip produced no output at $OUT_ZIP"
 
-entries=$(find "$DEST" -type f | wc -l)
-raw_bytes=$(du -sb "$DEST" | cut -f1)
+entries=$(find "$STAGE" -type f | wc -l)
+raw_bytes=$(du -sb "$STAGE" | cut -f1)
 zip_bytes=$(stat -c%s "$OUT_ZIP")
 echo
 echo "Packed $packed file(s) across $boards board(s); $missing expected-but-absent combination(s)."
