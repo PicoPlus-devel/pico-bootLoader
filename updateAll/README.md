@@ -13,6 +13,14 @@ Three equivalent implementations are provided: `updateAll.exe`, a Windows progra
 | `outrun` | pico-outrun | `outrun.zip` (revision B) | `/roms/ORUN` |
 | `phoenix` | pico-phoenix | `phoenix.zip` | `/roms/arcade/PHOENIX` |
 | `mooncresta` | pico-mooncresta | `mooncrst.zip` | `/roms/arcade/MOONCRESTA` |
+| `pacman` | pico-galagino | `puckman.zip` (merged), or `pacman.zip` | `/roms/arcade/PACMAN` |
+| `galaga` | pico-galagino | `galaga.zip` | `/roms/arcade/GALAGA` |
+| `dkong` | pico-galagino | `dkong.zip` | `/roms/arcade/DONKEYKONG` |
+| `frogger` | pico-galagino | `frogger.zip` | `/roms/arcade/FROGGER` |
+| `digdug` | pico-galagino | `digdug.zip` | `/roms/arcade/DIGDUG` |
+| `1942` | pico-galagino | `1942.zip` (revision B) | `/roms/arcade/1942` |
+
+pico-galagino plays the Midway Pac-Man, MAME's `pacman`, a clone of `puckman`. A merged `puckman.zip`, which the download database provides, holds all of its files; with a split set, have `pacman.zip` and `puckman.zip` in the zip folder together.
 
 ## Windows program
 

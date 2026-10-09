@@ -76,7 +76,8 @@ The game ROMs are copyright Nichibutsu and not included: copy MAME's
 Like Phoenix, it is a vertical game and has the same **Tate mode** setting.
 
 **updateAll** puts the ROMs of the three arcade games, OutRun, Phoenix and
-Moon Cresta, on the card. It is in the `updateAll` folder of the SD-card
+Moon Cresta, on the card, and those of the six games of pico-galagino:
+Pac-Man, Galaga, Donkey Kong, Frogger, Dig Dug and 1942. It is in the `updateAll` folder of the SD-card
 archive: `updateAll.exe` for Windows, and the same tool as a Python and a
 PowerShell script for other systems. Give it the MAME zips you have and it puts
 each game's files in the folder the game reads. Zips you do not have are

@@ -85,6 +85,151 @@
         { "name": "mcs_c",      "size": 2048, "crc": "24cfd145" },
         { "name": "mmi6331.6l", "size": 32,   "crc": "6a0c7d87" }
       ]
+    },
+    {
+      "id": "pacman",
+      "name": "Pac-Man",
+      "set": "MAME pacman (Midway), a clone of puckman",
+      "zips": ["puckman.zip", "pacman.zip"],
+      "destination": "/roms/arcade/PACMAN",
+      "files": [
+        { "name": "pacman.6e", "size": 4096, "crc": "c1e6ab10" },
+        { "name": "pacman.6f", "size": 4096, "crc": "1a6fb2d4" },
+        { "name": "pacman.6h", "size": 4096, "crc": "bcdd1beb" },
+        { "name": "pacman.6j", "size": 4096, "crc": "817d94e3" },
+        { "name": "pacman.5e", "size": 4096, "crc": "0c944964" },
+        { "name": "pacman.5f", "size": 4096, "crc": "958fedf9" },
+        { "name": "82s123.7f", "size": 32,   "crc": "2fc650bd" },
+        { "name": "82s126.4a", "size": 256,  "crc": "3eb3a8e4" },
+        { "name": "82s126.1m", "size": 256,  "crc": "a9cc86bf" },
+        { "name": "82s126.3m", "size": 256,  "crc": "77245b66" }
+      ]
+    },
+    {
+      "id": "galaga",
+      "name": "Galaga",
+      "set": "MAME galaga (Namco rev. B)",
+      "zips": ["galaga.zip"],
+      "destination": "/roms/arcade/GALAGA",
+      "files": [
+        { "name": "gg1_1b.3p", "size": 4096, "crc": "ab036c9f" },
+        { "name": "gg1_2b.3m", "size": 4096, "crc": "d9232240" },
+        { "name": "gg1_3.2m",  "size": 4096, "crc": "753ce503" },
+        { "name": "gg1_4b.2l", "size": 4096, "crc": "499fcc76" },
+        { "name": "gg1_5b.3f", "size": 4096, "crc": "bb5caae3" },
+        { "name": "gg1_7b.2c", "size": 4096, "crc": "d016686b" },
+        { "name": "gg1_9.4l",  "size": 4096, "crc": "58b2f47c" },
+        { "name": "gg1_11.4d", "size": 4096, "crc": "ad447c80" },
+        { "name": "gg1_10.4f", "size": 4096, "crc": "dd6f1afc" },
+        { "name": "prom-5.5n", "size": 32,   "crc": "54603c6b" },
+        { "name": "prom-4.2n", "size": 256,  "crc": "59b6edab" },
+        { "name": "prom-3.1c", "size": 256,  "crc": "4a04bb6b" },
+        { "name": "prom-1.1d", "size": 256,  "crc": "7a2815b4" }
+      ]
+    },
+    {
+      "id": "dkong",
+      "name": "Donkey Kong",
+      "set": "MAME dkong (US set 1)",
+      "zips": ["dkong.zip"],
+      "destination": "/roms/arcade/DONKEYKONG",
+      "files": [
+        { "name": "c_5et_g.bin", "size": 4096, "crc": "ba70b88b" },
+        { "name": "c_5ct_g.bin", "size": 4096, "crc": "5ec461ec" },
+        { "name": "c_5bt_g.bin", "size": 4096, "crc": "1c97d324" },
+        { "name": "c_5at_g.bin", "size": 4096, "crc": "b9005ac0" },
+        { "name": "s_3i_b.bin",  "size": 2048, "crc": "45a4ed06" },
+        { "name": "s_3j_b.bin",  "size": 2048, "crc": "4743fe92" },
+        { "name": "v_5h_b.bin",  "size": 2048, "crc": "12c8c95d" },
+        { "name": "v_3pt.bin",   "size": 2048, "crc": "15e9c5e9" },
+        { "name": "l_4m_b.bin",  "size": 2048, "crc": "59f8054d" },
+        { "name": "l_4n_b.bin",  "size": 2048, "crc": "672e4714" },
+        { "name": "l_4r_b.bin",  "size": 2048, "crc": "feaa59ee" },
+        { "name": "l_4s_b.bin",  "size": 2048, "crc": "20f2ef7e" },
+        { "name": "c-2k.bpr",    "size": 256,  "crc": "e273ede5" },
+        { "name": "c-2j.bpr",    "size": 256,  "crc": "d6412358" },
+        { "name": "v-5e.bpr",    "size": 256,  "crc": "b869b8f5" }
+      ]
+    },
+    {
+      "id": "frogger",
+      "name": "Frogger",
+      "set": "MAME frogger",
+      "zips": ["frogger.zip"],
+      "destination": "/roms/arcade/FROGGER",
+      "files": [
+        { "name": "frogger.26",  "size": 4096, "crc": "597696d6" },
+        { "name": "frogger.27",  "size": 4096, "crc": "b6e6fcc3" },
+        { "name": "frsm3.7",     "size": 4096, "crc": "aca22ae0" },
+        { "name": "frogger.608", "size": 2048, "crc": "e8ab0256" },
+        { "name": "frogger.609", "size": 2048, "crc": "7380a48f" },
+        { "name": "frogger.610", "size": 2048, "crc": "31d7eb27" },
+        { "name": "frogger.606", "size": 2048, "crc": "f524ee30" },
+        { "name": "frogger.607", "size": 2048, "crc": "05f7d883" },
+        { "name": "pr-91.6l",    "size": 32,   "crc": "413703bf" }
+      ]
+    },
+    {
+      "id": "digdug",
+      "name": "Dig Dug",
+      "set": "MAME digdug (rev 2)",
+      "zips": ["digdug.zip"],
+      "destination": "/roms/arcade/DIGDUG",
+      "files": [
+        { "name": "dd1a.1",     "size": 4096, "crc": "a80ec984" },
+        { "name": "dd1a.2",     "size": 4096, "crc": "559f00bd" },
+        { "name": "dd1a.3",     "size": 4096, "crc": "8cbc6fe1" },
+        { "name": "dd1a.4",     "size": 4096, "crc": "d066f830" },
+        { "name": "dd1a.5",     "size": 4096, "crc": "6687933b" },
+        { "name": "dd1a.6",     "size": 4096, "crc": "843d857f" },
+        { "name": "dd1.7",      "size": 4096, "crc": "a41bce72" },
+        { "name": "dd1.9",      "size": 2048, "crc": "f14a6fe1" },
+        { "name": "dd1.10b",    "size": 4096, "crc": "2cf399c2" },
+        { "name": "dd1.11",     "size": 4096, "crc": "7b383983" },
+        { "name": "dd1.15",     "size": 4096, "crc": "e22957c8" },
+        { "name": "dd1.14",     "size": 4096, "crc": "2829ec99" },
+        { "name": "dd1.13",     "size": 4096, "crc": "458499e9" },
+        { "name": "dd1.12",     "size": 4096, "crc": "c58252a0" },
+        { "name": "136007.113", "size": 32,   "crc": "4cb9da99" },
+        { "name": "136007.111", "size": 256,  "crc": "00c7c419" },
+        { "name": "136007.112", "size": 256,  "crc": "e9b3e08e" },
+        { "name": "136007.110", "size": 256,  "crc": "7a2815b4" },
+        { "name": "136007.109", "size": 256,  "crc": "77245b66" }
+      ]
+    },
+    {
+      "id": "1942",
+      "name": "1942",
+      "set": "MAME 1942 (Revision B)",
+      "zips": ["1942.zip"],
+      "destination": "/roms/arcade/1942",
+      "files": [
+        { "name": "srb-03.m3", "size": 16384, "crc": "d9dafcc3" },
+        { "name": "srb-04.m4", "size": 16384, "crc": "da0cf924" },
+        { "name": "srb-05.m5", "size": 16384, "crc": "d102911c" },
+        { "name": "srb-06.m6", "size": 8192,  "crc": "466f8248" },
+        { "name": "srb-07.m7", "size": 16384, "crc": "0d31038c" },
+        { "name": "sr-01.c11", "size": 16384, "crc": "bd87f06b" },
+        { "name": "sr-02.f2",  "size": 8192,  "crc": "6ebca191" },
+        { "name": "sr-08.a1",  "size": 8192,  "crc": "3884d9eb" },
+        { "name": "sr-09.a2",  "size": 8192,  "crc": "999cf6e0" },
+        { "name": "sr-10.a3",  "size": 8192,  "crc": "8edb273a" },
+        { "name": "sr-11.a4",  "size": 8192,  "crc": "3a2726c3" },
+        { "name": "sr-12.a5",  "size": 8192,  "crc": "1bd3d8bb" },
+        { "name": "sr-13.a6",  "size": 8192,  "crc": "658f02c4" },
+        { "name": "sr-14.l1",  "size": 16384, "crc": "2528bec6" },
+        { "name": "sr-15.l2",  "size": 16384, "crc": "f89287aa" },
+        { "name": "sr-16.n1",  "size": 16384, "crc": "024418f8" },
+        { "name": "sr-17.n2",  "size": 16384, "crc": "e2c7e489" },
+        { "name": "sb-5.e8",   "size": 256,   "crc": "93ab8153" },
+        { "name": "sb-6.e9",   "size": 256,   "crc": "8ab44f7d" },
+        { "name": "sb-7.e10",  "size": 256,   "crc": "f4ade9a4" },
+        { "name": "sb-0.f1",   "size": 256,   "crc": "6047d91b" },
+        { "name": "sb-4.d6",   "size": 256,   "crc": "4858968d" },
+        { "name": "sb-3.d2",   "size": 256,   "crc": "3b0c99af" },
+        { "name": "sb-2.d1",   "size": 256,   "crc": "8bb8b3df" },
+        { "name": "sb-8.k3",   "size": 256,   "crc": "f6fad943" }
+      ]
     }
   ]
 }
