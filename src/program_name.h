@@ -43,8 +43,14 @@ bool binary_end_from_xip(uint32_t base, uint32_t region_size, uint32_t *out_end)
  * if anything looks wrong (unsupported family, sparse layout, marker not
  * found in the first few blocks, etc.) so the caller can fall back to the
  * filename-derived label.
+ *
+ * When `out_end` is not NULL and the name was found, it also receives the
+ * absolute address one past the image's last byte (the end of the last program
+ * block, as uf2_extent_from_file_family() reports it), read in the same open;
+ * 0 when that could not be determined.
  */
-bool program_name_from_uf2_file(const char *path, char *out, unsigned cap);
+bool program_name_from_uf2_file(const char *path, char *out, unsigned cap,
+                                uint32_t *out_end);
 
 #ifdef __cplusplus
 }

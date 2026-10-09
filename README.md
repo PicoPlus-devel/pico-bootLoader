@@ -188,6 +188,14 @@ it first. On each boot it:
      for example after a newer build was placed on the card), it is re-flashed
      before starting.
 
+   Whether the resident image still matches its copy on the card is decided at
+   start-up. After it flashes an application, the loader records the file's size
+   and timestamp and the CRC of the flashed image in
+   `<BASEDIR>/<HW_CONFIG>/.flashed`. While the file is unchanged and the flash
+   contents still have that CRC, the file is not read again; otherwise the
+   whole file is compared, as it was before the record existed. The record may
+   be deleted at any time; the next start rebuilds it.
+
 The bootloader only ever *jumps* to an application; it never transfers the boot
 vector. Consequently it cannot be locked out: any reset or power cycle returns
 to the menu, and flashing a defective application costs nothing more than
@@ -642,6 +650,7 @@ project.
 /boot.txt                                  configuration (created/updated by the menu)
 /emu/                                      BASEDIR (default /emu, override in boot.txt)
 /emu/<HW_CONFIG>/*.uf2                     applications for this board (e.g. /emu/8/)
+/emu/<HW_CONFIG>/.flashed                  what the loader last flashed (written by the loader)
 /emu/emulators.txt                         the index / allow-list (name set by INDEX)
 /emu/categories.txt                        optional category list (see Categories)
 /emu/<category>.txt                        one index file per category, named by categories.txt
@@ -1020,9 +1029,19 @@ CYW43 driver for the Pico 2 W LED, which is no longer released (see
 [Pico 2 W](#pico-2-w)). `./buildAll.sh` builds every supported board into
 `releases/` (requires `picotool`).
 
+The serial log marks each start-up phase with the time since power-on
+(`T+<ms> (+<ms>): <phase>`). Output is held in an 8 KB RAM buffer and sent in
+the background, so logging does not hold up the start-up; it may therefore
+continue for a moment after the menu has appeared. A crash that stops the
+board without a panic message (a hard fault) loses whatever was still in the
+buffer. The log lists every `.uf2`, index row and category only in a build
+configured with `-DBOOT_VERBOSE_LOG=ON`
+(`EXTRA_CMAKE_ARGS=-DBOOT_VERBOSE_LOG=ON ./bld.sh ...`); by default those lines
+are left out so that they do not fill the buffer.
+
 The image must fit the 512 KB bootloader region; the linker errors out if it
 does not, and every link prints its occupancy. The released binaries sit between
-52% and 59% with USB drive mode built in. A `-w` build is the tight one: it
+53% and 59% with USB drive mode built in. A `-w` build is the tight one: it
 reaches 97.8% on HW_CONFIG 1 even with USB drive mode left out, which is why the
 whole project is compiled `-Os` — `-O2` no longer links there (see the comment
 in `CMakeLists.txt`).

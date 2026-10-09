@@ -30,6 +30,13 @@ used and free.
 **Clearer progress while flashing.** When an application is written to flash,
 the screen says whether it is erasing or writing, and how far along it is.
 
+**Faster start-up and flashing.** The menu appears sooner: the loader no longer
+reads the whole application file at every start to check that it still matches
+what is in flash. For this it keeps a small file, `.flashed`, in the board's
+folder on the card, which can be deleted at any time. Writing an application to
+flash takes less time, and on boards without PSRAM a game started from an
+emulator's menu starts slightly sooner.
+
 **SNES controllers on the controller port.** A SNES controller on the board's
 own controller port, such as the built-in pad of the PicoSNES, now starts an
 application with A and goes back with B, as a USB SNES controller does. Before,
