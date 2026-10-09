@@ -32,9 +32,11 @@
 
 #define BI_MARKER_START          0x7188ebf2u
 #define BI_MARKER_END            0xe71aa390u
+#define BI_TYPE_ID_AND_INT       5u
 #define BI_TYPE_ID_AND_STRING    6u
 #define BI_TAG_RP                ((((uint16_t)'P') << 8) | (uint16_t)'R')
 #define BI_ID_RP_PROGRAM_NAME    0x02031c86u
+#define BI_ID_RP_BINARY_END      0x68f465deu
 
 /* SDK docs say the marker pair is in the first 256 bytes, but on RP2350 it
  * lands further in (offset 0x124 = 292 bytes, past the NVIC table). 4 KB
@@ -48,29 +50,36 @@ static inline bool in_xip_range(uint32_t addr, uint32_t base, uint32_t size)
     return addr >= base && addr - base < size;
 }
 
+/* Locate the marker pair (marker_start at p[0], marker_end at p[4]) and return
+ * the [bi_s, bi_e) pointer-array bounds it names, validated against the region. */
+static bool find_xip_bi_range(uint32_t base, uint32_t region_size,
+                              uint32_t *out_bi_s, uint32_t *out_bi_e)
+{
+    const uint32_t *p   = (const uint32_t *)(uintptr_t)base;
+    const uint32_t *end = (const uint32_t *)(uintptr_t)(base + BI_SEARCH_BYTES - 20u);
+    for (; p <= end; p++) {
+        if (p[0] != BI_MARKER_START) continue;
+        if (p[4] != BI_MARKER_END)   continue;
+        uint32_t bi_s = p[1];
+        uint32_t bi_e = p[2];
+        if (!in_xip_range(bi_s, base, region_size)) return false;
+        if (!in_xip_range(bi_e, base, region_size)) return false;
+        if (bi_s > bi_e || ((bi_e - bi_s) & 3u) != 0)  return false;
+        *out_bi_s = bi_s;
+        *out_bi_e = bi_e;
+        return true;
+    }
+    return false;
+}
+
 bool program_name_from_xip(uint32_t base, uint32_t region_size,
                            char *out, unsigned cap)
 {
     if (cap > 0) out[0] = '\0';
     if (cap == 0) return false;
 
-    /* Locate the marker pair: marker_start at p[0], marker_end at p[4]. */
-    const uint32_t *p   = (const uint32_t *)(uintptr_t)base;
-    const uint32_t *end = (const uint32_t *)(uintptr_t)(base + BI_SEARCH_BYTES - 20u);
     uint32_t bi_s = 0, bi_e = 0;
-    bool found = false;
-    for (; p <= end; p++) {
-        if (p[0] != BI_MARKER_START) continue;
-        if (p[4] != BI_MARKER_END)   continue;
-        bi_s = p[1];
-        bi_e = p[2];
-        if (!in_xip_range(bi_s, base, region_size)) return false;
-        if (!in_xip_range(bi_e, base, region_size)) return false;
-        if (bi_s > bi_e || ((bi_e - bi_s) & 3u) != 0)  return false;
-        found = true;
-        break;
-    }
-    if (!found) return false;
+    if (!find_xip_bi_range(base, region_size, &bi_s, &bi_e)) return false;
 
     /* Walk the pointer array looking for the program-name entry. */
     const uint32_t *pp = (const uint32_t *)(uintptr_t)bi_s;
@@ -95,6 +104,38 @@ bool program_name_from_xip(uint32_t base, uint32_t region_size,
         while (i < max && s[i] != '\0') { out[i] = s[i]; i++; }
         out[i] = '\0';
         return i > 0;
+    }
+    return false;
+}
+
+/* The binary-end entry is a binary_info_id_and_int_t emitted by the SDK's
+ * standard_binary_info.c (bi_binary_end(__flash_binary_end)):
+ *   core   (4 bytes: type=ID_AND_INT=5, tag='R'|'P'<<8)
+ *   id     (4 bytes: BINARY_INFO_ID_RP_BINARY_END == 0x68f465de)
+ *   value  (4 bytes: absolute address one past the image's last flash byte) */
+bool binary_end_from_xip(uint32_t base, uint32_t region_size, uint32_t *out_end)
+{
+    uint32_t bi_s = 0, bi_e = 0;
+    if (!find_xip_bi_range(base, region_size, &bi_s, &bi_e)) return false;
+
+    const uint32_t *pp = (const uint32_t *)(uintptr_t)bi_s;
+    const uint32_t *pe = (const uint32_t *)(uintptr_t)bi_e;
+    for (; pp < pe; pp++) {
+        uint32_t entry_addr = *pp;
+        if (!in_xip_range(entry_addr, base, region_size)) continue;
+        const uint8_t *e = (const uint8_t *)(uintptr_t)entry_addr;
+        uint16_t type = (uint16_t)(e[0] | (e[1] << 8));
+        uint16_t tag  = (uint16_t)(e[2] | (e[3] << 8));
+        if (type != BI_TYPE_ID_AND_INT || tag != BI_TAG_RP) continue;
+        uint32_t id = (uint32_t)e[4] | ((uint32_t)e[5] << 8)
+                    | ((uint32_t)e[6] << 16) | ((uint32_t)e[7] << 24);
+        if (id != BI_ID_RP_BINARY_END) continue;
+        uint32_t end = (uint32_t)e[8] | ((uint32_t)e[9] << 8)
+                     | ((uint32_t)e[10] << 16) | ((uint32_t)e[11] << 24);
+        /* Exclusive end, so an image that fills the region exactly is valid. */
+        if (end <= base || end - base > region_size) return false;
+        *out_end = end;
+        return true;
     }
     return false;
 }

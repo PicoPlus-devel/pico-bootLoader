@@ -28,6 +28,14 @@ bool program_name_from_xip(uint32_t base, uint32_t region_size,
                            char *out, unsigned cap);
 
 /*
+ * Read the binary-end address (the SDK's __flash_binary_end, exclusive) of an
+ * image resident in flash, from the same binary_info table. `end - base` is
+ * the image size. Returns false if the image has no such entry or the value
+ * falls outside [base, base + region_size].
+ */
+bool binary_end_from_xip(uint32_t base, uint32_t region_size, uint32_t *out_end);
+
+/*
  * Parse the program name from an on-disk UF2 file. Does not touch flash.
  * Uses random file seeks (storage_seek) to read just the few blocks needed:
  * one for the binary_info marker, one for the entry-pointer array, one or

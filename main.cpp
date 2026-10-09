@@ -33,6 +33,8 @@
 #include <cstdio>
 #include <cstring>
 #include <strings.h>
+#include <malloc.h>
+#include <unistd.h>
 
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
@@ -103,6 +105,13 @@ void splash() {}
 // Defined in pico_shared/FrensHelpers.cpp but not declared in FrensHelpers.h.
 // Reads the SPI flash JEDEC capacity byte; returns the chip size in bytes.
 namespace Frens { uint storage_get_flash_capacity(); }
+
+// Also defined in pico_shared/FrensHelpers.cpp without a header declaration:
+// the PSRAM chip size found by initPsram(), 0 when there is none.
+namespace Frens { extern size_t psramMemorySize; }
+
+// End of the SRAM heap (linker script); sbrk() never grows past it.
+extern char __HeapLimit;
 
 // End of usable flash for app images: build-time partition end, clamped to
 // the real chip size reported by the JEDEC ID. Both the loader's runtime
@@ -982,9 +991,10 @@ void showUsbDriveScreen()
 // --- Options menu (SELECT) --------------------------------------------------
 //
 // The picker's secondary screen: help, the text/graphical toggle, BOOTSEL mode
-// and (where it is built in) USB drive mode. Same charcell chrome and the same
-// pump as showHelpScreen(); A applies the highlighted entry, B or SELECT
-// returns.
+// and (where it is built in) USB drive mode, with a SYSTEM block below them
+// describing the board, its flash, SRAM, PSRAM and SD card. Same charcell chrome and
+// the same pump as showHelpScreen(); A applies the highlighted entry, B or
+// SELECT returns.
 
 enum OptionsResult {
     OPT_BACK,           // nothing the caller has to act on
@@ -1000,13 +1010,215 @@ enum OptionId {
     OPTID_USB_DRIVE,
 };
 
-#define OPT_FIRST_ROW  6    // first entry row; entries are two rows apart
+#define OPT_FIRST_ROW  3    // first entry row; entries are two rows apart
 #define OPT_ROW_STEP   2
 #define OPT_LABEL_COL  6
 #define OPT_VALUE_COL  24
+#define OPT_HINT_ROW   11   // below the last of at most four entries (row 9)
+
+// SYSTEM block. The three value columns are right-aligned SYS_COL_W cells
+// apart against the right edge; fmtBytes() never exceeds 8 characters, so
+// neighbouring values always keep a space between them.
+#define SYS_HDR_ROW    13
+#define SYS_BOARD_ROW  14
+#define SYS_TABLE_ROW  16   // column headings; Flash, SRAM, PSRAM, SD rows follow
+#define SYS_LABEL_COL  3
+#define SYS_BOARD_COL  12
+#define SYS_COL_W      9
+
+// Board name per HW_CONFIG, following the README's board table. "<n> <name>"
+// must fit from SYS_BOARD_COL in the 38-column menu mode, which keeps the
+// names to 23 characters (24 for a single-digit config).
+static const char *hwConfigName()
+{
+    switch (HW_CONFIG) {
+    case 1:  return "Pimoroni Pico DV Base";
+    case 2:  return "Adafruit DVI/PicoNES";
+    case 5:  return "Adafruit Metro RP2350";
+    case 6:  return "RP2350-Zero/PicoNES Mini";
+    case 7:  return "Waveshare RP2350-PiZero";
+    case 8:  return "Adafruit Fruit Jam";
+    case 9:  return "Waveshare RP2350-USB-A";
+    case 13: return "Murmulator M2/PicoSNES";
+    case 14: return "Adafruit Feather RP2350";
+    case 15: return "Olimex RP2040-PICO-PC";
+    default: return "";
+    }
+}
+
+struct SysInfo {
+    uint32_t    flash_total;
+    uint32_t    flash_used;         // boot partition + installed application
+    bool        flash_used_known;   // false when the app's size can't be read
+    uint32_t    sram_total;
+    uint32_t    sram_free;          // heap still available to malloc
+    bool        psram;              // PSRAM detected and serving f_malloc
+    uint32_t    psram_total;
+    uint32_t    psram_free;
+    bool        sd_ok;
+    const char *sd_fs;              // "FAT32", "exFAT", ...
+    uint64_t    sd_total;
+    uint64_t    sd_free;
+};
+
+// Collected once when the options screen opens. Every source is cheap: the
+// flash size is the cached JEDEC read, the app size comes from binary_info
+// over XIP, and f_getfree() returns the free-cluster count FatFs has kept up
+// to date since initSDCard() first computed it at boot.
+void gatherSysInfo(SysInfo *si)
+{
+    *si = {};
+
+    // The whole boot partition counts as used -- an application can never
+    // be flashed into it -- plus the image of the application installed now.
+    // Data an application writes past its own image (a ROM on boards without
+    // PSRAM, an aux blob such as Doom's WAD) is not counted.
+    si->flash_total = Frens::storage_get_flash_capacity();
+    uint32_t app       = 0;
+    bool     app_known = true;
+    if (app_launch_present()) {
+        uint32_t end;
+        if (binary_end_from_xip(APP_BASE_ADDR, appFlashEnd() - APP_BASE_ADDR, &end)) {
+            app = end - APP_BASE_ADDR;
+        } else {
+            // No binary-end entry: use the extent scanUf2Dir() probed for the
+            // SD file with the same program name, if there is one.
+            app_known = false;
+            for (int i = 0; i < g_uf2_count && g_flash_prog_name[0]; i++) {
+                if (g_uf2[i].ext_known &&
+                    strcmp(g_uf2[i].prog_name, g_flash_prog_name) == 0) {
+                    app       = g_uf2[i].ext_hi - APP_BASE_ADDR + 1;
+                    app_known = true;
+                    break;
+                }
+            }
+        }
+    }
+    si->flash_used       = BOOTLOADER_SIZE + app;
+    si->flash_used_known = app_known && si->flash_used <= si->flash_total;
+
+    // All 520 KB, scratch banks included. Free is what malloc can still hand
+    // out: the free chunks inside the heap arena plus whatever lies between
+    // the program break and the heap limit. Without PSRAM, claimHeap() has
+    // already grown the arena to the limit, so the second term is ~0 there.
+    // Used is everything else -- static data, the framebuffer, both stacks
+    // and live heap blocks.
+    {
+        const struct mallinfo mi = mallinfo();
+        const uint32_t unclaimed = (uint32_t)(&__HeapLimit - (char *)sbrk(0));
+        si->sram_total = SRAM_END_ADDR - SRAM_BASE;
+        si->sram_free  = (uint32_t)mi.fordblks + unclaimed;
+    }
+
+    if (Frens::isPsramEnabled()) {
+        si->psram       = true;
+        si->psram_total = (uint32_t)Frens::psramMemorySize;
+        si->psram_free  = Frens::GetAvailableMemory();   // lwmem's free bytes
+    }
+
+    DWORD  fre = 0;
+    FATFS *fs  = nullptr;
+    if (f_getfree("", &fre, &fs) == FR_OK && fs) {
+        si->sd_ok = true;
+        switch (fs->fs_type) {
+        case FS_FAT12: si->sd_fs = "FAT12"; break;
+        case FS_FAT16: si->sd_fs = "FAT16"; break;
+        case FS_FAT32: si->sd_fs = "FAT32"; break;
+        case FS_EXFAT: si->sd_fs = "exFAT"; break;
+        default:       si->sd_fs = "?";     break;
+        }
+#if FF_MAX_SS == FF_MIN_SS
+        const uint64_t clst = (uint64_t)fs->csize * FF_MAX_SS;
+#else
+        const uint64_t clst = (uint64_t)fs->csize * fs->ssize;
+#endif
+        si->sd_total = (uint64_t)(fs->n_fatent - 2) * clst;
+        si->sd_free  = (uint64_t)fre * clst;
+    }
+
+    LOG("System: HW_CONFIG %d, flash %u KB used%s of %u KB, SRAM %u KB free of %u KB, "
+        "PSRAM %u KB free of %u KB, SD %s %u KB free of %u KB",
+        HW_CONFIG, (unsigned)(si->flash_used >> 10), si->flash_used_known ? "" : " (app size unknown)",
+        (unsigned)(si->flash_total >> 10), (unsigned)(si->sram_free >> 10),
+        (unsigned)(si->sram_total >> 10), (unsigned)(si->psram_free >> 10),
+        (unsigned)(si->psram_total >> 10), si->sd_ok ? si->sd_fs : "unavailable",
+        (unsigned)(si->sd_free >> 10), (unsigned)(si->sd_total >> 10));
+}
+
+// "512 KB", "15.5 MB", "29.7 GB": 1024-based, one decimal from MB up, integer
+// math only. The decimal is dropped from 1000 upwards ("1023 MB") so the
+// result never exceeds 8 characters.
+static void fmtBytes(char *out, size_t n, uint64_t b)
+{
+    static const char *const units[] = { "MB", "GB", "TB" };
+    if (b < (1ull << 20)) {
+        snprintf(out, n, "%u KB", (unsigned)((b + 512) >> 10));
+        return;
+    }
+    int      u   = 0;
+    uint64_t div = 1ull << 20;
+    while (u < 2 && b >= (div << 10)) { div <<= 10; u++; }
+    const unsigned tenths = (unsigned)((b * 10 + div / 2) / div);
+    if (tenths >= 10000) snprintf(out, n, "%u %s", tenths / 10, units[u]);
+    else                 snprintf(out, n, "%u.%u %s", tenths / 10, tenths % 10, units[u]);
+}
+
+// putText() at the column that makes `text` end in column `right`.
+static void putTextRight(int right, int row, const char *text, int fg, int bg)
+{
+    putText(right - (int)strlen(text) + 1, row, text, fg, bg);
+}
+
+// One "label  total  used  free" row. Used and Free read "--" when the used
+// figure isn't known.
+static void drawSysRow(int row, const char *label, uint64_t total, uint64_t used,
+                       bool used_known)
+{
+    char v[12];
+    putText(SYS_LABEL_COL, row, label, COL_FG, COL_BG);
+    fmtBytes(v, sizeof(v), total);
+    putTextRight(SCREEN_COLS - 1 - 2 * SYS_COL_W, row, v, COL_FG, COL_BG);
+    if (used_known) fmtBytes(v, sizeof(v), used);
+    else            strcpy(v, "--");
+    putTextRight(SCREEN_COLS - 1 - SYS_COL_W, row, v, COL_FG, COL_BG);
+    if (used_known) fmtBytes(v, sizeof(v), total - used);
+    putTextRight(SCREEN_COLS - 1, row, v, COL_FG, COL_BG);
+}
+
+void drawSysInfo(const SysInfo *si)
+{
+    char line[SCREEN_COLS + 1];
+
+    putText(1, SYS_HDR_ROW, "SYSTEM", COL_HELP_HDR, COL_BG);
+
+    putText(SYS_LABEL_COL, SYS_BOARD_ROW, "Board", COL_FG, COL_BG);
+    snprintf(line, sizeof(line), "%d %s", HW_CONFIG, hwConfigName());
+    putText(SYS_BOARD_COL, SYS_BOARD_ROW, line, COL_FG, COL_BG);
+
+    int row = SYS_TABLE_ROW;
+    putTextRight(SCREEN_COLS - 1 - 2 * SYS_COL_W, row, "Total", COL_FG, COL_BG);
+    putTextRight(SCREEN_COLS - 1 - SYS_COL_W,     row, "Used",  COL_FG, COL_BG);
+    putTextRight(SCREEN_COLS - 1,                 row, "Free",  COL_FG, COL_BG);
+    row++;
+
+    drawSysRow(row++, "Flash", si->flash_total, si->flash_used, si->flash_used_known);
+    drawSysRow(row++, "SRAM", si->sram_total, si->sram_total - si->sram_free,
+               si->sram_free <= si->sram_total);
+    if (si->psram) {
+        drawSysRow(row++, "PSRAM", si->psram_total,
+                   si->psram_total - si->psram_free, true);
+    }
+    if (si->sd_ok) {
+        snprintf(line, sizeof(line), "SD %s", si->sd_fs);
+        drawSysRow(row, line, si->sd_total, si->sd_total - si->sd_free, true);
+    } else {
+        putText(SYS_LABEL_COL, row, "SD card unavailable", COL_FG, COL_BG);
+    }
+}
 
 void drawOptionsScreen(const OptionId *ids, int count, int sel,
-                       const sd_boot_ini_t *ini, bool cfg_save_failed)
+                       const sd_boot_ini_t *ini, bool cfg_save_failed,
+                       const SysInfo *si)
 {
     char btn1[2], btn2[2];
     getButtonLabels(btn1, btn2);
@@ -1048,7 +1260,9 @@ void drawOptionsScreen(const OptionId *ids, int count, int sel,
     case OPTID_BOOTSEL:   hint = "Restart for flashing over USB"; break;
     case OPTID_USB_DRIVE: hint = "Show the SD card on your computer"; break;
     }
-    centerText(20, hint, COL_FG, COL_BG);
+    centerText(OPT_HINT_ROW, hint, COL_FG, COL_BG);
+
+    drawSysInfo(si);
 
     if (cfg_save_failed) {
         centerText(22, "Settings not saved - SD write failed",
@@ -1086,9 +1300,15 @@ OptionsResult showOptionsScreen(sd_boot_ini_t *ini, bool *cfg_save_failed,
     // ~0u so the SELECT press that opened this screen isn't read as input.
     uint32_t prev = ~0u;
 
+    // Once per visit: nothing done from this screen changes flash or PSRAM,
+    // the boot.txt rewrite doesn't move the SD figures visibly, and USB drive
+    // mode reboots whenever the card was written.
+    SysInfo si;
+    gatherSysInfo(&si);
+
     for (;;) {
         if (dirty) {
-            drawOptionsScreen(ids, count, sel, ini, *cfg_save_failed);
+            drawOptionsScreen(ids, count, sel, ini, *cfg_save_failed, &si);
             dirty = false;
         }
 

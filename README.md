@@ -238,6 +238,14 @@ with UP / DOWN, confirm with A, and return with B.
 | Enter BOOTSEL mode | Restarts the board into the RP2350 ROM bootloader, where it appears on a computer as a drive named `RP2350`. Copy a `.uf2` onto it to update the bootloader itself, or reset the board to return to the menu. |
 | USB drive mode | Presents the SD card to a computer as a USB mass-storage device, so applications, the index file and artwork can be changed without removing the card. |
 
+Below the entries, a **System** section shows the board's `HW_CONFIG` number and
+name, and the total, used and free capacity of the flash memory, the SRAM, the
+PSRAM (only when the board has it) and the SD card, together with the card's
+file system (FAT32 or exFAT). Used flash is the 512 KB bootloader partition plus
+the size of the application currently installed; data an application stores in
+flash beyond its own image, such as a ROM on a board without PSRAM, is not
+counted. Free SRAM is the memory the bootloader can still allocate.
+
 ### USB drive mode
 
 
