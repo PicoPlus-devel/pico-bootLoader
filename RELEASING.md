@@ -5,7 +5,7 @@ they have different lifecycles:
 
 | Artifact | Built by | How it gets onto the release |
 | --- | --- | --- |
-| `pico-bootLoader_<board>_arm[_piousb].uf2` (9 files) | CI, on the self-hosted runner | attached automatically by the workflow |
+| `pico-bootLoader_<board>_arm[_piousb].uf2` (10 files) | CI, on the self-hosted runner | attached automatically by the workflow |
 | `pico-bootLoader_sdcard.zip` | **locally**, by `build_emulators.sh -c all -z` | `gh release upload`, by hand |
 | PCB gerbers (3 zips: PicoNES v2.6, Mini v2.0, Micro v1.2) | nobody — vendored in the `pico_shared` submodule | attached automatically by the workflow |
 
@@ -136,7 +136,7 @@ gh release delete v0.2.1-alpha --cleanup-tag
 gh release view v0.2.1
 ```
 
-- **9 loader `.uf2` assets** — one per board. The `_pico2_w_` variants for
+- **10 loader `.uf2` assets** — one per board. The `_pico2_w_` variants for
   HW_CONFIG 1 and 2 are no longer built; a Pico 2 W runs the `pico2` asset.
 - `pico-bootLoader_sdcard.zip` present, unless this is a Scenario A release.
   Its `updateAll/` folder holds `updateAll.exe` next to the scripts
@@ -178,12 +178,12 @@ from `github.sha`, so it will point at whatever is current.
   (`BUILD_FOR_BOOTLOADER`) only in `pico_shared` `f2c8be9`, and the emulator tags
   of the time predated it, so their pinned revision rejected `-b` outright.
   That reason no longer applies — every current tag pins a descendant of
-  `f2c8be9` — but the substitution is still not a no-op. The tags pin different
-  revisions (for v0.6: `3e19ce0` for Videopac and Game Boy, `3873764` for PC
-  Engine, `1b88043` for SNES and Genesis, `63e983c` for the rest), while the
-  whole bundle is built against the one `pico_shared` `main` that
-  `emu/versions.txt` records. An older tag that no longer builds against `main`
-  shows up as a `FAIL` in the grand summary.
+  `f2c8be9`. For v0.7 the substitution is a no-op: every emulator tag pins
+  `6e65df4`, which is also `main`. It stops being one as soon as a repository is
+  tagged against an older revision (for v0.6 the tags pinned four different
+  ones), and the whole bundle is then still built against the one `pico_shared`
+  `main` that `emu/versions.txt` records. An older tag that no longer builds
+  against `main` shows up as a `FAIL` in the grand summary.
 - **A tag pushed from CI would not trigger this workflow** — GitHub does not fire
   workflows for events created with the default `GITHUB_TOKEN`. That is why the
   release step passes `tag_name` + `target_commitish` and creates the tag itself

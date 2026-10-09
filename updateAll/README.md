@@ -2,7 +2,7 @@
 
 `updateAll` installs arcade ROM sets on the SD card of a pico-bootLoader console or of a standalone arcade application. It takes MAME ROM zips from a folder, downloads the zips that are not in it from the configured databases, and extracts each set into the folder on the SD card where its application looks for it.
 
-The ROM sets are copyright of their manufacturers. They are not included, and no download source is configured: the user supplies the zips, or a database to download them from, and is responsible for holding the rights to them.
+The ROM sets are copyright of their manufacturers and are not included. The shipped `updateAll.json` configures one download database, [ArcadeROMsDB_MiSTer](https://github.com/zakk4223/ArcadeROMsDB_MiSTer), a third-party database that is not part of this project, so zips that are not in the zip folder are downloaded from it by default. The user is responsible for holding the rights to the ROM sets, whether they are supplied as zips or downloaded. To use only zips you supply, untick **Download missing zips** in the Windows program, pass `--no-download` (Python) or `-NoDownload` (PowerShell), or set `"databases": []` in `updateAll.json`; see [Download databases](#download-databases).
 
 Three equivalent implementations are provided: `updateAll.exe`, a Windows program with a window, `updateAll.py` (Python) and `updateAll.ps1` (PowerShell). All three read the same configuration file, `updateAll.json`; the Windows program also carries a built-in copy of it.
 
@@ -20,7 +20,7 @@ Three equivalent implementations are provided: `updateAll.exe`, a Windows progra
 
 1. Start `updateAll.exe`. The SD card is selected for you: the card the program was started from, or else the first removable drive that holds a pico-bootLoader card (an `emu` folder), or else the first removable drive.
 2. Under **SD card**, choose another card if needed. Any existing folder can be chosen instead.
-3. Under **Zip folder**, choose the folder with the MAME zips you already have, if any. When **Download missing zips** is ticked, zips that are not in the folder are downloaded from the configured databases; without a zip folder they are downloaded into a temporary folder that is removed afterwards.
+3. Under **Zip folder**, choose the folder with the MAME zips you already have, if any. When **Download missing zips** is ticked, which it is by default, zips that are not in the folder are downloaded from the configured databases; without a zip folder they are downloaded into a temporary folder that is removed afterwards.
 4. Untick the sets that are not wanted. The **Status** column shows which sets are already complete on the card.
 5. Select **Install**. The log shows the same report as the scripts. **Dry run** reports what would be downloaded and written without doing it. **Cancel** stops a run before the next file.
 
@@ -98,7 +98,7 @@ A database uses the format of the [MiSTer Downloader](https://github.com/MiSTer-
 | `size` | Size in bytes. Optional, checked when present. |
 | `hash` | MD5 of the zip. Optional, checked when present. |
 
-Databases are listed in `updateAll.json` under `databases`, as URLs or as file paths relative to the configuration file, or given on the command line:
+Databases are listed in `updateAll.json` under `databases`, as URLs or as file paths relative to the configuration file, or given on the command line. The shipped configuration lists the ArcadeROMsDB_MiSTer database; an empty list, `"databases": []`, switches downloading off, and the Windows program then greys out **Download missing zips**. The Windows program reads an `updateAll.json` placed next to it in preference to its built-in copy, so editing the file in the `updateAll` folder is enough. The format of the list:
 
 ```json
 {

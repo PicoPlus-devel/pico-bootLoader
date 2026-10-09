@@ -649,9 +649,16 @@ _build_scripted() {
     # Reuse an existing checkout of the right repo across configs: clone once,
     # then move it to the wanted ref for later boards. Detaching works for both a
     # tag and a branch tip, so the same path serves either. If the update fails
-    # for any reason, fall back to a clean clone.
+    # for any reason, fall back to a clean clone. A checkout of another remote
+    # (a repository that has since moved, say from fhoedemakers to
+    # PicoPlus-devel) is discarded first: left in place, it would skip both the
+    # update and the clone below and be built at whatever ref it last had.
     if [ -d "$dest/.git" ] && \
-       [ "$(git -C "$dest" config --get remote.origin.url 2>/dev/null)" = "$url" ]; then
+       [ "$(git -C "$dest" config --get remote.origin.url 2>/dev/null)" != "$url" ]; then
+        warn "[$prog] $dest is a clone of another remote; re-cloning from scratch"
+        rm -rf "$dest"
+    fi
+    if [ -d "$dest/.git" ]; then
         info "[$prog] reusing existing clone at $dest; updating to ${cloneref}"
         if ! ( cd "$dest" \
                 && git fetch --depth 1 origin "$cloneref" \

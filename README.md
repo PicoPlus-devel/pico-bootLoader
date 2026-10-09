@@ -7,7 +7,7 @@ host a collection of retro-game emulators and native ports of *Doom* and
 *Duke Nukem 3D* on a single board and to let the user choose which one to run
 from an on-screen menu, without reconnecting the board to a computer.
 
-It runs on nine board configurations, each with its own ready-made binary — see
+It runs on ten board configurations, each with its own ready-made binary — see
 [Supported hardware](#supported-hardware) for the file names:
 
 - Raspberry Pi Pico 2 / Pico 2 W, or a Pimoroni Pico Plus 2, with an Adafruit DVI
@@ -23,11 +23,15 @@ It runs on nine board configurations, each with its own ready-made binary — se
   [PicoNES Micro PCB](#picones-micro-pcb-hw_config-9)
 - Murmulator M2, or an RP2350 Plus on the
   [PicoSNES PCB](#picosnes-pcb-hw_config-13), which uses the same pin map
+- [Olimex RP2040-PICO-PC](#olimex-rp2040-pico-pc-hw_config-15) with a Raspberry
+  Pi Pico 2
 
 Every one of them outputs video over DVI/HDMI and reads its applications from an
 SD card. RP2040 boards are not supported: the flash layout and the UF2 checks are
-RP2350-specific. The four PCBs are optional console-style carriers for boards
-already in this list — see [Custom PCBs](#custom-pcbs).
+RP2350-specific. The Olimex board is named after the RP2040 Pico it was designed
+for, but takes a Pico 2 in the same socket. The four PCBs are optional
+console-style carriers for boards already in this list — see
+[Custom PCBs](#custom-pcbs).
 
 It is not limited to emulation, though: any RP2350 application can be made
 bootable and added to the menu — see [Creating a bootable build of your own
@@ -59,23 +63,23 @@ its own repository and identified by the program name embedded in its `.uf2`.
 
 | System | Program name | Source repository | Menu artwork |
 |---|---|---|---|
-| Nintendo Entertainment System | `piconesPlus` | [pico-infonesPlus](https://github.com/fhoedemakers/pico-infonesPlus) | <img width="280" alt="Nintendo Entertainment System menu artwork" src="https://github.com/user-attachments/assets/95c8eab1-02ed-4b29-8339-087f9db04726" />|
-| Super Nintendo Entertainment System | `picosnesPlus` | [pico-snesPlus](https://github.com/fhoedemakers/pico-snesPlus) | <img width="280" alt="Super Nintendo Entertainment System" src="https://github.com/user-attachments/assets/d7e64b3d-b0e2-4811-a31b-2536b0245a3f" /> |
-| Sega Genesis / Mega Drive | `picogenesisPlus` | [pico-genesisPlus](https://github.com/fhoedemakers/pico-genesisPlus) | <img width="280" alt="Sega Genesis / Mega Drive menu artwork" src="https://github.com/user-attachments/assets/9ad3f11b-6f4f-44fc-abbd-908a9aed4326" /> |
-| NEC PC Engine / PCEngine CD | `picopcePlus` | [pico-pcePlus](https://github.com/fhoedemakers/pico-pcePlus) | <img width="280" alt="NEC PC Engine menu artwork" src="https://github.com/user-attachments/assets/558b9d3b-d0c7-455e-b16a-6c1b30b0fa08" /> |
-| Nintendo Game Boy / Game Boy Color | `PicoPeanutGB` | [pico-peanutGB](https://github.com/fhoedemakers/pico-peanutGB) | <img width="280" alt="Nintendo Game Boy menu artwork" src="https://github.com/user-attachments/assets/4954bcba-9e51-4ef1-a45e-02ecc408dbc2" /> |
-| Sega Master System / Game Gear | `picosmsPlus` | [pico-smsplus](https://github.com/fhoedemakers/pico-smsplus) | <img width="280" alt="Sega Master System / Game Gear menu artwork" src="https://github.com/user-attachments/assets/a3c223c6-8f52-412d-b7ca-25dfe33f1740" />|
-| Philips Videopac / Magnavox Odyssey² | `picoPacPlus` | [pico-pacPlus](https://github.com/fhoedemakers/pico-pacPlus) | <img width="280" alt="Philips Videopac / Magnavox Odyssey II menu artwork" src="https://github.com/user-attachments/assets/838ba7b0-3360-4020-a83c-5113aa0efb4a" />|
+| Nintendo Entertainment System | `piconesPlus` | [pico-infonesPlus](https://github.com/PicoPlus-devel/pico-infonesPlus) | <img width="280" alt="Nintendo Entertainment System menu artwork" src="https://github.com/user-attachments/assets/95c8eab1-02ed-4b29-8339-087f9db04726" />|
+| Super Nintendo Entertainment System | `picosnesPlus` | [pico-snesPlus](https://github.com/PicoPlus-devel/pico-snesPlus) | <img width="280" alt="Super Nintendo Entertainment System" src="https://github.com/user-attachments/assets/d7e64b3d-b0e2-4811-a31b-2536b0245a3f" /> |
+| Sega Genesis / Mega Drive | `picogenesisPlus` | [pico-genesisPlus](https://github.com/PicoPlus-devel/pico-genesisPlus) | <img width="280" alt="Sega Genesis / Mega Drive menu artwork" src="https://github.com/user-attachments/assets/9ad3f11b-6f4f-44fc-abbd-908a9aed4326" /> |
+| NEC PC Engine / PCEngine CD | `picopcePlus` | [pico-pcePlus](https://github.com/PicoPlus-devel/pico-pcePlus) | <img width="280" alt="NEC PC Engine menu artwork" src="https://github.com/user-attachments/assets/558b9d3b-d0c7-455e-b16a-6c1b30b0fa08" /> |
+| Nintendo Game Boy / Game Boy Color | `PicoPeanutGB` | [pico-peanutGB](https://github.com/PicoPlus-devel/pico-peanutGB) | <img width="280" alt="Nintendo Game Boy menu artwork" src="https://github.com/user-attachments/assets/4954bcba-9e51-4ef1-a45e-02ecc408dbc2" /> |
+| Sega Master System / Game Gear | `picosmsPlus` | [pico-smsplus](https://github.com/PicoPlus-devel/pico-smsplus) | <img width="280" alt="Sega Master System / Game Gear menu artwork" src="https://github.com/user-attachments/assets/a3c223c6-8f52-412d-b7ca-25dfe33f1740" />|
+| Philips Videopac / Magnavox Odyssey² | `picoPacPlus` | [pico-pacPlus](https://github.com/PicoPlus-devel/pico-pacPlus) | <img width="280" alt="Philips Videopac / Magnavox Odyssey II menu artwork" src="https://github.com/user-attachments/assets/838ba7b0-3360-4020-a83c-5113aa0efb4a" />|
 | ColecoVision | `colecojam` | [Adafruit_ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam) | <img width="280" alt="ColecoVision menu artwork" src="emu/assets/themes/0/col.png" /> |
 | Texas Instruments TI-99/4A | `pico994A` | [pico-994A](https://github.com/PicoPlus-devel/pico-994A) | <img width="280" alt="TI-99/4A menu artwork" src="emu/assets/themes/0/ti99.png" /> |
-| **Doom** (native port, not emulated) | `doom_tiny` | [pico-doom](https://github.com/fhoedemakers/pico-doom) | <img width="280" alt="Doom menu artwork" src="https://github.com/user-attachments/assets/112fb4f3-a806-4f60-83fb-59f70fbffbff" />|
-| **Duke Nukem 3D** (native port, not emulated) | `duke3d_game` | [pico-duke3D](https://github.com/fhoedemakers/pico-duke3D) |<img width="280" alt="Duke Nukem 3D menu artwork" src="https://github.com/user-attachments/assets/79798fb3-5517-41cf-bfcb-62c0aa0dc00e" />  |
+| **Doom** (native port, not emulated) | `doom_tiny` | [pico-doom](https://github.com/PicoPlus-devel/pico-doom) | <img width="280" alt="Doom menu artwork" src="https://github.com/user-attachments/assets/112fb4f3-a806-4f60-83fb-59f70fbffbff" />|
+| **Duke Nukem 3D** (native port, not emulated) | `duke3d_game` | [pico-duke3D](https://github.com/PicoPlus-devel/pico-duke3D) |<img width="280" alt="Duke Nukem 3D menu artwork" src="https://github.com/user-attachments/assets/79798fb3-5517-41cf-bfcb-62c0aa0dc00e" />  |
 | **OutRun** (native port, not emulated) | `picoOutRun` | [pico-outrun](https://github.com/PicoPlus-devel/pico-outrun) | <img width="280" alt="OutRun menu artwork" src="emu/assets/themes/0/outrun.png" /> |
 | **Phoenix** (arcade) | `picoPhoenix` | [pico-phoenix](https://github.com/PicoPlus-devel/pico-phoenix) | <img width="280" alt="Phoenix menu artwork" src="emu/assets/themes/0/phoenix.png" /> |
 | **Moon Cresta** (arcade) | `picoMoonCresta` | [pico-mooncresta](https://github.com/PicoPlus-devel/pico-mooncresta) | <img width="280" alt="Moon Cresta menu artwork" src="emu/assets/themes/0/mooncresta.png" /> |
 
 The following emulators need a bios in `/bios` on SD:
-- *Nintendo Entertainment System* : For Famicom Dsik System games `fds-bios.rom`
+- *Nintendo Entertainment System* : For Famicom Disk System games `fds-bios.rom`
 - *Philips Videopac / Magnavox Odyssey²*: `o2rom.bin`
 - *PCEngine CD* : `Super CD-ROM System (Japan) (v3.0).pce` or another variant.
 - *Texas Instruments TI-99/4A*: `994aROM.bin` and `994aGROM.bin`, both required —
@@ -150,14 +154,18 @@ the same *Tate mode* setting as Phoenix.
 The ROM sets of the Arcade entries can also be installed with `updateAll`, which
 the SD-card archive holds in its `updateAll` folder: `updateAll.exe` for
 Windows, and equivalent Python and PowerShell scripts. It extracts each set from
-the MAME zips into the folder its game reads, and can download zips that are
-missing from a configured database. See [updateAll/README.md](updateAll/README.md).
+the MAME zips into the folder its game reads. Zips that are not at hand are
+downloaded from a third-party ROM database
+([ArcadeROMsDB_MiSTer](https://github.com/zakk4223/ArcadeROMsDB_MiSTer)) that is
+configured by default; switch downloads off to use only zips you supply. The ROM
+sets are not part of this project, and holding the rights to them is the user's
+responsibility. See [updateAll/README.md](updateAll/README.md).
 
-*PCEngine CD* needs PSRAM
+*PCEngine CD* needs PSRAM.
 
 Additional emulators may be added over time.
 
-For board-by-board wiring, supported display modes and more refer to the [pico-infonesPlus documentation](https://github.com/fhoedemakers/pico-infonesPlus#setup). The set of supported boards and their pinouts is identical between the two projects.
+For board-by-board wiring, supported display modes and more refer to the [pico-infonesPlus documentation](https://github.com/PicoPlus-devel/pico-infonesPlus#setup). The set of supported boards and their pinouts is identical between the two projects.
 
 ## How it works
 
@@ -202,7 +210,10 @@ devices are active simultaneously.
 - **USB keyboard** — a standard USB HID keyboard.
 
 On boards that provide the necessary wiring, NES/SNES controller ports and a Wii
-Classic controller (over I²C) are also supported and use their own buttons.
+Classic controller (over I²C) are also supported and use their own buttons. A
+SNES controller on such a port, the built-in pad of the
+[PicoSNES](#picosnes-pcb-hw_config-13) included, confirms with A and returns
+with B, as a USB SNES controller does.
 
 | Action | Game controller | USB keyboard |
 |---|---|---|
@@ -277,15 +288,16 @@ see [Pico 2 W](#pico-2-w) for what that board does and does not do.
 ## Getting started
 
 1. **Flash the bootloader.** Download the loader `.uf2` for your board from the
-   [Releases](https://github.com/fhoedemakers/pico-bootLoader/releases) page
+   [Releases](https://github.com/PicoPlus-devel/pico-bootLoader/releases) page
    (see [Supported hardware](#supported-hardware) for the file names). Hold
    BOOTSEL, connect the board over USB, and copy the `.uf2` onto the
    `RP2350` drive.
 2. **Prepare the SD card.** Download `pico-bootLoader_sdcard.zip` from the same
    Releases page and unpack it onto a FAT32- or exFAT-formatted card. The
-   archive contains the emulators, the native ports, the menu artwork, and a
-   sample configuration file. Alternatively, assemble the layout yourself as
-   described in [SD card layout](#sd-card-layout).
+   archive contains the emulators, the native ports, the menu artwork, a
+   sample configuration file and the `updateAll` ROM installer. Alternatively,
+   assemble the layout yourself as described in
+   [SD card layout](#sd-card-layout).
 3. **Run it.** Insert the card and power on the board. The menu appears.
 
 The Releases page provides two kinds of download: the per-board bootloader
@@ -329,6 +341,32 @@ HSTX peripheral; the others use PicoDVI. A single SD card
 serves both kinds — artwork is cached in both pixel formats (see
 [Artwork](#artwork)).
 
+### Olimex RP2040-PICO-PC (HW_CONFIG 15)
+
+The [Olimex RP2040-PICO-PC](https://www.olimex.com/Products/MicroPython/PICO/RP2040-PICO-PC/)
+is a carrier board for a Raspberry Pi Pico, with HDMI, a microSD slot, a USB-A
+port, an audio jack and a UEXT connector. Despite its name, the loader runs on
+it with a **Raspberry Pi Pico 2** in the socket in place of the original Pico.
+Flash `pico-bootLoader_OlimexPicoPC_arm.uf2` and put the applications in
+`/emu/15/`.
+
+- **Video and sound.** HDMI is driven through HSTX. Sound plays on HDMI and on
+  the audio jack at the same time.
+- **Controllers.** A USB controller or keyboard goes in the USB-A port, and a
+  NES or SNES controller can be wired to the UEXT connector. The USB-A port is
+  connected to the Pico 2's own USB port, so a USB controller cannot be used
+  while the card is shown to a computer in [USB drive mode](#usb-drive-mode);
+  leave that mode from the NES/SNES controller or by ejecting the drive.
+- **Flash.** A standard Pico 2 has 4 MB of flash, which leaves 3.5 MB for the
+  application partition.
+- **PSRAM.** A standard Pico 2 has no PSRAM. A PSRAM chip can be added with its
+  chip-select pin on GPIO 8. Without it, the entries that require PSRAM — the
+  Super Nintendo emulator, *PCEngine CD*, *OutRun*, *Duke Nukem 3D* and
+  `doom_tiny_full` — still appear in the menu but do not run.
+
+Support for this board was contributed by
+[DnCraptor](https://github.com/DnCraptor).
+
 ### Pico 2 W
 
 The Pico 2 W runs the ordinary `pico2` binary for its hardware configuration;
@@ -360,16 +398,16 @@ in the matching `/emu/<HW_CONFIG>/` folder.
 | [PicoSNES](#picosnes-pcb-hw_config-13) | RP2350 Plus | 13 | `Gerber_SNES_PicoSNES_v1.0.zip` | Gavin Knight |
 
 The three PicoNES archives are attached to every
-[release](https://github.com/fhoedemakers/pico-bootLoader/releases) of this
+[release](https://github.com/PicoPlus-devel/pico-bootLoader/releases) of this
 project and also live in
-[`pico_shared/PCB`](https://github.com/fhoedemakers/pico_shared/tree/main/PCB).
+[`pico_shared/PCB`](https://github.com/PicoPlus-devel/pico_shared/tree/main/PCB).
 The PicoSNES archive is published on its own
 [release page](https://github.com/DynaMight1124/pico-infonesPlus/releases/tag/PicoSNES).
 Upload the zip as-is to a PCB manufacturer of your choice;
 [PCBWay](https://www.pcbway.com/) and JLCPCB are both good options.
 
 The PicoNES designs come from
-[pico-infonesPlus](https://github.com/fhoedemakers/pico-infonesPlus) and keep its
+[pico-infonesPlus](https://github.com/PicoPlus-devel/pico-infonesPlus) and keep its
 NES-flavoured names, and the PicoSNES is named after the controller it fits in,
 but there is nothing console-specific about any of them — they are DVI, microSD
 and controller wiring, and every application in the menu runs on them.
@@ -489,7 +527,7 @@ own; Gavin's Thingiverse page has the details.
 <img width="480" alt="Top cover with a button for BOOTSEL" src="https://github.com/user-attachments/assets/3c8f8990-51b9-4873-9054-64bb2cd6c300" />
 
 For the full photo gallery and assembly detail, see the
-[PCB section of the pico-infonesPlus documentation](https://github.com/fhoedemakers/pico-infonesPlus#pcb-with-raspberry-pi-pico-or-pico-2-and-pimoroni-pico-plus-2).
+[PCB section of the pico-infonesPlus documentation](https://github.com/PicoPlus-devel/pico-infonesPlus#pcb-with-raspberry-pi-pico-or-pico-2-and-pimoroni-pico-plus-2).
 
 ### PicoNES Mini PCB (HW_CONFIG 6)
 
@@ -612,6 +650,7 @@ project.
 /emu/assets/themes/0/Categories/*.png|.jpg category artwork (with categories.txt)
 /emu/assets/themes/1..9/                   optional extra themes (UP/DOWN to switch)
 /emu/assets/screensaver/*.png|.jpg         screensaver images (optional, not themed)
+/updateAll/                                arcade ROM installer, run on a computer (optional)
 ```
 
 Applications live in a subfolder named after the board's `HW_CONFIG` number, so
@@ -875,7 +914,7 @@ pico_set_program_name(${projectname} "my_app")
 **Relink into the application partition.** Add the following near the end of the
 `CMakeLists.txt` (after the target exists, before `pico_add_extra_outputs`),
 with `BootPartition.cmake` taken from the
-[`pico_shared`](https://github.com/fhoedemakers/pico_shared) repository:
+[`pico_shared`](https://github.com/PicoPlus-devel/pico_shared) repository:
 
 ```cmake
 if(BUILD_FOR_BOOTLOADER)
@@ -983,7 +1022,7 @@ CYW43 driver for the Pico 2 W LED, which is no longer released (see
 
 The image must fit the 512 KB bootloader region; the linker errors out if it
 does not, and every link prints its occupancy. The released binaries sit between
-50% and 57% with USB drive mode built in. A `-w` build is the tight one: it
+52% and 59% with USB drive mode built in. A `-w` build is the tight one: it
 reaches 97.8% on HW_CONFIG 1 even with USB drive mode left out, which is why the
 whole project is compiled `-Os` — `-O2` no longer links there (see the comment
 in `CMakeLists.txt`).
@@ -1004,15 +1043,15 @@ stamps a version.
 > records both refs. The reason is historical: `bld.sh` only learned `-b`
 > (`BUILD_FOR_BOOTLOADER`) in `pico_shared` `f2c8be9`, and the emulator release
 > tags of the time predated it — their pinned `pico_shared` rejected `-b`
-> outright, so no bootloader-format `.uf2` could be produced from it. **As of the
-> v0.4 tag set the substitution is a no-op**: every emulator tag pins `3e19ce0`,
-> a descendant of `f2c8be9`, which is also where `main` sits, so the two columns
-> of `emu/versions.txt` now agree. They will differ again whenever a repository
-> is tagged against an older `pico_shared`, which is what the behaviour is for.
+> outright, so no bootloader-format `.uf2` could be produced from it. **For the
+> v0.7 bundle the substitution is a no-op**: every emulator tag pins `6e65df4`,
+> which is also where `main` sits, so the two columns of `emu/versions.txt`
+> agree. They will differ again whenever a repository is tagged against an older
+> `pico_shared`, which is what the behaviour is for.
 
 The native ports and *ColecoVision* are the exception to all of the above.
-[pico-doom](https://github.com/fhoedemakers/pico-doom),
-[pico-duke3D](https://github.com/fhoedemakers/pico-duke3D) and
+[pico-doom](https://github.com/PicoPlus-devel/pico-doom),
+[pico-duke3D](https://github.com/PicoPlus-devel/pico-duke3D) and
 [Adafruit_ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam) have no
 `pico_shared`, so there is no `SWVERSION` to stamp, and all three build through
 their own per-board `<board>-build-forbootloader.sh` scripts rather than
@@ -1061,7 +1100,7 @@ containing an empty `.uf2`, so a half-finished build cannot ship. It requires
 ### Cutting a release
 
 The loader `.uf2`s are built by CI; the SD-card archive is built locally, because
-it needs all nine emulator toolchains. An emulator-only refresh still gets its own
+it needs the toolchain of every application. An emulator-only refresh still gets its own
 release so users find out about it — that is what the `v0.N.M` form is for.
 
 The full maintainer checklist — per-scenario steps, dry runs, verification and
@@ -1093,6 +1132,8 @@ gh release upload v0.2.1 releases/pico-bootLoader_sdcard.zip
   [PicoSNES](#picosnes-pcb-hw_config-13) PCBs, and the 3D-printed cases for the
   three PicoNES designs and for the Waveshare RP2350-PiZero, were designed by
   [Gavin Knight](https://github.com/DynaMight1124).
+- Support for the [Olimex RP2040-PICO-PC](#olimex-rp2040-pico-pc-hw_config-15)
+  was contributed by [DnCraptor](https://github.com/DnCraptor).
 - This project was developed with the assistance of AI
   (Anthropic Claude / Claude Code).
 
