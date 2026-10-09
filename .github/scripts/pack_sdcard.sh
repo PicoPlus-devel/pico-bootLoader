@@ -194,7 +194,7 @@ for hwdir in "$LOADER/emu/"[0-9] "$LOADER/emu/"[0-9][0-9]; do
         app="$hwdir/${prog}.uf2"
         if [ ! -f "$app" ]; then
             # Not every emulator builds for every board (excluded combinations,
-            # Doom's four boards); that is normal, so only note it.
+            # Doom's five boards); that is normal, so only note it.
             echo "  --   HW=$hw $prog: no UF2"
             missing=$((missing + 1))
             continue

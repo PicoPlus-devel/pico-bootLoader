@@ -21,11 +21,12 @@ It runs on nine board configurations, each with its own ready-made binary — se
 - Waveshare RP2350-PiZero
 - Waveshare RP2350-USB-A, optionally on the
   [PicoNES Micro PCB](#picones-micro-pcb-hw_config-9)
-- Murmulator M2
+- Murmulator M2, or an RP2350 Plus on the
+  [PicoSNES PCB](#picosnes-pcb-hw_config-13), which uses the same pin map
 
 Every one of them outputs video over DVI/HDMI and reads its applications from an
 SD card. RP2040 boards are not supported: the flash layout and the UF2 checks are
-RP2350-specific. The three PCBs are optional console-style carriers for boards
+RP2350-specific. The four PCBs are optional console-style carriers for boards
 already in this list — see [Custom PCBs](#custom-pcbs).
 
 It is not limited to emulation, though: any RP2350 application can be made
@@ -96,28 +97,30 @@ outside this project. It expects everything in `/coleco/` on the SD
 card: the 8 KB ColecoVision BIOS as `COLECO.BIN`, and the games as `.ROM` files.
 Neither the BIOS nor any game is included.
 
-*Doom* runs on four boards: Adafruit Fruit Jam (HW_CONFIG 8), the Adafruit DVI +
-MicroSD breakout combination (2), Murmulator M2 (13) and Adafruit Feather RP2350
-with a TLV320DAC3100 (14). It ships in two variants: `doom_tiny`, the shareware
+*Doom* runs on five boards: Adafruit Fruit Jam (HW_CONFIG 8), the Adafruit DVI +
+MicroSD breakout combination (2), Murmulator M2 (13), Adafruit Feather RP2350
+with a TLV320DAC3100 (14) and the Olimex RP2040-PICO-PC with a Pico 2 (15). It
+ships in two variants: `doom_tiny`, the shareware
 episode, distributed as the engine `.uf2` together with a companion WAD data
 image (see [Auxiliary data images](#auxiliary-data-images)); and
 `doom_tiny_full`, registered/Ultimate DOOM, which carries no WAD in flash and
 instead reads `/roms/doom/doom.whd` from the SD card at boot, so it needs a board
 with PSRAM.
 
-*Duke Nukem 3D* runs on three boards: Adafruit Fruit Jam (HW_CONFIG 8), the
-Adafruit DVI + MicroSD breakout combination (2, on a Pimoroni Pico Plus 2) and
-Murmulator M2 (13). It needs **PSRAM** on all three. There is no companion data
+*Duke Nukem 3D* runs on four boards: Adafruit Fruit Jam (HW_CONFIG 8), the
+Adafruit DVI + MicroSD breakout combination (2, on a Pimoroni Pico Plus 2),
+Murmulator M2 (13) and the Olimex RP2040-PICO-PC with a Pico 2 (15, with a PSRAM
+chip fitted on GPIO 8). It needs **PSRAM** on all four. There is no companion data
 image: `DUKE3D.GRP` — shareware or registered/Atomic — is streamed from
 `/roms/duke3d/` on the SD card, with savegames and `duke3d.cfg` written next to
-it. Only the Fruit Jam has been tested on hardware; boards 2 and 13 build clean
-but are untested.
+it. All four have been tested on hardware.
 
 *OutRun* is a port of the Cannonball engine and one of the three entries in the
-**Arcade** category. It runs on four boards: Adafruit Fruit Jam (HW_CONFIG 8),
+**Arcade** category. It is built for five boards: Adafruit Fruit Jam (HW_CONFIG 8),
 the Adafruit DVI + MicroSD breakout combination (2, on a Pimoroni Pico Plus 2),
-Murmulator M2 (13) and Adafruit Feather RP2350 with a TLV320DAC3100 (14). It
-needs **PSRAM** on all four, and an **HSTX** board: on the bit-banged PicoDVI
+Murmulator M2 (13), Adafruit Feather RP2350 with a TLV320DAC3100 (14) and the
+Olimex RP2040-PICO-PC with a Pico 2 (15, with a PSRAM chip fitted on GPIO 8). It
+needs **PSRAM** on all five, and an **HSTX** board: on the bit-banged PicoDVI
 configurations the system clock is tied to the pixel clock and the engine is too
 slow, so those boards are not built. There is no companion data image. The
 OutRun ROM set is copyright SEGA and is not distributed with the bundle: copy
@@ -308,11 +311,12 @@ number names the SD-card folder the loader reads applications from
 | 7 | Waveshare RP2350-PiZero | `pico-bootLoader_WaveShareRP2350PiZero_arm_piousb.uf2` |
 | 8 | Adafruit Fruit Jam | `pico-bootLoader_AdafruitFruitJam_arm_piousb.uf2` |
 | 9 | Waveshare RP2350-USB-A (optionally on the [PicoNES Micro PCB](#picones-micro-pcb-hw_config-9)) | `pico-bootLoader_WaveShare2350USBA_arm_piousb.uf2` |
-| 13 | Murmulator M2 | `pico-bootLoader_MurmulatorM2_arm.uf2` |
+| 13 | Murmulator M2, or an RP2350 Plus on the [PicoSNES PCB](#picosnes-pcb-hw_config-13) | `pico-bootLoader_MurmulatorM2_arm.uf2` |
 | 14 | Adafruit Feather RP2350 (TLV320DAC3100 audio) | `pico-bootLoader_AdafruitFeatherRP2350_TLV320DAC3100_arm_piousb.uf2` |
+| 15 | Olimex RP2040-PICO-PC with a Raspberry Pi Pico 2 | `pico-bootLoader_OlimexPicoPC_arm.uf2` |
 
 Video output is DVI/HDMI on all boards. Boards whose video connector is wired
-to the RP2350 HSTX pins — HW_CONFIG 2, 5, 8, 13 and 14 — drive it through the
+to the RP2350 HSTX pins — HW_CONFIG 2, 5, 8, 13, 14 and 15 — drive it through the
 HSTX peripheral; the others use PicoDVI. A single SD card
 serves both kinds — artwork is cached in both pixel formats (see
 [Artwork](#artwork)).
@@ -333,29 +337,34 @@ it by default.
 
 ## Custom PCBs
 
-Three community PCB designs turn a supported board plus its breakouts into a
-finished console, each with an optional 3D-printed case. Every one of them is
-just a neater way to build a hardware configuration the loader already supports,
-so nothing about the firmware changes: flash the binary for that HW_CONFIG and
-put the applications in the matching `/emu/<HW_CONFIG>/` folder.
+Four community PCB designs turn a supported board into a finished console:
+three PicoNES designs, each with an optional 3D-printed case, and the PicoSNES,
+which fits inside a SNES controller. Every one of them is just a neater way to
+build a hardware configuration the loader already supports, so nothing about the
+firmware changes: flash the binary for that HW_CONFIG and put the applications
+in the matching `/emu/<HW_CONFIG>/` folder.
 
 | Design | Board it carries | HW_CONFIG | Gerber archive | Designed by |
 |---|---|---|---|---|
 | [PicoNES](#picones-pcb-hw_config-2) | Pico 2, Pico 2 W or Pimoroni Pico Plus 2 | 2 | `pico_nesPCB_v2.6.zip` | John Edgar Park |
 | [PicoNES Mini](#picones-mini-pcb-hw_config-6) | Waveshare RP2350-Zero | 6 | `Gerber_PicoNES_Mini_PCB_v2.0.zip` | Gavin Knight |
 | [PicoNES Micro](#picones-micro-pcb-hw_config-9) | Waveshare RP2350-USB-A | 9 | `Gerber_PicoNES_Micro_v1.2.zip` | Gavin Knight |
+| [PicoSNES](#picosnes-pcb-hw_config-13) | RP2350 Plus | 13 | `Gerber_SNES_PicoSNES_v1.0.zip` | Gavin Knight |
 
-All three archives are attached to every
+The three PicoNES archives are attached to every
 [release](https://github.com/fhoedemakers/pico-bootLoader/releases) of this
 project and also live in
 [`pico_shared/PCB`](https://github.com/fhoedemakers/pico_shared/tree/main/PCB).
+The PicoSNES archive is published on its own
+[release page](https://github.com/DynaMight1124/pico-infonesPlus/releases/tag/PicoSNES).
 Upload the zip as-is to a PCB manufacturer of your choice;
 [PCBWay](https://www.pcbway.com/) and JLCPCB are both good options.
 
-The designs come from [pico-infonesPlus](https://github.com/fhoedemakers/pico-infonesPlus)
-and keep its NES-flavoured names, but there is nothing NES-specific about them —
-they are DVI, microSD and controller wiring, and every application in the menu
-runs on them.
+The PicoNES designs come from
+[pico-infonesPlus](https://github.com/fhoedemakers/pico-infonesPlus) and keep its
+NES-flavoured names, and the PicoSNES is named after the controller it fits in,
+but there is nothing console-specific about any of them — they are DVI, microSD
+and controller wiring, and every application in the menu runs on them.
 
 The Waveshare RP2350-PiZero (HW_CONFIG 7) needs no PCB, since it already carries
 its own HDMI and microSD connectors, but it has a matching NES-like case:
@@ -370,7 +379,7 @@ designed for two NES controller ports.
 
 The original design, by [@johnedgarpark](https://twitter.com/johnedgarpark). It
 carries the Pico, the DVI and microSD breakouts and up to two NES controller
-ports. It is also the only one of the three that takes an interchangeable
+ports. It is also the only one of the four that takes an interchangeable
 Pico-format board, which is what makes a Pimoroni Pico Plus 2 — and with it
 PSRAM and 16 MB of flash — an option. The current design is **v2.6**; it runs
 the `AdafruitDVISD` loader binary and reads its applications from `/emu/2/`.
@@ -511,7 +520,7 @@ PCBWay or JLCPCB will produce it — the professional finishes are excellent.
 
 ### PicoNES Micro PCB (HW_CONFIG 9)
 
-The smallest of the three, again by Gavin Knight: a Waveshare RP2350-USB-A board
+The smallest of the four, again by Gavin Knight: a Waveshare RP2350-USB-A board
 on a PCB barely larger than the USB port itself, with a single player
 controlling the console over USB. The current design is **v1.2**
 (`Gerber_PicoNES_Micro_v1.2.zip`).
@@ -522,7 +531,7 @@ for power and for flashing the firmware.
 
 > [!NOTE]
 > Because of the size, micro-soldering skills are required — the design uses
-> 0603 SMD components. This is the most demanding of the three builds.
+> 0603 SMD components. This is the most demanding of the three PicoNES builds.
 
 The build guide is on Instructables:
 <https://www.instructables.com/PicoNES-RaspberryPi-Pico-Based-NES-Emulator/>
@@ -530,6 +539,56 @@ The build guide is on Instructables:
 <img width="480" alt="PicoNES Micro populated PCB, NES controller shown for scale" src="https://github.com/user-attachments/assets/59c8a31b-dc3e-47b0-8ffb-89e1eab2a75b" />
 
 <img width="480" alt="PicoNES Micro in its 3D-printed case" src="https://github.com/user-attachments/assets/1d6051f2-1393-40e1-aad0-e39ffb7717a0" />
+
+### PicoSNES PCB (HW_CONFIG 13)
+
+The PicoSNES, by Gavin Knight ([DynaMight1124](https://github.com/DynaMight1124)),
+is an excellent project and the most self-contained of the four designs: the
+complete console is built into the shell of a SNES controller, original or
+aftermarket. The HDMI and USB-C ports and the microSD slot are let into the
+shell, and the controller's own buttons are read through CD4021 shift
+registers, as in an original SNES pad. Powered through an HDMI 5 V injector, it
+needs nothing more than a single cable to the display. The board it carries is
+an RP2350 Plus (4 MB or 16 MB of flash), soldered flat onto the PCB.
+The current design is **v1.0** (`Gerber_SNES_PicoSNES_v1.0.zip`); order it at
+1.6 mm thickness with the manufacturer's standard settings.
+
+The PCB uses the Murmulator M2 pin map, so it runs the Murmulator M2 binary:
+flash `pico-bootLoader_MurmulatorM2_arm.uf2` and put the applications in
+`/emu/13/`. The built-in controller is player 1; there is no second controller
+port.
+
+- **First flash.** Flash the loader before closing the shell — the BOOT button
+  on the RP2350 Plus is only reachable while the controller is open. Later
+  loader updates do not need it: **Enter BOOTSEL mode** in the
+  [options menu](#the-options-menu) does the same over the USB-C port.
+- **PSRAM.** The RP2350 Plus has no PSRAM. The build guide shows how to add a
+  PSRAM chip piggybacked on the flash chip, with its chip-select pin wired to
+  GPIO 8. Without it, the entries that require PSRAM still appear in the menu
+  but do not run — see [Bootable applications](#bootable-applications).
+- **Power.** The USB-C port powers the board, and its data lines are also used
+  for flashing and for [USB drive mode](#usb-drive-mode). Alternatively, an HDMI
+  5 V injector powers it through the HDMI cable.
+
+> [!WARNING]
+> Never connect the HDMI 5 V injector and the USB-C cable at the same time; the
+> supply can feed back into the other source.
+
+> [!NOTE]
+> Good soldering skills are required: the HDMI and USB-C connectors are fine
+> pitch, the resistor networks are 0603 size, and the USB data lines are soldered
+> through the PCB onto the test points of the RP2350 Plus. The controller shell
+> also has to be cut and filed to make room for the ports and the microSD slot.
+
+Gavin's build guide on Instructables is thorough and well illustrated. It covers
+the component list, the order in which to assemble the PCB, the PSRAM
+modification and the trimming of the controller shell:
+<https://www.instructables.com/PicoSNES-RP2350-Retro-Gaming-Inside-a-Controller>
+
+Many thanks to Gavin for this amazing work, and for designing it around this
+project.
+
+<img width="480" alt="PicoSNES controller connected to a monitor, showing the Pico-InfoNES+ menu" src="docs/images/picosnes.png" />
 
 ## SD card layout
 
@@ -949,8 +1008,8 @@ The native ports and *ColecoVision* are the exception to all of the above.
 [Adafruit_ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam) have no
 `pico_shared`, so there is no `SWVERSION` to stamp, and all three build through
 their own per-board `<board>-build-forbootloader.sh` scripts rather than
-`bld.sh`. Each targets only the boards it has a script for — *Doom* 2, 8, 13 and
-14, *Duke Nukem 3D* 2, 8 and 13, *ColecoVision* 8 — and is reported as `SKIP` for
+`bld.sh`. Each targets only the boards it has a script for — *Doom* 2, 8, 13, 14
+and 15, *Duke Nukem 3D* 2, 8, 13 and 15, *ColecoVision* 8 — and is reported as `SKIP` for
 every other configuration. The *ColecoVision* build downloads its own
 dependencies, so it needs network access.
 
@@ -1021,9 +1080,10 @@ gh release upload v0.2.1 releases/pico-bootLoader_sdcard.zip
   writing it and for making it available to this project.
 - The [PicoNES PCB](#picones-pcb-hw_config-2) was designed by [John Edgar
   Park](https://twitter.com/johnedgarpark).
-- The [PicoNES Mini](#picones-mini-pcb-hw_config-6) and
-  [PicoNES Micro](#picones-micro-pcb-hw_config-9) PCBs, and the 3D-printed cases
-  for all three designs and for the Waveshare RP2350-PiZero, were designed by
+- The [PicoNES Mini](#picones-mini-pcb-hw_config-6),
+  [PicoNES Micro](#picones-micro-pcb-hw_config-9) and
+  [PicoSNES](#picosnes-pcb-hw_config-13) PCBs, and the 3D-printed cases for the
+  three PicoNES designs and for the Waveshare RP2350-PiZero, were designed by
   [Gavin Knight](https://github.com/DynaMight1124).
 - This project was developed with the assistance of AI
   (Anthropic Claude / Claude Code).

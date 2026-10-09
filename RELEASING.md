@@ -82,7 +82,7 @@ changes but the board does not need re-flashing.
 Check the grand summary before going further. Every emulator should be `BUILT`
 for the boards it supports. `SKIP` is expected for excluded combinations
 (`picogenesisPlus` on HW 7; `picosnesPlus` and `picoOutRun` on HW 1, 5, 6, 7, 9;
-Doom outside boards 2, 8, 13, 14; `duke3d_game` outside boards 2, 8, 13;
+Doom outside boards 2, 8, 13, 14, 15; `duke3d_game` outside boards 2, 8, 13, 15;
 `colecojam` outside board 8). Any `FAIL` or `MISSING` means the archive is
 incomplete — fix it and re-run rather than shipping a partial card.
 

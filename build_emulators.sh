@@ -125,7 +125,7 @@ repo_name() { echo "${REPO_OF[$1]##*/}"; }
 #
 # pico-doom ships two variants from the same repo and from the same *ref*: since
 # full-version was merged, main carries the -build-forbootloader.sh and
-# -build-full-forbootloader.sh families for all four boards.
+# -build-full-forbootloader.sh families for every board it supports.
 #   doom_tiny       shareware, WHX baked into flash as a companion DATA UF2
 #                   (the emulators.txt aux_uf2 column)
 #   doom_tiny_full  registered/Ultimate DOOM; nothing extra in flash — at boot
@@ -222,20 +222,21 @@ declare -A BOARD_TAG=(
     [8]=fruitjam         # Adafruit Fruit Jam
     [13]=murmulatorm2    # Murmulator M2
     [14]=featherrp2350   # Adafruit Feather RP2350 + TLV320DAC3100
+    [15]=olimexpicopc    # Olimex RP2040-PICO-PC + Pico 2
 )
 # The HW_CONFIGs each variant has a build script for; any other config is
 # skipped cleanly. Every entry must have a BOARD_TAG.
 declare -A SCRIPTED_HWCONFIGS=(
-    [doom_tiny]="2 8 13 14"
-    [doom_tiny_full]="2 8 13 14"
-    [duke3d_game]="2 8 13"
+    [doom_tiny]="2 8 13 14 15"
+    [doom_tiny_full]="2 8 13 14 15"
+    [duke3d_game]="2 8 13 15"
     [colecojam]="8"
 )
 
 # Supported RP2350-ARM hwconfigs + descriptors from pico_shared/bld.sh case
 # statement. Configs 1, 2, 6, 11 are not Pico-2-only at the board level, but
 # we always pass -2 to bld.sh so they build for RP2350.
-HWCONFIGS=(1 2 5 6 7 8 9 13 14)
+HWCONFIGS=(1 2 5 6 7 8 9 13 14 15)
 declare -A HW_DESC=(
     [1]="Pimoroni Pico DV Demo Base"
     [2]="Adafruit DVI + MicroSD breakouts / custom PCB"
@@ -246,20 +247,21 @@ declare -A HW_DESC=(
     [9]="WaveShare RP2350-USBA (PIO USB)"
     [13]="Murmulator M2"
     [14]="Adafruit Feather RP2350 + TLV320DAC3100 (PIO USB)"
+    [15]="Olimex RP2040-PICO-PC + Pico 2"
 )
 # Hwconfigs that imply PIO USB (mirrors pico_shared/bld.sh).
 PIOUSB_CONFIGS=(7 8 9 14)
 
 # prog_name -> space-separated HW_CONFIGs it must NOT be built for.
 #
-# picosnesPlus supports only the four HSTX boards (2, 8, 13, 14): it needs 8 MB
+# picosnesPlus supports only the five HSTX boards (2, 8, 13, 14, 15): it needs 8 MB
 # of PSRAM and a framebuffer, so on the others the link fails outright —
 # SCRATCH_X overflows and pico_shared's !HSTX screensaver asset
 # (DefaultSS160_444, see pico_shared/DefaultSS.h) is never linked in. Listing
 # them here turns four noisy FAILs into clean SKIPs and keeps an unsupported
 # binary off the card.
 #
-# picoOutRun is restricted to the same four boards, for its own reasons: the
+# picoOutRun is restricted to the same five boards, for its own reasons: the
 # engine's buffers come out of PSRAM through Frens::f_malloc, and HSTX is
 # required because the bit-banged PicoDVI path ties the system clock to the
 # pixel clock (capped at 324 MHz, where the engine is too slow) and puts the

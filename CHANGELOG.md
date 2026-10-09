@@ -8,13 +8,23 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 
 ## v0.6.4
 
-An SD-card update: **Phoenix** and **Moon Cresta** join the **Arcade** category.
-The loader itself is unchanged since v0.6.
+An SD-card update: **Phoenix** and **Moon Cresta** join the **Arcade** category,
+and the **Olimex RP2040-PICO-PC** with a Raspberry Pi Pico 2 is a new supported
+board. The loader itself is unchanged since v0.6.
 
 > **Do you need to update?** Only the card. Replace the `/emu` folder on it with
 > the one in the new `pico-bootLoader_sdcard.zip`. The board does not have to be
 > re-flashed, and your ROMs, save states and everything else outside `/emu` are
-> untouched.
+> untouched. On the Olimex board, flash `pico-bootLoader_OlimexPicoPC_arm.uf2`
+> first.
+
+### New board
+
+The **Olimex RP2040-PICO-PC** with a Raspberry Pi Pico 2 in place of the original
+Pico (HW_CONFIG 15). It has its own loader, `pico-bootLoader_OlimexPicoPC_arm.uf2`,
+and its own folder on the card, `/emu/15/`, with the emulators, *Doom* and
+*Duke Nukem 3D*. Sound plays on HDMI and on the board's audio jack. *Duke Nukem 3D*
+and the full version of *Doom* need a PSRAM chip fitted to the Pico 2 (GPIO 8).
 
 ### New on the card
 
