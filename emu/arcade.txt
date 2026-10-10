@@ -17,6 +17,13 @@
 # picoMoonCresta runs on every supported board as well. The Moon Cresta ROM set
 # is copyright Nichibutsu: the game reads MAME's mooncrst.zip (or its files
 # unzipped) from /roms/arcade/MOONCRESTA.
+#
+# picoGalagino runs on every supported board: six games (Pac-Man, Galaga,
+# Donkey Kong, Frogger, Dig Dug, 1942) chosen from its own menu. Each reads its
+# MAME zip (or its files unzipped) from its own folder below /roms/arcade:
+# PACMAN (puckman.zip), GALAGA, DONKEYKONG, FROGGER, DIGDUG, 1942. Without
+# PSRAM it copies the sets into flash at start-up, once.
 picoOutRun;outrun;OutRun
 picoPhoenix;phoenix;Phoenix
 picoMoonCresta;mooncresta;Moon Cresta
+picoGalagino;galagino;Galagino

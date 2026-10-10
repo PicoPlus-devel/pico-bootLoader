@@ -77,6 +77,7 @@ its own repository and identified by the program name embedded in its `.uf2`.
 | **OutRun** (native port, not emulated) | `picoOutRun` | [pico-outrun](https://github.com/PicoPlus-devel/pico-outrun) | <img width="280" alt="OutRun menu artwork" src="emu/assets/themes/0/outrun.png" /> |
 | **Phoenix** (arcade) | `picoPhoenix` | [pico-phoenix](https://github.com/PicoPlus-devel/pico-phoenix) | <img width="280" alt="Phoenix menu artwork" src="emu/assets/themes/0/phoenix.png" /> |
 | **Moon Cresta** (arcade) | `picoMoonCresta` | [pico-mooncresta](https://github.com/PicoPlus-devel/pico-mooncresta) | <img width="280" alt="Moon Cresta menu artwork" src="emu/assets/themes/0/mooncresta.png" /> |
+| **Galagino** (arcade: Pac-Man, Galaga, Donkey Kong, Frogger, Dig Dug, 1942) | `picoGalagino` | [pico-galagino](https://github.com/PicoPlus-devel/pico-galagino) | <img width="280" alt="Galagino menu artwork" src="emu/assets/themes/0/galagino.png" /> |
 
 The following emulators need a bios in `/bios` on SD:
 - *Nintendo Entertainment System* : For Famicom Disk System games `fds-bios.rom`
@@ -119,7 +120,7 @@ image: `DUKE3D.GRP` — shareware or registered/Atomic — is streamed from
 `/roms/duke3d/` on the SD card, with savegames and `duke3d.cfg` written next to
 it. All four have been tested on hardware.
 
-*OutRun* is a port of the Cannonball engine and one of the three entries in the
+*OutRun* is a port of the Cannonball engine and one of the four entries in the
 **Arcade** category. It is built for five boards: Adafruit Fruit Jam (HW_CONFIG 8),
 the Adafruit DVI + MicroSD breakout combination (2, on a Pimoroni Pico Plus 2),
 Murmulator M2 (13), Adafruit Feather RP2350 with a TLV320DAC3100 (14) and the
@@ -150,6 +151,20 @@ copyright Nichibutsu and is not distributed with the bundle: copy MAME's
 `mooncrst.zip` (the Nichibutsu parent set) to `/roms/arcade/MOONCRESTA` on the
 SD card, either as it is or unzipped. Missing files are named on screen. It has
 the same *Tate mode* setting as Phoenix.
+
+*Galagino* is the fourth **Arcade** entry: a port of Till Harbaum's Galagino,
+six arcade games in one application, chosen from a menu of their logos:
+Pac-Man, Galaga, Donkey Kong, Frogger, Dig Dug and 1942. It runs on every board
+the loader supports. The ROM sets are copyright of their makers and are not
+distributed with the bundle: copy each game's MAME zip to its own folder below
+`/roms/arcade` on the SD card, either as it is or unzipped: `puckman.zip` to
+`PACMAN`, `galaga.zip` to `GALAGA`, `dkong.zip` to `DONKEYKONG`, `frogger.zip`
+to `FROGGER`, `digdug.zip` to `DIGDUG` and `1942.zip` to `1942`. Its menu lists
+the games whose sets are complete. On boards without PSRAM it copies the sets
+into flash at start-up, once; when the loader has since written another
+application over that flash, the copy is made again, which takes a few seconds.
+It has the same *Tate mode* setting as Phoenix, and *Quit game* in its settings
+menu returns to its game menu.
 
 The ROM sets of the Arcade entries can also be installed with `updateAll`, which
 the SD-card archive holds in its `updateAll` folder: `updateAll.exe` for
@@ -1041,7 +1056,7 @@ are left out so that they do not fill the buffer.
 
 The image must fit the 512 KB bootloader region; the linker errors out if it
 does not, and every link prints its occupancy. The released binaries sit between
-53% and 59% with USB drive mode built in. A `-w` build is the tight one: it
+53% and 60% with USB drive mode built in. A `-w` build is the tight one: it
 reaches 97.8% on HW_CONFIG 1 even with USB drive mode left out, which is why the
 whole project is compiled `-Os` — `-O2` no longer links there (see the comment
 in `CMakeLists.txt`).
@@ -1062,11 +1077,12 @@ stamps a version.
 > records both refs. The reason is historical: `bld.sh` only learned `-b`
 > (`BUILD_FOR_BOOTLOADER`) in `pico_shared` `f2c8be9`, and the emulator release
 > tags of the time predated it — their pinned `pico_shared` rejected `-b`
-> outright, so no bootloader-format `.uf2` could be produced from it. **For the
-> v0.7 bundle the substitution is a no-op**: every emulator tag pins `6e65df4`,
-> which is also where `main` sits, so the two columns of `emu/versions.txt`
-> agree. They will differ again whenever a repository is tagged against an older
-> `pico_shared`, which is what the behaviour is for.
+> outright, so no bootloader-format `.uf2` could be produced from it. That
+> reason no longer applies, but the substitution still matters: in the v0.7
+> bundle the arcade entries (OutRun, Phoenix, Moon Cresta, Galagino) pin
+> `929281d`, which is `main`, while the other emulators pin the older `6e65df4`
+> and are built against `929281d` all the same. `emu/versions.txt` records
+> `main`, the revision every emulator was actually built against.
 
 The native ports and *ColecoVision* are the exception to all of the above.
 [pico-doom](https://github.com/PicoPlus-devel/pico-doom),
@@ -1144,6 +1160,15 @@ gh release upload v0.2.1 releases/pico-bootLoader_sdcard.zip
   [ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam), is the work of
   Dan Cogliano ([@cogliano](https://github.com/cogliano)). Many thanks to him for
   writing it and for making it available to this project.
+- The six games of *Galagino* are emulated by
+  [Galagino](https://github.com/harbaum/galagino), by Till Harbaum, of which
+  [pico-galagino](https://github.com/PicoPlus-devel/pico-galagino) is a port.
+- [updateAll](updateAll/README.md) downloads missing ROM zips from
+  [ArcadeROMsDB_MiSTer](https://github.com/zakk4223/ArcadeROMsDB_MiSTer), a
+  database maintained by [zakk4223](https://github.com/zakk4223) for the MiSTer
+  FPGA project, and reads databases in the format of the
+  [MiSTer Downloader](https://github.com/MiSTer-devel/Downloader_MiSTer).
+  Neither is part of this project.
 - The [PicoNES PCB](#picones-pcb-hw_config-2) was designed by [John Edgar
   Park](https://twitter.com/johnedgarpark).
 - The [PicoNES Mini](#picones-mini-pcb-hw_config-6),

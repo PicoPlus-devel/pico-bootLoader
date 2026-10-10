@@ -178,12 +178,12 @@ from `github.sha`, so it will point at whatever is current.
   (`BUILD_FOR_BOOTLOADER`) only in `pico_shared` `f2c8be9`, and the emulator tags
   of the time predated it, so their pinned revision rejected `-b` outright.
   That reason no longer applies — every current tag pins a descendant of
-  `f2c8be9`. For v0.7 the substitution is a no-op: every emulator tag pins
-  `6e65df4`, which is also `main`. It stops being one as soon as a repository is
-  tagged against an older revision (for v0.6 the tags pinned four different
-  ones), and the whole bundle is then still built against the one `pico_shared`
-  `main` that `emu/versions.txt` records. An older tag that no longer builds
-  against `main` shows up as a `FAIL` in the grand summary.
+  `f2c8be9` — but the substitution is not a no-op. For v0.7 the arcade entries
+  (OutRun v0.5, Phoenix v0.2, Moon Cresta v0.2, Galagino v0.1) pin `929281d`,
+  which is `main`, and every other emulator tag pins `6e65df4`; the whole bundle
+  is built against the one `pico_shared` `main` that `emu/versions.txt` records.
+  An older tag that no longer builds against `main` shows up as a `FAIL` in the
+  grand summary.
 - **A tag pushed from CI would not trigger this workflow** — GitHub does not fire
   workflows for events created with the default `GITHUB_TOKEN`. That is why the
   release step passes `tag_name` + `target_commitish` and creates the tag itself
