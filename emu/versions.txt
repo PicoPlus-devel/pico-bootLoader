@@ -14,7 +14,7 @@
 picoOutRun;pico-outrun;v0.5;929281d
 picoPhoenix;pico-phoenix;v0.2;929281d
 picoMoonCresta;pico-mooncresta;v0.2;929281d
-picoGalagino;pico-galagino;v0.1;929281d
+picoGalagino;pico-galagino;v0.1.1;929281d
 pico994A;pico-994A;v0.3;929281d
 piconesPlus;pico-infonesPlus;v0.54;929281d
 picosnesPlus;pico-snesPlus;v0.8;929281d

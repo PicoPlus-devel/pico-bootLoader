@@ -179,7 +179,7 @@ from `github.sha`, so it will point at whatever is current.
   of the time predated it, so their pinned revision rejected `-b` outright.
   That reason no longer applies — every current tag pins a descendant of
   `f2c8be9` — but the substitution is not a no-op. For v0.7 the arcade entries
-  (OutRun v0.5, Phoenix v0.2, Moon Cresta v0.2, Galagino v0.1) pin `929281d`,
+  (OutRun v0.5, Phoenix v0.2, Moon Cresta v0.2, Galagino v0.1.1) pin `929281d`,
   which is `main`, and every other emulator tag pins `6e65df4`; the whole bundle
   is built against the one `pico_shared` `main` that `emu/versions.txt` records.
   An older tag that no longer builds against `main` shows up as a `FAIL` in the
