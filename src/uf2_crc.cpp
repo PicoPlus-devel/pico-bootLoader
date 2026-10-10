@@ -16,6 +16,7 @@
 extern "C" {
 #include "storage.h"
 #include "uf2_format.h"
+#include "uf2_stream.h"
 }
 
 #include <cstddef>       /* size_t referenced by crc32.h's prototypes */
@@ -48,7 +49,7 @@ bool uf2_fingerprint_from_file_family(const char *path,
 {
     if (!out) return false;
     std::memset(out, 0, sizeof(*out));
-    if (!storage_open(path)) return false;
+    if (!uf2_stream_open(path)) return false;
 
     uint32_t crc = 0;
     uint32_t lo  = 0xFFFFFFFFu;
@@ -57,26 +58,23 @@ bool uf2_fingerprint_from_file_family(const char *path,
 
     /* Walk every block in file order. RP2350 SDK UF2 builds emit program blocks
      * in monotonically-increasing target_addr; this matches the byte order we
-     * read back via XIP on the verify side. */
-    uf2_block_t blk;
-    for (uint32_t idx = 0; ; idx++) {
-        if (!storage_seek(idx * sizeof(blk))) break;
-        uint32_t got = 0;
-        if (!storage_read(&blk, sizeof(blk), &got)) break;
-        if (got != sizeof(blk)) break;   /* short read = EOF */
-        if (blk.magic_start0 != UF2_MAGIC_START0) break;
-        if (blk.magic_start1 != UF2_MAGIC_START1) break;
-        if (blk.magic_end    != UF2_MAGIC_END)    break;
-        if (!block_is_program(&blk, expected_family)) continue;
+     * read back via XIP on the verify side. A short trailing block or the first
+     * record without UF2 magic ends the walk, as end of file does. */
+    const uf2_block_t *blk;
+    while (uf2_stream_next(&blk) == 1) {
+        if (blk->magic_start0 != UF2_MAGIC_START0) break;
+        if (blk->magic_start1 != UF2_MAGIC_START1) break;
+        if (blk->magic_end    != UF2_MAGIC_END)    break;
+        if (!block_is_program(blk, expected_family)) continue;
 
-        if (blk.target_addr < lo) lo = blk.target_addr;
-        uint32_t end = blk.target_addr + blk.payload_size;
+        if (blk->target_addr < lo) lo = blk->target_addr;
+        uint32_t end = blk->target_addr + blk->payload_size;
         if (end > hi) hi = end;
 
-        crc = update_crc32(crc, blk.data, (UINT)blk.payload_size);
+        crc = update_crc32(crc, blk->data, (UINT)blk->payload_size);
         any = true;
     }
-    storage_close();
+    uf2_stream_close();
     if (!any) return false;
 
     out->image_base = lo;

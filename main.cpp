@@ -28,11 +28,16 @@
  *
  * Serial output: all diagnostics go to UART (PICO_DEFAULT_UART, pins 44/45 on
  * Fruit Jam, 115200-8N1). Tag every line with "[bootLoader] " so they stand out
- * when the freshly-launched emulator starts speaking.
+ * when the freshly-launched emulator starts speaking. Output is buffered and
+ * sent in the background (src/stdio_buffered.h); call stdio_buffered_flush()
+ * -- not stdio_flush(), which no longer waits -- before any reboot or launch,
+ * or the tail of the log is cut off.
  */
 #include <cstdio>
 #include <cstring>
 #include <strings.h>
+#include <malloc.h>
+#include <unistd.h>
 
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
@@ -41,6 +46,7 @@
 #include "hardware/clocks.h"
 #include "hardware/watchdog.h"
 #include "hardware/vreg.h"
+#include "hardware/flash.h"
 
 #include "FrensHelpers.h"
 #include "usb_msc.h"         // C++ linkage (namespace Frens); FRENS_USB_MSC gates it
@@ -64,11 +70,13 @@ extern "C" {
 #include "emulators_txt.h"
 #include "categories.h"
 #include "uf2_crc.h"
+#include "flash_record.h"
 #include "gui.h"
 #include "themes.h"
 #include "screensaver.h"
 #include "progress_bar.h"
 #include "sd_boot_ini.h"
+#include "stdio_buffered.h"
 #include <hardware/divider.h>
 }
 
@@ -103,6 +111,13 @@ void splash() {}
 // Reads the SPI flash JEDEC capacity byte; returns the chip size in bytes.
 namespace Frens { uint storage_get_flash_capacity(); }
 
+// Also defined in pico_shared/FrensHelpers.cpp without a header declaration:
+// the PSRAM chip size found by initPsram(), 0 when there is none.
+namespace Frens { extern size_t psramMemorySize; }
+
+// End of the SRAM heap (linker script); sbrk() never grows past it.
+extern char __HeapLimit;
+
 // End of usable flash for app images: build-time partition end, clamped to
 // the real chip size reported by the JEDEC ID. Both the loader's runtime
 // bound (set in main) and the menu's size gate (buildEmuList) derive from
@@ -134,6 +149,18 @@ static uint32_t appFlashEnd()
 #define PICO_DVI_FLASH_NOTICE_MS  3500
 
 #define LOG(fmt, ...) printf("[bootLoader] " fmt "\n", ##__VA_ARGS__)
+
+// Per-item detail: one line per .uf2, per index row, per category. At 115200
+// baud the UART needs ~87 us per character; the output is buffered, but on a
+// full card these lines alone would fill much of the buffer, after which every
+// write waits for the UART again. Build with
+// EXTRA_CMAKE_ARGS=-DBOOT_VERBOSE_LOG=ON to get them back. The if (0) keeps the
+// arguments type-checked when they are compiled out.
+#if BOOT_VERBOSE_LOG
+#define LOGV(fmt, ...) LOG(fmt, ##__VA_ARGS__)
+#else
+#define LOGV(fmt, ...) do { if (0) LOG(fmt, ##__VA_ARGS__); } while (0)
+#endif
 
 namespace {
 
@@ -189,6 +216,73 @@ bool  g_have_categories = false;
 // Bare filename of the categories index. Not configurable in /boot.txt: a card
 // either has categories or it doesn't, and INDEX already names the flat list.
 #define CATEGORIES_TXT "categories.txt"
+
+// What the loader last wrote to flash, mirrored from <g_emuDir>/.flashed (see
+// flash_record.h). g_flashrec is the working copy, g_flashrec_disk what the
+// file holds, so the card is only written when something changed.
+flash_records_t g_flashrec;
+flash_records_t g_flashrec_disk;
+char  g_flashrec_path[96];            // "<BASEDIR>/<HW_CONFIG>/.flashed"
+
+// Boot-time checkpoint: ms since power-on and since the previous checkpoint,
+// so a serial log shows where the start-up time goes.
+void logPhase(const char *what)
+{
+    static uint32_t prev = 0;
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+    LOG("T+%lu ms (+%lu): %s", (unsigned long)now, (unsigned long)(now - prev), what);
+    prev = now;
+}
+
+// A recorded range comes from a file on the card, so check that it lies in
+// this chip's app partition before CRCing it through XIP.
+bool rangeInPartition(const uf2_fingerprint_t &fp)
+{
+    uint32_t end = appFlashEnd();
+    return fp.image_base >= APP_BASE_ADDR && fp.image_base < end &&
+           fp.image_size > 0 && fp.image_size <= end - fp.image_base;
+}
+
+// True when the `role` record names `filename`, that file still has the
+// recorded size and timestamp, and the flash range the record names still
+// CRCs to the recorded value: then flash holds exactly what the file holds,
+// without reading the file. Flash-only CRC, no SD reads beyond one f_stat.
+bool recordStillMatches(flash_record_role_t role, const char *filename)
+{
+    const flash_record_t &rec = g_flashrec.row[role];
+    if (!flash_record_file_unchanged(&rec, g_emuDir, filename)) return false;
+    if (!rangeInPartition(rec.fp)) return false;
+    uint32_t crc = 0;
+    return uf2_fingerprint_from_xip(rec.fp.image_base, rec.fp.image_size, &crc) &&
+           crc == rec.fp.crc;
+}
+
+// Note that flash now holds `filename`'s image (fingerprint `fp`).
+void recordInFlash(flash_record_role_t role, const char *filename,
+                   const uf2_fingerprint_t &fp)
+{
+    if (!flash_record_set(&g_flashrec.row[role], g_emuDir, filename, &fp)) {
+        LOG("flash record: cannot stat %s/%s; row left out", g_emuDir, filename);
+    }
+}
+
+// Write .flashed if the working copy differs from the file. A failure (write-
+// protected or full card) only means the next boot checks the slow way.
+void saveFlashRecord()
+{
+    bool same = true;
+    for (int r = 0; r < FLASH_RECORD_COUNT; r++) {
+        if (!flash_record_equal(&g_flashrec.row[r], &g_flashrec_disk.row[r])) same = false;
+    }
+    if (same || !g_flashrec_path[0]) return;
+    if (flash_record_save(g_flashrec_path, &g_flashrec)) {
+        g_flashrec_disk = g_flashrec;
+        LOG("flash record: %s updated", g_flashrec_path);
+    } else {
+        LOG("flash record: writing %s failed; the next boot checks the slow way",
+            g_flashrec_path);
+    }
+}
 
 #define GUI_SLIDE_PX_PER_FRAME 20            // 320 / 20 = 16 frames ≈ 270 ms
 // Vertical travel is 240 rows rather than 320 columns, so the per-frame step
@@ -580,34 +674,43 @@ uint32_t readPads(bool pace = true)
 #endif
     uint32_t btns = io::getCurrentGamePadState(0).buttons |
                     io::getCurrentGamePadState(1).buttons;
-    // nespad_states[] and wiipad_read() use their own bit layouts (NES
-    // bus order / Wii nunchuk layout). Translate them into the same
+    // nespad_states_ext[] and wiipad_read() use their own bit layouts (wire
+    // order / Wii nunchuk layout). Translate them into the same
     // io::GamePadState::Button bits the callers check via Btn::*.
 #if NES_PIN_CLK != -1 || NES_PIN_CLK_1 != -1
-    auto nesToBtn = [](uint8_t s) -> uint32_t {
-        // nespad_states is LSB-first wire order (A clocked out first lands
-        // in bit 0): 0x01=A, 0x02=B, 0x04=Select, 0x08=Start, 0x10=Up,
-        // 0x20=Down, 0x40=Left, 0x80=Right. The header comment in
-        // pico_shared/nespad.cpp claims the reverse and is wrong --
-        // infonesPlus ORs nespad_states[] straight into a bitmask with
-        // A=1<<0..RIGHT=1<<7, which only works under this layout.
+    auto nesToBtn = [](uint16_t ext, uint8_t type) -> uint32_t {
+        // nespad_states_ext is LSB-first wire order. A NES pad shifts out
+        // 0x01=A, 0x02=B, 0x04=Select, 0x08=Start, 0x10=Up, 0x20=Down,
+        // 0x40=Left, 0x80=Right. A SNES pad puts B and Y in bits 0/1 and its
+        // A and X in bits 8/9, so its face buttons are named rather than
+        // taken positionally -- otherwise SNES B chooses and Y goes back.
+        // Mirrors nespadMenuBits() in pico_shared/menu.cpp: a pad that has
+        // not yet proven itself SNES (only it drives bits 8-11) keeps NES
+        // order, which is also right for a SNES->NES adapter cable.
         uint32_t b = 0;
-        if (s & 0x01) b |= Btn::A;
-        if (s & 0x02) b |= Btn::B;
-        if (s & 0x04) b |= Btn::SELECT;
-        if (s & 0x08) b |= Btn::START;
-        if (s & 0x10) b |= Btn::UP;
-        if (s & 0x20) b |= Btn::DOWN;
-        if (s & 0x40) b |= Btn::LEFT;
-        if (s & 0x80) b |= Btn::RIGHT;
+        if (ext & 0x04) b |= Btn::SELECT;
+        if (ext & 0x08) b |= Btn::START;
+        if (ext & 0x10) b |= Btn::UP;
+        if (ext & 0x20) b |= Btn::DOWN;
+        if (ext & 0x40) b |= Btn::LEFT;
+        if (ext & 0x80) b |= Btn::RIGHT;
+        if (type == NESPAD_TYPE_SNES) {
+            if (ext & 0x100) b |= Btn::A;
+            if (ext & 0x001) b |= Btn::B;
+            if (ext & 0x200) b |= Btn::X;
+            if (ext & 0x002) b |= Btn::Y;
+        } else {
+            if (ext & 0x01) b |= Btn::A;
+            if (ext & 0x02) b |= Btn::B;
+        }
         return b;
     };
 #endif
 #if NES_PIN_CLK != -1
-    btns |= nesToBtn(nespad_states[0]);
+    btns |= nesToBtn(nespad_states_ext[0], nespad_padtype[0]);
 #endif
 #if NES_PIN_CLK_1 != -1
-    btns |= nesToBtn(nespad_states[1]);
+    btns |= nesToBtn(nespad_states_ext[1], nespad_padtype[1]);
 #endif
 #if WII_PIN_SDA >= 0 and WII_PIN_SCL >= 0
     {
@@ -961,6 +1064,7 @@ void showUsbDriveScreen()
         // magic that our own resume check reads back through
         // watchdog_enable_caused_reboot(), which would make the next boot jump
         // straight into the application instead of showing the picker.
+        stdio_buffered_flush();
         watchdog_reboot(0, 0, 0);
         while (1) {
             tight_loop_contents();
@@ -972,9 +1076,10 @@ void showUsbDriveScreen()
 // --- Options menu (SELECT) --------------------------------------------------
 //
 // The picker's secondary screen: help, the text/graphical toggle, BOOTSEL mode
-// and (where it is built in) USB drive mode. Same charcell chrome and the same
-// pump as showHelpScreen(); A applies the highlighted entry, B or SELECT
-// returns.
+// and (where it is built in) USB drive mode, with a SYSTEM block below them
+// describing the board, its flash, SRAM, PSRAM and SD card. Same charcell chrome and
+// the same pump as showHelpScreen(); A applies the highlighted entry, B or
+// SELECT returns.
 
 enum OptionsResult {
     OPT_BACK,           // nothing the caller has to act on
@@ -990,13 +1095,215 @@ enum OptionId {
     OPTID_USB_DRIVE,
 };
 
-#define OPT_FIRST_ROW  6    // first entry row; entries are two rows apart
+#define OPT_FIRST_ROW  3    // first entry row; entries are two rows apart
 #define OPT_ROW_STEP   2
 #define OPT_LABEL_COL  6
 #define OPT_VALUE_COL  24
+#define OPT_HINT_ROW   11   // below the last of at most four entries (row 9)
+
+// SYSTEM block. The three value columns are right-aligned SYS_COL_W cells
+// apart against the right edge; fmtBytes() never exceeds 8 characters, so
+// neighbouring values always keep a space between them.
+#define SYS_HDR_ROW    13
+#define SYS_BOARD_ROW  14
+#define SYS_TABLE_ROW  16   // column headings; Flash, SRAM, PSRAM, SD rows follow
+#define SYS_LABEL_COL  3
+#define SYS_BOARD_COL  12
+#define SYS_COL_W      9
+
+// Board name per HW_CONFIG, following the README's board table. "<n> <name>"
+// must fit from SYS_BOARD_COL in the 38-column menu mode, which keeps the
+// names to 23 characters (24 for a single-digit config).
+static const char *hwConfigName()
+{
+    switch (HW_CONFIG) {
+    case 1:  return "Pimoroni Pico DV Base";
+    case 2:  return "Adafruit DVI/PicoNES";
+    case 5:  return "Adafruit Metro RP2350";
+    case 6:  return "RP2350-Zero/PicoNES Mini";
+    case 7:  return "Waveshare RP2350-PiZero";
+    case 8:  return "Adafruit Fruit Jam";
+    case 9:  return "Waveshare RP2350-USB-A";
+    case 13: return "Murmulator M2/PicoSNES";
+    case 14: return "Adafruit Feather RP2350";
+    case 15: return "Olimex RP2040-PICO-PC";
+    default: return "";
+    }
+}
+
+struct SysInfo {
+    uint32_t    flash_total;
+    uint32_t    flash_used;         // boot partition + installed application
+    bool        flash_used_known;   // false when the app's size can't be read
+    uint32_t    sram_total;
+    uint32_t    sram_free;          // heap still available to malloc
+    bool        psram;              // PSRAM detected and serving f_malloc
+    uint32_t    psram_total;
+    uint32_t    psram_free;
+    bool        sd_ok;
+    const char *sd_fs;              // "FAT32", "exFAT", ...
+    uint64_t    sd_total;
+    uint64_t    sd_free;
+};
+
+// Collected once when the options screen opens. Every source is cheap: the
+// flash size is the cached JEDEC read, the app size comes from binary_info
+// over XIP, and f_getfree() returns the free-cluster count FatFs has kept up
+// to date since initSDCard() first computed it at boot.
+void gatherSysInfo(SysInfo *si)
+{
+    *si = {};
+
+    // The whole boot partition counts as used -- an application can never
+    // be flashed into it -- plus the image of the application installed now.
+    // Data an application writes past its own image (a ROM on boards without
+    // PSRAM, an aux blob such as Doom's WAD) is not counted.
+    si->flash_total = Frens::storage_get_flash_capacity();
+    uint32_t app       = 0;
+    bool     app_known = true;
+    if (app_launch_present()) {
+        uint32_t end;
+        if (binary_end_from_xip(APP_BASE_ADDR, appFlashEnd() - APP_BASE_ADDR, &end)) {
+            app = end - APP_BASE_ADDR;
+        } else {
+            // No binary-end entry: use the extent scanUf2Dir() probed for the
+            // SD file with the same program name, if there is one.
+            app_known = false;
+            for (int i = 0; i < g_uf2_count && g_flash_prog_name[0]; i++) {
+                if (g_uf2[i].ext_known &&
+                    strcmp(g_uf2[i].prog_name, g_flash_prog_name) == 0) {
+                    app       = g_uf2[i].ext_hi - APP_BASE_ADDR + 1;
+                    app_known = true;
+                    break;
+                }
+            }
+        }
+    }
+    si->flash_used       = BOOTLOADER_SIZE + app;
+    si->flash_used_known = app_known && si->flash_used <= si->flash_total;
+
+    // All 520 KB, scratch banks included. Free is what malloc can still hand
+    // out: the free chunks inside the heap arena plus whatever lies between
+    // the program break and the heap limit. Without PSRAM, claimHeap() has
+    // already grown the arena to the limit, so the second term is ~0 there.
+    // Used is everything else -- static data, the framebuffer, both stacks
+    // and live heap blocks.
+    {
+        const struct mallinfo mi = mallinfo();
+        const uint32_t unclaimed = (uint32_t)(&__HeapLimit - (char *)sbrk(0));
+        si->sram_total = SRAM_END_ADDR - SRAM_BASE;
+        si->sram_free  = (uint32_t)mi.fordblks + unclaimed;
+    }
+
+    if (Frens::isPsramEnabled()) {
+        si->psram       = true;
+        si->psram_total = (uint32_t)Frens::psramMemorySize;
+        si->psram_free  = Frens::GetAvailableMemory();   // lwmem's free bytes
+    }
+
+    DWORD  fre = 0;
+    FATFS *fs  = nullptr;
+    if (f_getfree("", &fre, &fs) == FR_OK && fs) {
+        si->sd_ok = true;
+        switch (fs->fs_type) {
+        case FS_FAT12: si->sd_fs = "FAT12"; break;
+        case FS_FAT16: si->sd_fs = "FAT16"; break;
+        case FS_FAT32: si->sd_fs = "FAT32"; break;
+        case FS_EXFAT: si->sd_fs = "exFAT"; break;
+        default:       si->sd_fs = "?";     break;
+        }
+#if FF_MAX_SS == FF_MIN_SS
+        const uint64_t clst = (uint64_t)fs->csize * FF_MAX_SS;
+#else
+        const uint64_t clst = (uint64_t)fs->csize * fs->ssize;
+#endif
+        si->sd_total = (uint64_t)(fs->n_fatent - 2) * clst;
+        si->sd_free  = (uint64_t)fre * clst;
+    }
+
+    LOG("System: HW_CONFIG %d, flash %u KB used%s of %u KB, SRAM %u KB free of %u KB, "
+        "PSRAM %u KB free of %u KB, SD %s %u KB free of %u KB",
+        HW_CONFIG, (unsigned)(si->flash_used >> 10), si->flash_used_known ? "" : " (app size unknown)",
+        (unsigned)(si->flash_total >> 10), (unsigned)(si->sram_free >> 10),
+        (unsigned)(si->sram_total >> 10), (unsigned)(si->psram_free >> 10),
+        (unsigned)(si->psram_total >> 10), si->sd_ok ? si->sd_fs : "unavailable",
+        (unsigned)(si->sd_free >> 10), (unsigned)(si->sd_total >> 10));
+}
+
+// "512 KB", "15.5 MB", "29.7 GB": 1024-based, one decimal from MB up, integer
+// math only. The decimal is dropped from 1000 upwards ("1023 MB") so the
+// result never exceeds 8 characters.
+static void fmtBytes(char *out, size_t n, uint64_t b)
+{
+    static const char *const units[] = { "MB", "GB", "TB" };
+    if (b < (1ull << 20)) {
+        snprintf(out, n, "%u KB", (unsigned)((b + 512) >> 10));
+        return;
+    }
+    int      u   = 0;
+    uint64_t div = 1ull << 20;
+    while (u < 2 && b >= (div << 10)) { div <<= 10; u++; }
+    const unsigned tenths = (unsigned)((b * 10 + div / 2) / div);
+    if (tenths >= 10000) snprintf(out, n, "%u %s", tenths / 10, units[u]);
+    else                 snprintf(out, n, "%u.%u %s", tenths / 10, tenths % 10, units[u]);
+}
+
+// putText() at the column that makes `text` end in column `right`.
+static void putTextRight(int right, int row, const char *text, int fg, int bg)
+{
+    putText(right - (int)strlen(text) + 1, row, text, fg, bg);
+}
+
+// One "label  total  used  free" row. Used and Free read "--" when the used
+// figure isn't known.
+static void drawSysRow(int row, const char *label, uint64_t total, uint64_t used,
+                       bool used_known)
+{
+    char v[12];
+    putText(SYS_LABEL_COL, row, label, COL_FG, COL_BG);
+    fmtBytes(v, sizeof(v), total);
+    putTextRight(SCREEN_COLS - 1 - 2 * SYS_COL_W, row, v, COL_FG, COL_BG);
+    if (used_known) fmtBytes(v, sizeof(v), used);
+    else            strcpy(v, "--");
+    putTextRight(SCREEN_COLS - 1 - SYS_COL_W, row, v, COL_FG, COL_BG);
+    if (used_known) fmtBytes(v, sizeof(v), total - used);
+    putTextRight(SCREEN_COLS - 1, row, v, COL_FG, COL_BG);
+}
+
+void drawSysInfo(const SysInfo *si)
+{
+    char line[SCREEN_COLS + 1];
+
+    putText(1, SYS_HDR_ROW, "SYSTEM", COL_HELP_HDR, COL_BG);
+
+    putText(SYS_LABEL_COL, SYS_BOARD_ROW, "Board", COL_FG, COL_BG);
+    snprintf(line, sizeof(line), "%d %s", HW_CONFIG, hwConfigName());
+    putText(SYS_BOARD_COL, SYS_BOARD_ROW, line, COL_FG, COL_BG);
+
+    int row = SYS_TABLE_ROW;
+    putTextRight(SCREEN_COLS - 1 - 2 * SYS_COL_W, row, "Total", COL_FG, COL_BG);
+    putTextRight(SCREEN_COLS - 1 - SYS_COL_W,     row, "Used",  COL_FG, COL_BG);
+    putTextRight(SCREEN_COLS - 1,                 row, "Free",  COL_FG, COL_BG);
+    row++;
+
+    drawSysRow(row++, "Flash", si->flash_total, si->flash_used, si->flash_used_known);
+    drawSysRow(row++, "SRAM", si->sram_total, si->sram_total - si->sram_free,
+               si->sram_free <= si->sram_total);
+    if (si->psram) {
+        drawSysRow(row++, "PSRAM", si->psram_total,
+                   si->psram_total - si->psram_free, true);
+    }
+    if (si->sd_ok) {
+        snprintf(line, sizeof(line), "SD %s", si->sd_fs);
+        drawSysRow(row, line, si->sd_total, si->sd_total - si->sd_free, true);
+    } else {
+        putText(SYS_LABEL_COL, row, "SD card unavailable", COL_FG, COL_BG);
+    }
+}
 
 void drawOptionsScreen(const OptionId *ids, int count, int sel,
-                       const sd_boot_ini_t *ini, bool cfg_save_failed)
+                       const sd_boot_ini_t *ini, bool cfg_save_failed,
+                       const SysInfo *si)
 {
     char btn1[2], btn2[2];
     getButtonLabels(btn1, btn2);
@@ -1038,7 +1345,9 @@ void drawOptionsScreen(const OptionId *ids, int count, int sel,
     case OPTID_BOOTSEL:   hint = "Restart for flashing over USB"; break;
     case OPTID_USB_DRIVE: hint = "Show the SD card on your computer"; break;
     }
-    centerText(20, hint, COL_FG, COL_BG);
+    centerText(OPT_HINT_ROW, hint, COL_FG, COL_BG);
+
+    drawSysInfo(si);
 
     if (cfg_save_failed) {
         centerText(22, "Settings not saved - SD write failed",
@@ -1076,9 +1385,15 @@ OptionsResult showOptionsScreen(sd_boot_ini_t *ini, bool *cfg_save_failed,
     // ~0u so the SELECT press that opened this screen isn't read as input.
     uint32_t prev = ~0u;
 
+    // Once per visit: nothing done from this screen changes flash or PSRAM,
+    // the boot.txt rewrite doesn't move the SD figures visibly, and USB drive
+    // mode reboots whenever the card was written.
+    SysInfo si;
+    gatherSysInfo(&si);
+
     for (;;) {
         if (dirty) {
-            drawOptionsScreen(ids, count, sel, ini, *cfg_save_failed);
+            drawOptionsScreen(ids, count, sel, ini, *cfg_save_failed, &si);
             dirty = false;
         }
 
@@ -1128,6 +1443,7 @@ OptionsResult showOptionsScreen(sd_boot_ini_t *ini, bool *cfg_save_failed,
                             "as a drive named RP2350.");
                 DrawScreen(-1);
                 idleFor(1200);
+                stdio_buffered_flush();
                 reset_usb_boot(0, 0);   // does not return
                 break;
 
@@ -1387,10 +1703,32 @@ void logAppPartitionState(const char *when)
         when, (unsigned)sp, (unsigned)reset, (int)present);
 }
 
+// Status-line words for flashProgress(). __not_in_flash puts them in .data:
+// a plain const array would land in flash .rodata, and the callback reads
+// nothing from flash (see uf2_loader.h).
+static const char __not_in_flash("pb_status") PB_TXT_ERASING[] = "Erasing ";
+static const char __not_in_flash("pb_status") PB_TXT_WRITING[] = "Writing ";
+
+// Unsigned decimal into dst without printf, for the flash callback. Returns
+// the number of digits written; no terminator.
+static int __not_in_flash_func(pbPutDec)(char *dst, uint32_t v)
+{
+    char tmp[10];
+    int n = 0;
+    do { tmp[n++] = (char)('0' + v % 10u); v /= 10u; } while (v);
+    for (int i = 0; i < n; i++) dst[i] = tmp[n - 1 - i];
+    return n;
+}
+
 // __not_in_flash_func: the whole callback path is SRAM-resident so we never
 // have to worry about XIP state. No printf/LOG inside -- bookend logging
 // happens in flashAndLaunch around uf2_load_file. The throttle (done & 0x3F)
 // keeps redraw cost down for large images (otherwise ~16 K calls).
+//
+// Each phase fills the bar on its own -- 0..100 for the erase, then again for
+// the write -- and the status line above it names the phase and how far it
+// has got, e.g. "Erasing 512/2048 KB". Units per uf2_loader.h: erase ticks
+// are 4 KB sectors, write ticks 256-byte pages.
 //
 // LED heartbeat: on picoDVI HW configs the DVI receiver loses sync during the
 // ~50 ms-per-sector erase windows even with the full SRAM audit -- HSTX's
@@ -1402,19 +1740,36 @@ void logAppPartitionState(const char *when)
 // so the LED is just bonus.
 extern "C" void __not_in_flash_func(flashProgress)(int phase, uint32_t done, uint32_t total)
 {
-    // Combined percentage: erase contributes 0..10, write contributes 10..100.
-    uint32_t pct;
-    if (phase == UF2_PROGRESS_ERASE) {
-        pct = (total > 0) ? (done * 10u / total) : 0;
-    } else {
-        uint32_t w = (total > 0) ? (done * 90u / total) : 0;
-        pct = 10u + w;
+    bool erase = (phase == UF2_PROGRESS_ERASE);
+    if (!erase) {
         // Throttle write-phase redraws: a 2 MB image is ~8192 pages, plenty
-        // of opportunity to skip frames where pct didn't move visibly.
-        bool boundary = (done == 0 || done == total);
+        // of opportunity to skip frames where the bar didn't move visibly.
+        // done == 1 is drawn so the status switches to "Writing" at once.
+        bool boundary = (done <= 1 || done == total);
         if (!boundary && (done & 0x3F) != 0) return;
     }
-    progress_bar_draw(pct, 100, PB_COL_FILL, PB_COL_EMPTY, PB_COL_BORDER);
+
+    // Write pages round up, so the last tick reads N/N KB.
+    uint32_t kb, tkb;
+    if (erase) {
+        kb  = done  * (FLASH_SECTOR_SIZE / 1024u);
+        tkb = total * (FLASH_SECTOR_SIZE / 1024u);
+    } else {
+        const uint32_t per_kb = 1024u / FLASH_PAGE_SIZE;
+        kb  = (done  + per_kb - 1u) / per_kb;
+        tkb = (total + per_kb - 1u) / per_kb;
+    }
+    const char *what = erase ? PB_TXT_ERASING : PB_TXT_WRITING;
+    char st[40];
+    int n = 0;
+    while (what[n]) { st[n] = what[n]; n++; }
+    n += pbPutDec(st + n, kb);
+    st[n++] = '/';
+    n += pbPutDec(st + n, tkb);
+    st[n++] = ' '; st[n++] = 'K'; st[n++] = 'B'; st[n] = '\0';
+    progress_bar_draw_status(st, PB_COL_BORDER, PB_COL_EMPTY);
+
+    progress_bar_draw(done, total, PB_COL_FILL, PB_COL_EMPTY, PB_COL_BORDER);
 
     // LED heartbeat -- toggle on every accepted callback so the user sees
     // activity even while the picoDVI signal is gone.
@@ -1449,6 +1804,10 @@ void scanUf2Dir()
         LOG("Config dir %s not present (f_stat=%d, attr=0x%02x); leaving emu list empty.",
             g_emuDir, (int)fr, (unsigned)fi.fattrib);
     } else {
+        snprintf(g_flashrec_path, sizeof(g_flashrec_path), "%s/" FLASH_RECORD_FILE, g_emuDir);
+        flash_record_load(g_flashrec_path, &g_flashrec);
+        g_flashrec_disk = g_flashrec;
+
         Frens::RomLister lister(32 * 1024, ".uf2");
         lister.list(g_emuDir);
         int count = (int)lister.Count();
@@ -1470,29 +1829,30 @@ void scanUf2Dir()
             char full[FF_MAX_LFN];
             snprintf(full, sizeof(full), "%s/%s", g_emuDir, u.filename);
 
+            // The extent comes back from the same open as the name. Cached here
+            // so entering a category costs no extra SD reads -- the app extent
+            // depends only on the file, never on the index row.
             u.prog_name[0] = '\0';
             u.ext_hi       = 0;
             u.ext_known    = false;
-            bool ok = program_name_from_uf2_file(full, u.prog_name, sizeof(u.prog_name));
+            uint32_t hi = 0;
+            bool ok = program_name_from_uf2_file(full, u.prog_name, sizeof(u.prog_name), &hi);
             if (!ok || !u.prog_name[0]) {
                 LOG("  SKIP %s (binary_info parse failed; no program_name)", u.filename);
                 skipped++;
                 continue;
             }
-
-            // Cached here so entering a category costs no extra SD reads --
-            // the app extent depends only on the file, never on the index row.
-            uint32_t lo, hi;
-            if (uf2_extent_from_file_family(full, UF2_FAMILY_RP2350_ARM_S, &lo, &hi)) {
+            if (hi) {
                 u.ext_hi    = hi;
                 u.ext_known = true;
             }
-            LOG("  [%2d] %-40s  prog_name=\"%s\"", g_uf2_count, u.filename, u.prog_name);
+            LOGV("  [%2d] %-40s  prog_name=\"%s\"", g_uf2_count, u.filename, u.prog_name);
             g_uf2_count++;
         }
         LOG("Scanned %d of %d .uf2 file(s) in %s (%d unreadable).",
             g_uf2_count, g_emu_seen, g_emuDir, skipped);
     }
+    logPhase("scan of program names");
 
     g_flash_prog_name[0] = '\0';
     g_flash_drift = false;
@@ -1517,11 +1877,22 @@ void scanUf2Dir()
         for (int i = 0; i < g_uf2_count; i++) {
             if (strcmp(g_uf2[i].prog_name, g_flash_prog_name) == 0) { fidx = i; break; }
         }
+        const char *fname = (fidx >= 0) ? g_uf2[fidx].filename : nullptr;
         if (fidx < 0) {
             LOG("In-flash image has no counterpart on the card.");
+        } else if (recordStillMatches(FLASH_RECORD_EMU, fname)) {
+            // The cheap path: the card file is unchanged since the loader last
+            // recorded it, and flash still CRCs to what it recorded.
+            const uf2_fingerprint_t &rfp = g_flashrec.row[FLASH_RECORD_EMU].fp;
+            LOG("In-flash image matches SD copy (CRC 0x%08X, %u bytes; %s unchanged since %s).",
+                (unsigned)rfp.crc, (unsigned)rfp.image_size, fname, FLASH_RECORD_FILE);
         } else {
+            // The full check reads the whole .uf2. When it finds a match, record
+            // it, so the next boot can take the path above.
+            LOG("No matching %s entry for %s; comparing the whole file.",
+                FLASH_RECORD_FILE, fname);
             char full[FF_MAX_LFN];
-            snprintf(full, sizeof(full), "%s/%s", g_emuDir, g_uf2[fidx].filename);
+            snprintf(full, sizeof(full), "%s/%s", g_emuDir, fname);
 
             uf2_fingerprint_t fp = {0};
             if (uf2_fingerprint_from_file(full, &fp)) {
@@ -1534,6 +1905,8 @@ void scanUf2Dir()
                     } else {
                         LOG("In-flash image matches SD copy (CRC 0x%08X, %u bytes).",
                             (unsigned)fp.crc, (unsigned)fp.image_size);
+                        recordInFlash(FLASH_RECORD_EMU, fname, fp);
+                        saveFlashRecord();
                     }
                 } else {
                     LOG("WARN: XIP fingerprint failed (base=0x%08X size=%u)",
@@ -1544,6 +1917,7 @@ void scanUf2Dir()
             }
         }
     }
+    logPhase("check of the in-flash image");
 }
 
 // Build g_emus[] from the index file currently loaded in emulators_txt, and
@@ -1631,7 +2005,7 @@ int buildEmuList()
             g_flash_idx = g_emu_count;
         }
 
-        LOG("  [%2d] %-40s  prog_name=\"%s\"  img_key=\"%s\"  display=\"%s\"%s%s",
+        LOGV("  [%2d] %-40s  prog_name=\"%s\"  img_key=\"%s\"  display=\"%s\"%s%s",
             g_emu_count, e.filename, e.prog_name, e.image_key, e.display_name,
             e.aux_uf2[0] ? "  aux=" : "", e.aux_uf2[0] ? e.aux_uf2 : "");
         g_emu_count++;
@@ -1657,6 +2031,17 @@ static AuxState computeAuxDrift(int idx, uf2_fingerprint_t *out_fp)
     const char *aux = g_emus[idx].aux_uf2;
     if (!aux[0]) return AUX_NO_AUX;
 
+    // The cheap path, as for the emulator at boot: an aux file unchanged since
+    // it was recorded, over a flash range that still CRCs to the record.
+    if (recordStillMatches(FLASH_RECORD_AUX, aux)) {
+        const uf2_fingerprint_t &rfp = g_flashrec.row[FLASH_RECORD_AUX].fp;
+        LOG("Aux blob already in flash (CRC 0x%08X, %u bytes at 0x%08X; %s unchanged "
+            "since %s); skipping.", (unsigned)rfp.crc, (unsigned)rfp.image_size,
+            (unsigned)rfp.image_base, aux, FLASH_RECORD_FILE);
+        if (out_fp) *out_fp = rfp;
+        return AUX_MATCH;
+    }
+
     char full[FF_MAX_LFN];
     snprintf(full, sizeof(full), "%s/%s", g_emuDir, aux);
 
@@ -1676,6 +2061,8 @@ static AuxState computeAuxDrift(int idx, uf2_fingerprint_t *out_fp)
     if (flash_crc == fp.crc) {
         LOG("Aux blob already in flash (CRC 0x%08X, %u bytes at 0x%08X); skipping.",
             (unsigned)fp.crc, (unsigned)fp.image_size, (unsigned)fp.image_base);
+        recordInFlash(FLASH_RECORD_AUX, aux, fp);
+        saveFlashRecord();
         return AUX_MATCH;
     }
     LOG("Aux drift: SD CRC=0x%08X  flash CRC=0x%08X  -> reflash on launch",
@@ -1688,7 +2075,7 @@ static AuxState computeAuxDrift(int idx, uf2_fingerprint_t *out_fp)
 [[noreturn]] void handoffToApp(const char *label)
 {
     LOG("Launching %s; bye!", label ? label : "(unknown)");
-    stdio_flush();
+    stdio_buffered_flush();
 #if WII_PIN_SDA >= 0 and WII_PIN_SCL >= 0
     wiipad_end();
 #endif
@@ -1696,6 +2083,7 @@ static AuxState computeAuxDrift(int idx, uf2_fingerprint_t *out_fp)
     Frens::markLaunchedFromBootloader();
     app_launch_run();          // VTOR jump; no return on success
     LOG("app_launch_run() returned unexpectedly.");
+    stdio_buffered_flush();
     watchdog_reboot(0, 0, 0);
     for (;;) tight_loop_contents();
 }
@@ -1727,9 +2115,11 @@ void flashAndLaunch(int idx, bool flashEmu, bool flashAux, const uf2_fingerprint
         idx, full, (int)flashEmu, (int)flashAux);
 
     uf2_load_stats_t st;
+    logPhase("flash requested");
 
     // Pre-flight the emulator UF2 first (display still alive). Skip if the
-    // caller just wants the aux flashed.
+    // caller just wants the aux flashed. The loader reuses these stats rather
+    // than walking the file a second time.
     if (flashEmu) {
         LOG("Pre-flight validating emulator UF2 (pass 1, no flash writes)...");
         uf2_load_result_t vr = uf2_validate_file(full, &st);
@@ -1756,6 +2146,7 @@ void flashAndLaunch(int idx, bool flashEmu, bool flashAux, const uf2_fingerprint
     // Pre-flight the aux UF2 too, using its own target range (derived from
     // the fingerprint pass, so we don't re-scan the file).
     char auxFull[FF_MAX_LFN] = {0};
+    uf2_load_stats_t astp = {};
     if (flashAux) {
         if (!auxFp || !g_emus[idx].aux_uf2[0]) {
             LOG("BUG: flashAux=true but no aux fingerprint / column");
@@ -1765,7 +2156,6 @@ void flashAndLaunch(int idx, bool flashEmu, bool flashAux, const uf2_fingerprint
         LOG("Pre-flight validating aux UF2 %s at [0x%08X..0x%08X)...",
             auxFull, (unsigned)auxFp->image_base,
             (unsigned)(auxFp->image_base + auxFp->image_size));
-        uf2_load_stats_t astp;
         uf2_load_result_t vr = uf2_validate_file_ex(auxFull,
             auxFp->image_base, auxFp->image_base + auxFp->image_size,
             UF2_FAMILY_RP2350_DATA, &astp);
@@ -1783,6 +2173,8 @@ void flashAndLaunch(int idx, bool flashEmu, bool flashAux, const uf2_fingerprint
             return;
         }
     }
+
+    logPhase("pre-flight validation");
 
     // Build a short header line naming what's being flashed. The user cares
     // about "Flashing" more than which one; keep the extra line short.
@@ -1842,18 +2234,21 @@ void flashAndLaunch(int idx, bool flashEmu, bool flashAux, const uf2_fingerprint
         uf2_load_stats_t ast;
         uf2_load_result_t r = uf2_load_file_ex(auxFull,
             auxFp->image_base, auxFp->image_base + auxFp->image_size,
-            UF2_FAMILY_RP2350_DATA, &ast, flashProgress);
+            UF2_FAMILY_RP2350_DATA, &astp, &ast, flashProgress);
         if (r != UF2_LOAD_OK) {
             LOG("Aux flash FAILED: %s (after %u programmed, %u skipped)",
                 uf2_load_result_str(r),
                 (unsigned)ast.programmed_blocks, (unsigned)ast.skipped_blocks);
-            stdio_flush();
+            stdio_buffered_flush();
             watchdog_reboot(0, 0, 0);
             for (;;) tight_loop_contents();
         }
         LOG("Aux flash OK: %u blocks written to 0x%08X..0x%08X",
             (unsigned)ast.programmed_blocks,
             (unsigned)ast.lowest_addr, (unsigned)ast.highest_addr);
+        logPhase("aux flash (erase + write)");
+        // Flash now holds the bytes the fingerprint at A-press was taken from.
+        recordInFlash(FLASH_RECORD_AUX, g_emus[idx].aux_uf2, *auxFp);
 #if HSTX
         // Reset the bar to 0% for the next phase so the second flash starts
         // fresh instead of finishing full-on-full.
@@ -1863,19 +2258,31 @@ void flashAndLaunch(int idx, bool flashEmu, bool flashAux, const uf2_fingerprint
 
     if (flashEmu) {
         LOG("Flashing emulator %s ...", full);
-        uf2_load_result_t r = uf2_load_file(full, &st, flashProgress);
+        uf2_load_result_t r = uf2_load_file(full, &st, &st, flashProgress);
         if (r != UF2_LOAD_OK) {
             LOG("Flash FAILED: %s (after %u programmed, %u skipped)",
                 uf2_load_result_str(r),
                 (unsigned)st.programmed_blocks, (unsigned)st.skipped_blocks);
-            stdio_flush();
+            stdio_buffered_flush();
             watchdog_reboot(0, 0, 0);
             for (;;) tight_loop_contents();
         }
         LOG("Flash OK: %u blocks written to 0x%08X..0x%08X",
             (unsigned)st.programmed_blocks,
             (unsigned)st.lowest_addr, (unsigned)st.highest_addr);
+        logPhase("flash (erase + write)");
+
+        // Every page was verified against the file as it was written, so a CRC
+        // of the written range through XIP is the file's fingerprint -- and is
+        // exactly what the next boot compares against.
+        uf2_fingerprint_t fp = {};
+        fp.image_base = st.lowest_addr;
+        fp.image_size = st.highest_addr - st.lowest_addr;
+        if (uf2_fingerprint_from_xip(fp.image_base, fp.image_size, &fp.crc)) {
+            recordInFlash(FLASH_RECORD_EMU, g_emus[idx].filename, fp);
+        }
     }
+    saveFlashRecord();
 
 #if HSTX
     // Force a final 100% paint before we tear down core1.
@@ -1905,7 +2312,7 @@ void flashAndLaunch(int idx, bool flashEmu, bool flashAux, const uf2_fingerprint
     // Reboot to recover a clean state; the resume check's app_launch_present()
     // guard prevents jumping into a half-written partition.
     LOG("Rebooting bootloader to recover a clean state.");
-    stdio_flush();
+    stdio_buffered_flush();
 #if WII_PIN_SDA >= 0 and WII_PIN_SCL >= 0
     wiipad_end();
 #endif
@@ -1917,7 +2324,29 @@ void flashAndLaunch(int idx, bool flashEmu, bool flashAux, const uf2_fingerprint
 
 int main()
 {
+    // --- RESUME CHECK -------------------------------------------------------
+    // First, ahead of the clock and stdio setup. An emulator that rebooted
+    // itself with watchdog_enable (to flash a ROM on a board without PSRAM)
+    // goes straight back into its own main(). All this needs is the watchdog
+    // scratch registers and the app's vector table, and the app sets up clocks
+    // and stdio itself, so this path skips the 160-260 ms of clock settling and
+    // the banner. It is silent on the UART for the same reason; the emulator's
+    // own output follows at once.
+    //
+    // If the previously-running emulator asked to return to the picker
+    // (Frens::rebootToBootloader() before its watchdog_reboot), honour that
+    // request and fall through to the menu even though watchdog_enable
+    // would otherwise trigger the resume jump.
+    bool returnRequested = Frens::consumeReturnToBootloaderRequest();
+    bool resumeWanted    = !returnRequested && watchdog_enable_caused_reboot();
+    if (resumeWanted && app_launch_present()) {
+        Frens::markLaunchedFromBootloader();
+        app_launch_run();          // VTOR jump; no return on success
+    }
+
     Frens::setClocksAndStartStdio(CPUFREQ_KHZ, VREG_VOLTAGE_1_30);
+    stdio_buffered_init();     // from here on printf no longer waits for the UART
+    logPhase("clocks and stdio up");
 
     // --- BANNER -------------------------------------------------------------
     LOG("---- Pico bootLoader booting ----");
@@ -1931,27 +2360,12 @@ int main()
         (unsigned)APP_PARTITION_SIZE, (unsigned)(APP_PARTITION_SIZE / 1024));
     logBootCause();
     logAppPartitionState("at boot");
-
-    // --- RESUME CHECK -------------------------------------------------------
-    // If the previously-running emulator asked to return to the picker
-    // (Frens::rebootToBootloader() before its watchdog_reboot), honour that
-    // request and fall through to the menu even though watchdog_enable
-    // would otherwise trigger the resume jump.
-    bool returnRequested = Frens::consumeReturnToBootloaderRequest();
     if (returnRequested) {
         LOG("Return-to-loader requested by app; skipping resume jump.");
+    } else if (resumeWanted) {
+        LOG("Resume requested but refused (no valid image); falling through to menu.");
     }
-    if (!returnRequested && watchdog_enable_caused_reboot() && app_launch_present()) {
-        LOG("Resume path: watchdog_enable=true and app image valid");
-        LOG("Jumping to app reset vector at 0x%08X (no return on success)",
-            (unsigned)((const uint32_t *)APP_BASE_ADDR)[1]);
-        stdio_flush();
-        Frens::markLaunchedFromBootloader();
-        app_launch_run();
-        LOG("Resume refused (no valid image); falling through to menu.");
-    } else {
-        LOG("No resume: showing emulator picker.");
-    }
+    LOG("No resume: showing emulator picker.");
 
     // --- FULL INIT (display/SD/USB/input via the shared framework) ----------
     LOG("Initializing shared framework (display/SD/USB/audio)...");
@@ -1980,6 +2394,7 @@ int main()
     bool sdOk = Frens::initAll(dummyRom, CPUFREQ_KHZ, 0, 0, 1024, false, true);
     LOG("initAll done. SD mounted=%d  PSRAM=%d  framebufferUsed=%d",
         (int)sdOk, (int)Frens::isPsramEnabled(), (int)Frens::isFrameBufferUsed());
+    logPhase("shared framework up (display, SD, USB)");
 
     // Force 1:1 scaling so the full 320x240 framebuffer is shown. The global
     // scaleMode8_7_ defaults to true and is read by the DVI core1 render loop
@@ -2106,6 +2521,8 @@ int main()
         }
     }
 
+    logPhase("boot.txt, themes and lists loaded");
+
     // Parse program_name from every .uf2 on SD and from the in-flash image.
     // Briefly tell the user what's happening (this can take a second or two
     // while we seek through 5+ files on slow SD cards). Done once: entering a
@@ -2152,6 +2569,7 @@ int main()
     if (!Frens::isPsramEnabled()) {
         themes_convert_all();
         screensaver_convert_batch();
+        logPhase("artwork caches checked");
     }
 
     // --- PICKER LOOP --------------------------------------------------------
@@ -2381,6 +2799,7 @@ int main()
     LOG("Initial menu mode: %s, level: %s", graphical_mode ? "graphical" : "text",
         level == LVL_CATEGORIES ? "categories" : "apps");
     if (graphical_mode) enter_graphical();
+    bool firstFrame = true;     // for the last boot-time checkpoint
 
     // Selection-change debounce: a change is written back once the user has
     // stopped moving for ~2 s, so a power-off while browsing still comes back
@@ -2661,6 +3080,10 @@ int main()
             if (level == LVL_CATEGORIES) drawCategoryMenu(cat_sel, cat_top, visible);
             else                         drawMenu(sel, top, visible);
             DrawScreen(-1);
+        }
+        if (firstFrame) {
+            logPhase("first menu frame");
+            firstFrame = false;
         }
     }
 }

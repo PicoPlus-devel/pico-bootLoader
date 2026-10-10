@@ -5,7 +5,7 @@ they have different lifecycles:
 
 | Artifact | Built by | How it gets onto the release |
 | --- | --- | --- |
-| `pico-bootLoader_<board>_arm[_piousb].uf2` (9 files) | CI, on the self-hosted runner | attached automatically by the workflow |
+| `pico-bootLoader_<board>_arm[_piousb].uf2` (10 files) | CI, on the self-hosted runner | attached automatically by the workflow |
 | `pico-bootLoader_sdcard.zip` | **locally**, by `build_emulators.sh -c all -z` | `gh release upload`, by hand |
 | PCB gerbers (3 zips: PicoNES v2.6, Mini v2.0, Micro v1.2) | nobody — vendored in the `pico_shared` submodule | attached automatically by the workflow |
 
@@ -35,7 +35,10 @@ export PICO_EXTRAS_PATH=~/pico/pico-extras     # required by pico-doom only
 gh auth status                                  # needs repo write
 ```
 
-`zip` or `python3` must be present for the packer (either is fine).
+`zip` or `python3` must be present for the packer (either is fine), and
+mingw-w64 (`x86_64-w64-mingw32-gcc`, `apt install mingw-w64`) for
+`updateAll.exe`, which `-z` builds and packs into the archive's `updateAll/`
+folder.
 
 `PICO_EXTRAS_PATH` is a pico-doom requirement, not an emulator one — pico-doom
 takes its whole toolchain from the environment via its `pico-env.sh` rather than
@@ -79,7 +82,7 @@ changes but the board does not need re-flashing.
 Check the grand summary before going further. Every emulator should be `BUILT`
 for the boards it supports. `SKIP` is expected for excluded combinations
 (`picogenesisPlus` on HW 7; `picosnesPlus` and `picoOutRun` on HW 1, 5, 6, 7, 9;
-Doom outside boards 2, 8, 13, 14; `duke3d_game` outside boards 2, 8, 13;
+Doom outside boards 2, 8, 13, 14, 15; `duke3d_game` outside boards 2, 8, 13, 15;
 `colecojam` outside board 8). Any `FAIL` or `MISSING` means the archive is
 incomplete — fix it and re-run rather than shipping a partial card.
 
@@ -133,9 +136,11 @@ gh release delete v0.2.1-alpha --cleanup-tag
 gh release view v0.2.1
 ```
 
-- **9 loader `.uf2` assets** — one per board. The `_pico2_w_` variants for
+- **10 loader `.uf2` assets** — one per board. The `_pico2_w_` variants for
   HW_CONFIG 1 and 2 are no longer built; a Pico 2 W runs the `pico2` asset.
 - `pico-bootLoader_sdcard.zip` present, unless this is a Scenario A release.
+  Its `updateAll/` folder holds `updateAll.exe` next to the scripts
+  (`unzip -l releases/pico-bootLoader_sdcard.zip | grep updateAll/`).
 - **3 PCB gerber assets** — `pico_nesPCB_v2.6.zip`,
   `Gerber_PicoNES_Mini_PCB_v2.0.zip` and `Gerber_PicoNES_Micro_v1.2.zip`,
   attached by the workflow from the `pico_shared` submodule. See
@@ -173,12 +178,12 @@ from `github.sha`, so it will point at whatever is current.
   (`BUILD_FOR_BOOTLOADER`) only in `pico_shared` `f2c8be9`, and the emulator tags
   of the time predated it, so their pinned revision rejected `-b` outright.
   That reason no longer applies — every current tag pins a descendant of
-  `f2c8be9` — but the substitution is still not a no-op. The tags pin different
-  revisions (for v0.6: `3e19ce0` for Videopac and Game Boy, `3873764` for PC
-  Engine, `1b88043` for SNES and Genesis, `63e983c` for the rest), while the
-  whole bundle is built against the one `pico_shared` `main` that
-  `emu/versions.txt` records. An older tag that no longer builds against `main`
-  shows up as a `FAIL` in the grand summary.
+  `f2c8be9` — but the substitution is not a no-op. For v0.7 the arcade entries
+  (OutRun v0.5, Phoenix v0.2, Moon Cresta v0.2, Galagino v0.1) pin `929281d`,
+  which is `main`, and every other emulator tag pins `6e65df4`; the whole bundle
+  is built against the one `pico_shared` `main` that `emu/versions.txt` records.
+  An older tag that no longer builds against `main` shows up as a `FAIL` in the
+  grand summary.
 - **A tag pushed from CI would not trigger this workflow** — GitHub does not fire
   workflows for events created with the default `GITHUB_TOKEN`. That is why the
   release step passes `tag_name` + `target_commitish` and creates the tag itself

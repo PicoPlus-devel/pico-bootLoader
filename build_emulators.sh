@@ -44,8 +44,9 @@ Usage: $0 [-c N|all] [-j N] [-B|-m] [-z] [-h]
          for pico_shared, instead of using each repo's latest release tag.
   -m     non-interactively build each repo's default branch (main or master,
          whichever its remote HEAD points at), skipping the branch picker.
-  -z     after building, write emu/versions.txt and pack the SD-card archive
-         releases/pico-bootLoader_sdcard.zip. Requires -c all (a zip built from
+  -z     after building, write emu/versions.txt, build updateAll.exe and pack
+         the SD-card archive releases/pico-bootLoader_sdcard.zip (updateAll.exe
+         needs mingw-w64). Requires -c all (a zip built from
          one hwconfig would be missing every other board) and the default tag
          mode (a release bundle must be built from tags).
   -h     this help
@@ -97,6 +98,9 @@ declare -A REPO_OF=(
     [picosnesPlus]=pico-snesPlus
     [pico994A]=pico-994A
     [picoOutRun]=pico-outrun
+    [picoPhoenix]=pico-phoenix
+    [picoMoonCresta]=pico-mooncresta
+    [picoGalagino]=pico-galagino
     [doom_tiny]=pico-doom
     [doom_tiny_full]=pico-doom
     [duke3d_game]=pico-duke3D
@@ -122,7 +126,7 @@ repo_name() { echo "${REPO_OF[$1]##*/}"; }
 #
 # pico-doom ships two variants from the same repo and from the same *ref*: since
 # full-version was merged, main carries the -build-forbootloader.sh and
-# -build-full-forbootloader.sh families for all four boards.
+# -build-full-forbootloader.sh families for every board it supports.
 #   doom_tiny       shareware, WHX baked into flash as a companion DATA UF2
 #                   (the emulators.txt aux_uf2 column)
 #   doom_tiny_full  registered/Ultimate DOOM; nothing extra in flash — at boot
@@ -219,20 +223,21 @@ declare -A BOARD_TAG=(
     [8]=fruitjam         # Adafruit Fruit Jam
     [13]=murmulatorm2    # Murmulator M2
     [14]=featherrp2350   # Adafruit Feather RP2350 + TLV320DAC3100
+    [15]=olimexpicopc    # Olimex RP2040-PICO-PC + Pico 2
 )
 # The HW_CONFIGs each variant has a build script for; any other config is
 # skipped cleanly. Every entry must have a BOARD_TAG.
 declare -A SCRIPTED_HWCONFIGS=(
-    [doom_tiny]="2 8 13 14"
-    [doom_tiny_full]="2 8 13 14"
-    [duke3d_game]="2 8 13"
+    [doom_tiny]="2 8 13 14 15"
+    [doom_tiny_full]="2 8 13 14 15"
+    [duke3d_game]="2 8 13 15"
     [colecojam]="8"
 )
 
 # Supported RP2350-ARM hwconfigs + descriptors from pico_shared/bld.sh case
 # statement. Configs 1, 2, 6, 11 are not Pico-2-only at the board level, but
 # we always pass -2 to bld.sh so they build for RP2350.
-HWCONFIGS=(1 2 5 6 7 8 9 13 14)
+HWCONFIGS=(1 2 5 6 7 8 9 13 14 15)
 declare -A HW_DESC=(
     [1]="Pimoroni Pico DV Demo Base"
     [2]="Adafruit DVI + MicroSD breakouts / custom PCB"
@@ -243,20 +248,21 @@ declare -A HW_DESC=(
     [9]="WaveShare RP2350-USBA (PIO USB)"
     [13]="Murmulator M2"
     [14]="Adafruit Feather RP2350 + TLV320DAC3100 (PIO USB)"
+    [15]="Olimex RP2040-PICO-PC + Pico 2"
 )
 # Hwconfigs that imply PIO USB (mirrors pico_shared/bld.sh).
 PIOUSB_CONFIGS=(7 8 9 14)
 
 # prog_name -> space-separated HW_CONFIGs it must NOT be built for.
 #
-# picosnesPlus supports only the four HSTX boards (2, 8, 13, 14): it needs 8 MB
+# picosnesPlus supports only the five HSTX boards (2, 8, 13, 14, 15): it needs 8 MB
 # of PSRAM and a framebuffer, so on the others the link fails outright —
 # SCRATCH_X overflows and pico_shared's !HSTX screensaver asset
 # (DefaultSS160_444, see pico_shared/DefaultSS.h) is never linked in. Listing
 # them here turns four noisy FAILs into clean SKIPs and keeps an unsupported
 # binary off the card.
 #
-# picoOutRun is restricted to the same four boards, for its own reasons: the
+# picoOutRun is restricted to the same five boards, for its own reasons: the
 # engine's buffers come out of PSRAM through Frens::f_malloc, and HSTX is
 # required because the bit-banged PicoDVI path ties the system clock to the
 # pixel clock (capped at 324 MHz, where the engine is too slow) and puts the
@@ -644,9 +650,16 @@ _build_scripted() {
     # Reuse an existing checkout of the right repo across configs: clone once,
     # then move it to the wanted ref for later boards. Detaching works for both a
     # tag and a branch tip, so the same path serves either. If the update fails
-    # for any reason, fall back to a clean clone.
+    # for any reason, fall back to a clean clone. A checkout of another remote
+    # (a repository that has since moved, say from fhoedemakers to
+    # PicoPlus-devel) is discarded first: left in place, it would skip both the
+    # update and the clone below and be built at whatever ref it last had.
     if [ -d "$dest/.git" ] && \
-       [ "$(git -C "$dest" config --get remote.origin.url 2>/dev/null)" = "$url" ]; then
+       [ "$(git -C "$dest" config --get remote.origin.url 2>/dev/null)" != "$url" ]; then
+        warn "[$prog] $dest is a clone of another remote; re-cloning from scratch"
+        rm -rf "$dest"
+    fi
+    if [ -d "$dest/.git" ]; then
         info "[$prog] reusing existing clone at $dest; updating to ${cloneref}"
         if ! ( cd "$dest" \
                 && git fetch --depth 1 origin "$cloneref" \
@@ -1192,6 +1205,16 @@ if (( PACK_ZIP )); then
     echo " SD-card archive"
     hr
     write_versions_manifest
+
+    # updateAll.exe, the arcade ROM installer for Windows, ships in the archive
+    # next to emu/; the packer takes it from updateAll/win/build/.
+    echo
+    if bash "$LOADER_DIR/updateAll/win/build.sh"; then
+        info "built updateAll.exe"
+    else
+        warn "building updateAll.exe failed (apt install mingw-w64?) — the archive ships the updateAll scripts without it"
+        overall_rc=1
+    fi
 
     PACKER="$LOADER_DIR/.github/scripts/pack_sdcard.sh"
     [ -f "$PACKER" ] || die "packer not found: $PACKER"

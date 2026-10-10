@@ -91,11 +91,14 @@ bool categories_load(const char *path)
     f_close(&fil);
 
     printf("[bootLoader] categories: %d row(s) loaded from %s\n", s_count, path);
+#if BOOT_VERBOSE_LOG
+    /* One line per row; off by default, see LOGV in main.cpp. */
     for (int i = 0; i < s_count; i++) {
         printf("[bootLoader]   [%2d] %-20s img=\"%s\" config=\"%s\"%s\n",
                i, s_cats[i].name, s_cats[i].image_key, s_cats[i].config_file,
                s_cats[i].config_file[0] ? "" : "  (options row)");
     }
+#endif
     return s_count > 0;
 }
 

@@ -35,8 +35,10 @@ typedef struct {
 #define UF2_PROGRESS_ERASE 0
 #define UF2_PROGRESS_WRITE 1
 
-/* Optional progress callback. done/total are in arbitrary per-phase units:
- *   UF2_PROGRESS_ERASE : called twice with (0,1) and (1,1) bracketing the erase.
+/* Optional progress callback. done/total count per-phase units:
+ *   UF2_PROGRESS_ERASE : counts 4 KB sectors. Called once with done=0, then
+ *                        after every erase call: done rises by 1 for a sector
+ *                        and by 16 for a 64 KB block, ending at total.
  *   UF2_PROGRESS_WRITE : called once per page programmed, done=1..total.
  * May be NULL. */
 typedef void (*uf2_progress_cb)(int phase, uint32_t done, uint32_t total);
@@ -46,8 +48,14 @@ typedef void (*uf2_progress_cb)(int phase, uint32_t done, uint32_t total);
  * application partition. Erases only the sectors the image actually touches.
  * Uses the built-in RP2350_ARM_S family and [APP_BASE_ADDR, g_app_end_addr)
  * range.
+ *
+ * `validated` may be NULL. Otherwise it is the stats a uf2_validate_file call
+ * for this same file just returned with UF2_LOAD_OK; the loader then takes the
+ * address range from it instead of walking the whole file a second time. Stats
+ * that do not fit the target range are ignored and the file is validated again.
  */
 uf2_load_result_t uf2_load_file(const char *name,
+                                const uf2_load_stats_t *validated,
                                 uf2_load_stats_t *stats,
                                 uf2_progress_cb progress);
 
@@ -65,12 +73,14 @@ uf2_load_result_t uf2_validate_file(const char *name, uf2_load_stats_t *stats);
  * [region_base, region_end) and expected_family. Used for aux blobs
  * (e.g. Doom WHX at 0x10400000, DATA family). region_base must be
  * >= APP_BASE_ADDR (we never write into the bootloader partition) and
- * region_end must be <= the runtime-clamped g_app_end_addr.
+ * region_end must be <= the runtime-clamped g_app_end_addr. `validated` as for
+ * uf2_load_file, from a uf2_validate_file_ex call with the same arguments.
  */
 uf2_load_result_t uf2_load_file_ex(const char *name,
                                    uint32_t region_base,
                                    uint32_t region_end,
                                    uint32_t expected_family,
+                                   const uf2_load_stats_t *validated,
                                    uf2_load_stats_t *stats,
                                    uf2_progress_cb progress);
 

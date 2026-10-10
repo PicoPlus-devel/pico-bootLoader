@@ -19,7 +19,7 @@ message("* Current build type is : ${CMAKE_BUILD_TYPE}")
 # Hardware / board selection
 # ---------------------------------------------------------------------------
 if(NOT HW_CONFIG)
-    set(HW_CONFIG 8 CACHE STRING "Select the hardware configuration for your board")
+    set(HW_CONFIG 1 CACHE STRING "Select the hardware configuration for your board")
 endif()
 if(NOT USE_HSTX)
     set(USE_HSTX 1 CACHE STRING "Use HSTX for display output when possible")
@@ -109,10 +109,12 @@ add_executable(${projectname}
     src/categories.c
     src/sd_boot_ini.c
     src/uf2_crc.cpp
+    src/uf2_stream.c
+    src/flash_record.c
+    src/stdio_buffered.c
     src/gui.cpp
     src/themes.cpp
     src/screensaver.cpp
-    src/progress_bar.cpp
     src/image_convert.cpp
     src/third_party/PNGdec/PNGdec.cpp
     src/third_party/PNGdec/adler32.c
@@ -143,6 +145,15 @@ set_source_files_properties(
 target_compile_definitions(${projectname} PRIVATE
     PNG_MAX_BUFFERED_PIXELS=10752
 )
+
+# One serial line per .uf2, per index row and per category at boot. Off by
+# default: on a full card they would fill much of the 8 KB serial buffer
+# (src/stdio_buffered.h), after which logging holds up the start-up again.
+# EXTRA_CMAKE_ARGS=-DBOOT_VERBOSE_LOG=ON ./bld.sh ... turns them back on.
+option(BOOT_VERBOSE_LOG "Log every .uf2, index row and category at boot" OFF)
+if(BOOT_VERBOSE_LOG)
+    target_compile_definitions(${projectname} PRIVATE BOOT_VERBOSE_LOG=1)
+endif()
 
 pico_set_program_name(${projectname} "${projectname}")
 pico_set_program_version(${projectname} "0.1")

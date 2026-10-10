@@ -4,6 +4,7 @@
 #include "app_launch.h"
 
 #include "boot_config.h"
+#include "stdio_buffered.h"
 #include "pico/stdlib.h"
 /* CMSIS core symbols (SCB, NVIC, SysTick, __set_MSP, ...) come from the RP2350
  * CMSIS device header. It is not pulled in transitively here, so include it
@@ -46,7 +47,7 @@ void app_launch_run(void)
     if (!app_launch_present())
         return;
 
-    stdio_flush();
+    stdio_buffered_flush();
 
     /* Scratch RAM for the ROM loader. 4 KB is plenty for an unsigned image. */
     static uint8_t workarea[4096] __attribute__((aligned(256)));
@@ -72,7 +73,7 @@ void app_launch_run(void)
     uint32_t app_sp    = vt[0];
     uint32_t app_reset = vt[1];
 
-    stdio_flush();
+    stdio_buffered_flush();
 
     /* From here on we tear down the bootloader's runtime so the application
      * starts from a clean slate. Order matters. */

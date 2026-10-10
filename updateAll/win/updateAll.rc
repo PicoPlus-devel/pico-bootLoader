@@ -1,0 +1,71 @@
+#include <windows.h>
+#include <commctrl.h>
+#include "resource.h"
+#include "version.h"
+
+#ifndef UA_VERSION
+#define UA_VERSION "dev"
+#endif
+#ifndef UA_VERSION_NUM
+#define UA_VERSION_NUM 0,0,0,0
+#endif
+
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "updateAll.manifest"
+
+/* Drawn by make_icon.py. */
+IDI_APP ICON "updateAll.ico"
+
+/* The configuration the program uses when no updateAll.json is next to it. */
+IDR_CONFIG RCDATA "../updateAll.json"
+
+IDD_MAIN DIALOGEX 0, 0, 420, 298
+STYLE DS_SHELLFONT | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX |
+      WS_MAXIMIZEBOX | WS_THICKFRAME | WS_CLIPCHILDREN
+CAPTION "updateAll"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "&SD card:", -1, 7, 9, 52, 8
+    COMBOBOX        IDC_SD, 62, 7, 288, 150, CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "&Browse...", IDC_SD_BROWSE, 356, 6, 57, 14
+    LTEXT           "&Zip folder:", -1, 7, 27, 52, 8
+    EDITTEXT        IDC_ZIPS, 62, 25, 288, 13, ES_AUTOHSCROLL
+    PUSHBUTTON      "B&rowse...", IDC_ZIPS_BROWSE, 356, 24, 57, 14
+    LTEXT           "Se&ts to install:", -1, 7, 45, 120, 8
+    CONTROL         "", IDC_SETS, WC_LISTVIEW, LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL |
+                    LVS_NOSORTHEADER | WS_BORDER | WS_TABSTOP, 7, 55, 406, 74
+    AUTOCHECKBOX    "&Download missing zips", IDC_DOWNLOAD, 7, 134, 220, 10
+    AUTOCHECKBOX    "Dry r&un: only show what would be done", IDC_DRYRUN, 230, 134, 183, 10
+    LTEXT           "&Log:", -1, 7, 150, 60, 8
+    EDITTEXT        IDC_LOG, 7, 160, 406, 110, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL |
+                    WS_VSCROLL | WS_TABSTOP
+    CONTROL         "", IDC_PROGRESS, PROGRESS_CLASS, PBS_SMOOTH, 7, 279, 282, 12
+    DEFPUSHBUTTON   "&Install", IDOK, 296, 277, 57, 14
+    PUSHBUTTON      "Close", IDCANCEL, 356, 277, 57, 14
+END
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION UA_VERSION_NUM
+ PRODUCTVERSION UA_VERSION_NUM
+ FILEFLAGSMASK 0x3fL
+ FILEFLAGS 0x0L
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "FileDescription", "updateAll - installs arcade ROM sets on the SD card"
+            VALUE "FileVersion", UA_VERSION
+            VALUE "InternalName", "updateAll"
+            VALUE "OriginalFilename", "updateAll.exe"
+            VALUE "ProductName", "pico-bootLoader"
+            VALUE "ProductVersion", UA_VERSION
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

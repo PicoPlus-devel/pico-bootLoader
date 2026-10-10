@@ -5,8 +5,25 @@
 # Only .uf2 files whose embedded program name matches a row below appear in
 # this category, in the order the rows are written. Max 32 rows.
 #
-# picoOutRun needs PSRAM and HSTX, so it is built for HW_CONFIG 2, 8, 13 and 14
-# only. The OutRun ROM set is copyright SEGA and is not distributable, so no
+# picoOutRun needs PSRAM and HSTX, so it is built for HW_CONFIG 2, 8, 13, 14 and
+# 15 only. The OutRun ROM set is copyright SEGA and is not distributable, so no
 # data image ships with the bundle: the game reads the ROM set from /roms/ORUN
 # on the card and prepares the data itself at startup.
+#
+# picoPhoenix runs on every supported board, with or without PSRAM and HSTX.
+# The Phoenix ROM set is copyright Amstar and is not distributable either: the
+# game reads MAME's phoenix.zip (or its files unzipped) from /roms/arcade/PHOENIX.
+#
+# picoMoonCresta runs on every supported board as well. The Moon Cresta ROM set
+# is copyright Nichibutsu: the game reads MAME's mooncrst.zip (or its files
+# unzipped) from /roms/arcade/MOONCRESTA.
+#
+# picoGalagino runs on every supported board: six games (Pac-Man, Galaga,
+# Donkey Kong, Frogger, Dig Dug, 1942) chosen from its own menu. Each reads its
+# MAME zip (or its files unzipped) from its own folder below /roms/arcade:
+# PACMAN (puckman.zip), GALAGA, DONKEYKONG, FROGGER, DIGDUG, 1942. Without
+# PSRAM it copies the sets into flash at start-up, once.
 picoOutRun;outrun;OutRun
+picoPhoenix;phoenix;Phoenix
+picoMoonCresta;mooncresta;Moon Cresta
+picoGalagino;galagino;Galagino
