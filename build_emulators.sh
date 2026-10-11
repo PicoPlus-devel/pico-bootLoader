@@ -5,8 +5,9 @@
 #
 # By default every emulator repo is built from its LATEST RELEASE TAG, with that
 # tag stamped into pico_shared/menu.h SWVERSION so the emulator reports a version
-# instead of a build date. This is the mode the release bundle is cut from; add
-# -z to also pack the SD-card zip.
+# instead of a build date. A tag whose GitHub release is marked as a pre-release
+# is skipped (see latest_tag_of). This is the mode the release bundle is cut
+# from; add -z to also pack the SD-card zip.
 #
 # pico_shared is taken from main, NOT from the revision the tag pins, and
 # emu/versions.txt records both refs. The reason is historical: bld.sh only
@@ -44,9 +45,10 @@ Usage: $0 [-c N|all] [-j N] [-B|-m] [-z] [-h]
          for pico_shared, instead of using each repo's latest release tag.
   -m     non-interactively build each repo's default branch (main or master,
          whichever its remote HEAD points at), skipping the branch picker.
-  -z     after building, write emu/versions.txt, build updateAll.exe and pack
+  -z     after building, write emu/versions.txt, build updateAll.exe, download
+         ld2pico.exe from the pico-dragonslair release that was built, and pack
          the SD-card archive releases/pico-bootLoader_sdcard.zip (updateAll.exe
-         needs mingw-w64). Requires -c all (a zip built from
+         needs mingw-w64, ld2pico.exe curl). Requires -c all (a zip built from
          one hwconfig would be missing every other board) and the default tag
          mode (a release bundle must be built from tags).
   -h     this help
@@ -293,10 +295,33 @@ default_branch_of() {
 # workflow makes. Prints the bare tag name, or nothing when the repo has no tags
 # or cannot be reached. Captures first instead of piping into head: under
 # `set -o pipefail` a large tag list would give git SIGPIPE and fail the caller.
+#
+# A tag whose GitHub release is marked as a pre-release is passed over — a beta
+# such as Adafruit_ColecoJam's 2.0b1, or a v*.*-alpha dry run — so a bundle
+# ships releases only. git cannot tell, so this asks the GitHub API through gh;
+# without gh, or when the API cannot be reached, every tag is a candidate.
 latest_tag_of() {
-    local url="$1" out
+    local url="$1" out slug pre="" tag
     out=$(git ls-remote --tags --refs --sort=-v:refname "$url" 2>/dev/null) || return 0
-    printf '%s\n' "$out" | sed -n '1s#.*refs/tags/##p'
+    slug="${url#https://github.com/}"
+    slug="${slug%.git}"
+    if command -v gh >/dev/null 2>&1; then
+        pre=$(gh api "repos/$slug/releases?per_page=100" \
+                --jq '.[] | select(.prerelease) | .tag_name' 2>/dev/null) || {
+            pre=""
+            warn "$slug: could not ask GitHub which tags are pre-releases — every tag is a candidate"
+        }
+    fi
+    while IFS= read -r tag; do
+        tag="${tag##*refs/tags/}"
+        [ -n "$tag" ] || continue
+        if grep -qxF -- "$tag" <<<"$pre"; then
+            echo "    -> $slug: $tag is a pre-release, skipped" >&2
+            continue
+        fi
+        echo "$tag"
+        return 0
+    done <<<"$out"
 }
 
 # Stamp a version into the emulator's OWN pico_shared/menu.h, exactly as each
@@ -1215,6 +1240,28 @@ if (( PACK_ZIP )); then
     else
         warn "building updateAll.exe failed (apt install mingw-w64?) — the archive ships the updateAll scripts without it"
         overall_rc=1
+    fi
+
+    # ld2pico.exe, the Dragon's Lair laserdisc converter for Windows, ships in
+    # ld2pico/ next to emu/. It is not built here: it is the asset of the
+    # pico-dragonslair release whose tag was just bundled, so the archive carries
+    # the same binary as that release. The packer takes it from ld2pico/build/;
+    # an old copy is removed first so a failed download cannot ship a stale one.
+    LD2PICO_EXE="$LOADER_DIR/ld2pico/build/ld2pico.exe"
+    rm -f "$LD2PICO_EXE"
+    if [ -n "${REF_OF[picoDragonsLair]:-}" ]; then
+        ld_repo="${REPO_OF[picoDragonsLair]}"
+        [[ "$ld_repo" == */* ]] || ld_repo="$GITHUB_OWNER/$ld_repo"
+        ld_url="https://github.com/$ld_repo/releases/download/${REF_OF[picoDragonsLair]}/ld2pico.exe"
+        mkdir -p "$(dirname "$LD2PICO_EXE")"
+        if curl -fsSL -o "$LD2PICO_EXE" "$ld_url" \
+                && [ "$(head -c 2 "$LD2PICO_EXE")" = "MZ" ]; then
+            info "downloaded ld2pico.exe from $ld_repo ${REF_OF[picoDragonsLair]}"
+        else
+            rm -f "$LD2PICO_EXE"
+            warn "downloading ld2pico.exe failed ($ld_url) — the archive ships without it"
+            overall_rc=1
+        fi
     fi
 
     PACKER="$LOADER_DIR/.github/scripts/pack_sdcard.sh"

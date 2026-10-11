@@ -7,8 +7,9 @@
 # to keep in sync with pico_shared/bld.sh, and every board and program that got
 # built is packed automatically.
 #
-# Archive layout (matches boot.txt's BASEDIR=/emu; emu/ and updateAll/ sit at the
-# archive root, so unzipping at the root of the card is all a user has to do):
+# Archive layout (matches boot.txt's BASEDIR=/emu; emu/, updateAll/ and ld2pico/
+# sit at the archive root, so unzipping at the root of the card is all a user has
+# to do):
 #   emu/<HW_CONFIG>/<prog_name>.uf2      plus any aux (WAD) UF2s alongside
 #   emu/emulators.txt
 #   emu/categories.txt                   (if present, with the config files it names)
@@ -22,6 +23,10 @@
 #                                        built by updateAll/win/build.sh
 #   updateAll/updateAll.{json,py,ps1}    its sets, and the same installer as scripts
 #   updateAll/README.md
+#   ld2pico/ld2pico.exe                  the Dragon's Lair laserdisc converter for
+#                                        Windows, downloaded by build_emulators.sh -z
+#                                        from the pico-dragonslair release
+#   ld2pico/README.md
 #
 # Usage: pack_sdcard.sh <loader_dir> <output_zip>
 set -euo pipefail
@@ -49,11 +54,12 @@ else
     exit 1
 fi
 
-# make_zip <staging_dir> <out_zip>   — archives the staging dir's emu/ and
-# updateAll/ subtrees with both at the archive root, deflated.
+# make_zip <staging_dir> <out_zip>   — archives the staging dir's emu/,
+# updateAll/ and ld2pico/ subtrees with all three at the archive root, deflated.
 make_zip() {
     local stage="$1" out="$2" roots=(emu)
     [ -d "$stage/updateAll" ] && roots+=(updateAll)
+    [ -d "$stage/ld2pico" ] && roots+=(ld2pico)
     case "$ZIP_IMPL" in
         zip)
             ( cd "$stage" && zip -r -q "$out" "${roots[@]}" )
@@ -364,6 +370,26 @@ if [ -d "$UA_SRC" ]; then
         warn "updateAll/win/build/updateAll.exe is not built (updateAll/win/build.sh) — the archive ships the updateAll scripts without it"
     fi
     echo "  pack $ua_count updateAll file(s)"
+fi
+
+# --- ld2pico -----------------------------------------------------------------
+# The Dragon's Lair laserdisc converter travels with the card too, in ld2pico/
+# next to emu/. Only the Windows program ships; without it the folder is left
+# out, since its README alone would only point elsewhere.
+LD_SRC="$LOADER/ld2pico"
+if [ -s "$LD_SRC/build/ld2pico.exe" ]; then
+    mkdir -p "$STAGE/ld2pico"
+    cp "$LD_SRC/build/ld2pico.exe" "$STAGE/ld2pico/ld2pico.exe"
+    ld_count=1
+    if [ -f "$LD_SRC/README.md" ]; then
+        cp "$LD_SRC/README.md" "$STAGE/ld2pico/README.md"
+        ld_count=2
+    else
+        warn "ld2pico/README.md not found — not packed"
+    fi
+    echo "  pack $ld_count ld2pico file(s)"
+else
+    warn "ld2pico/build/ld2pico.exe is not there (build_emulators.sh -z downloads it) — the archive ships without ld2pico"
 fi
 
 # --- Zip it ------------------------------------------------------------------

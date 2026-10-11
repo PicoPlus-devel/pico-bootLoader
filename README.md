@@ -174,9 +174,11 @@ copyright Cinematronics and Don Bluth and is not distributed with the bundle.
 Two files are needed in `/roms/arcade/DLAIR` on the SD card: MAME's `dlair.zip`
 (revision F2), either as it is or unzipped, and the laserdisc file `lair.pld`.
 The latter is converted once on a computer from MAME's laserdisc image
-`dlair.chd`, with the Windows program `ld2pico.exe` of
-[pico-dragonslair](https://github.com/PicoPlus-devel/pico-dragonslair#game-data);
-it is about 260 MB. Missing files are named on screen.
+`dlair.chd`, with the Windows program `ld2pico.exe`, which the SD-card archive
+holds in its `ld2pico` folder; it is about 260 MB. See
+[ld2pico/README.md](ld2pico/README.md), and for other systems the
+[pico-dragonslair README](https://github.com/PicoPlus-devel/pico-dragonslair#game-data).
+Missing files are named on screen.
 
 The ROM sets of the Arcade entries can also be installed with `updateAll`, which
 the SD-card archive holds in its `updateAll` folder: `updateAll.exe` for
@@ -687,6 +689,7 @@ project.
 /emu/assets/themes/1..9/                   optional extra themes (UP/DOWN to switch)
 /emu/assets/screensaver/*.png|.jpg         screensaver images (optional, not themed)
 /updateAll/                                arcade ROM installer, run on a computer (optional)
+/ld2pico/                                  Dragon's Lair laserdisc converter, run on a computer (optional)
 ```
 
 Applications live in a subfolder named after the board's `HW_CONFIG` number, so
@@ -1090,11 +1093,12 @@ stamps a version.
 > (`BUILD_FOR_BOOTLOADER`) in `pico_shared` `f2c8be9`, and the emulator release
 > tags of the time predated it — their pinned `pico_shared` rejected `-b`
 > outright, so no bootloader-format `.uf2` could be produced from it. That
-> reason no longer applies, but the substitution still matters: in the v0.7
-> bundle the arcade entries (OutRun, Phoenix, Moon Cresta, Galagino) pin
-> `929281d`, which is `main`, while the other emulators pin the older `6e65df4`
-> and are built against `929281d` all the same. `emu/versions.txt` records
-> `main`, the revision every emulator was actually built against.
+> reason no longer applies, but the substitution still matters: in the v0.7.1
+> bundle Phoenix, Moon Cresta and Galagino pin `ce03f96`, which is `main`, while
+> OutRun and Dragon's Lair pin `929281d` and the other emulators the older
+> `6e65df4`, and are built against `ce03f96` all the same.
+> `emu/versions.txt` records `main`, the revision every emulator was actually
+> built against.
 
 The native ports and *ColecoVision* are the exception to all of the above.
 [pico-doom](https://github.com/PicoPlus-devel/pico-doom),
@@ -1111,7 +1115,11 @@ All three repositories are tagged and are built from their latest tag like the
 emulators, so `versions.txt` records a real version for `doom_tiny`,
 `doom_tiny_full`, `duke3d_game` and `colecojam`. The tag is simply the newest by
 version order, whether or not it carries a `v` prefix (Adafruit_ColecoJam's
-tags do not), so later tags are picked up with no change here. The
+tags do not), so later tags are picked up with no change here. This applies to
+the emulators as well: a tag whose GitHub release is marked as a pre-release,
+such as Adafruit_ColecoJam's beta `2.0b1`, is skipped in favour of the newest
+full release. `build_emulators.sh` asks the GitHub API through `gh` for this,
+and warns when it cannot, in which case every tag is a candidate. The
 `SCRIPTED_BRANCH` table in [`build_emulators.sh`](build_emulators.sh) — `main`
 for *Doom* and *ColecoVision*, `fix/audio-production-rate` for *Duke Nukem 3D* —
 is now only the fallback for a repository that has no tag at all.
@@ -1143,6 +1151,9 @@ shipped emulator — and packs
 takes the `emu/` tree as its only source of truth and refuses to build an archive
 containing an empty `.uf2`, so a half-finished build cannot ship. It requires
 `-c all`, since an archive built from one board would be missing the others.
+Besides `emu/`, the archive holds `updateAll/`, with `updateAll.exe` built by
+`-z` (mingw-w64), and `ld2pico/`, with the `ld2pico.exe` that `-z` downloads
+with `curl` from the pico-dragonslair release it bundled.
 
 ### Cutting a release
 

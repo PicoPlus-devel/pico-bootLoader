@@ -38,7 +38,9 @@ gh auth status                                  # needs repo write
 `zip` or `python3` must be present for the packer (either is fine), and
 mingw-w64 (`x86_64-w64-mingw32-gcc`, `apt install mingw-w64`) for
 `updateAll.exe`, which `-z` builds and packs into the archive's `updateAll/`
-folder.
+folder. `-z` also needs `curl`: it downloads `ld2pico.exe`, the Dragon's Lair
+laserdisc converter, from the pico-dragonslair release of the tag it bundled,
+and packs it into the archive's `ld2pico/` folder.
 
 `PICO_EXTRAS_PATH` is a pico-doom requirement, not an emulator one — pico-doom
 takes its whole toolchain from the environment via its `pico-env.sh` rather than
@@ -140,7 +142,9 @@ gh release view v0.2.1
   HW_CONFIG 1 and 2 are no longer built; a Pico 2 W runs the `pico2` asset.
 - `pico-bootLoader_sdcard.zip` present, unless this is a Scenario A release.
   Its `updateAll/` folder holds `updateAll.exe` next to the scripts
-  (`unzip -l releases/pico-bootLoader_sdcard.zip | grep updateAll/`).
+  (`unzip -l releases/pico-bootLoader_sdcard.zip | grep updateAll/`), and its
+  `ld2pico/` folder holds `ld2pico.exe` and its README
+  (`unzip -l releases/pico-bootLoader_sdcard.zip | grep ld2pico/`).
 - **3 PCB gerber assets** — `pico_nesPCB_v2.6.zip`,
   `Gerber_PicoNES_Mini_PCB_v2.0.zip` and `Gerber_PicoNES_Micro_v1.2.zip`,
   attached by the workflow from the `pico_shared` submodule. See
@@ -178,10 +182,11 @@ from `github.sha`, so it will point at whatever is current.
   (`BUILD_FOR_BOOTLOADER`) only in `pico_shared` `f2c8be9`, and the emulator tags
   of the time predated it, so their pinned revision rejected `-b` outright.
   That reason no longer applies — every current tag pins a descendant of
-  `f2c8be9` — but the substitution is not a no-op. For v0.7 the arcade entries
-  (OutRun v0.5, Phoenix v0.2, Moon Cresta v0.2, Galagino v0.1.1) pin `929281d`,
-  which is `main`, and every other emulator tag pins `6e65df4`; the whole bundle
-  is built against the one `pico_shared` `main` that `emu/versions.txt` records.
+  `f2c8be9` — but the substitution is not a no-op. For v0.7.1 Phoenix v0.2.1,
+  Moon Cresta v0.2.1 and Galagino v0.1.2 pin `ce03f96`, which is `main`;
+  OutRun v0.5 and Dragon's Lair v0.1 pin `929281d`, and every other emulator tag
+  pins `6e65df4`. The whole bundle is built against the one `pico_shared` `main`
+  that `emu/versions.txt` records.
   An older tag that no longer builds against `main` shows up as a `FAIL` in the
   grand summary.
 - **A tag pushed from CI would not trigger this workflow** — GitHub does not fire

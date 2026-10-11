@@ -6,13 +6,55 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 
 [Binaries for each configuration and PCB design are at the end of this page](#downloads___).
 
+## v0.7.1
+
+An SD-card update: **Dragon's Lair** joins the Arcade category, and Phoenix,
+Moon Cresta and Galagino have new versions. The loader itself is unchanged
+since v0.7.
+
+> **Do you need to update?** Only the card. Replace the `/emu` folder on it with
+> the one in the new `pico-bootLoader_sdcard.zip`, and copy its `updateAll` and
+> `ld2pico` folders as well if you want to use them. The board does not have to
+> be re-flashed, and your ROMs, save states and everything else outside `/emu`
+> are untouched.
+
+### New on the card
+
+**Dragon's Lair**, Cinematronics' 1983 laserdisc game, runs on every board.
+The game is not included: besides MAME's `dlair.zip`, it needs its laserdisc,
+which you convert once on a computer from MAME's `dlair.chd` into the file
+`lair.pld`. The Windows program that does this, `ld2pico.exe`, is in the
+`ld2pico` folder of the SD-card archive. Both files go to `/roms/arcade/DLAIR`
+on the card; see the
+[ld2pico README](https://github.com/PicoPlus-devel/pico-bootLoader/blob/main/ld2pico/README.md).
+
+**updateAll** now also installs the ROMs of Dragon's Lair, but not its
+laserdisc.
+
+### Updated applications
+
+- **Phoenix**
+  [v0.2.1](https://github.com/PicoPlus-devel/pico-phoenix/releases/tag/v0.2.1)
+  and **Moon Cresta**
+  [v0.2.1](https://github.com/PicoPlus-devel/pico-mooncresta/releases/tag/v0.2.1):
+  on boards such as the Adafruit Fruit Jam, every line of the picture is now
+  shown when Tate mode is off.
+- **Galagino**
+  [v0.1.2](https://github.com/PicoPlus-devel/pico-galagino/releases/tag/v0.1.2):
+  *1942* runs at full speed and its sound no longer stutters. On boards such as
+  the Adafruit Fruit Jam, the sound of the games no longer drops out every few
+  seconds, and every line of the picture is shown when Tate mode is off.
+
+Every other application is the same version as in v0.7. The exact version of
+every application is in the table at the end of this page and in
+`/emu/versions.txt`.
+
 ## v0.7
 
 A release of both halves, the loader and the SD card. The loader shows an
 overview of the board and supports one more, the **Olimex RP2040-PICO-PC**.
-Every application on the card has a new version, and the card gains four arcade
-entries, **Phoenix**, **Moon Cresta**, **Galagino** (six games) and
-**Dragon's Lair**, and
+Every application on the card has a new version, and the card gains three arcade
+entries, **Phoenix**, **Moon Cresta** and **Galagino** (six games), and
 **updateAll**, a tool that installs the arcade ROMs.
 
 > **Do you need to update?** Yes, both parts. Re-flash the board with the
@@ -87,15 +129,8 @@ which takes a few seconds, and again after another application has been written
 over them. Like Phoenix, the games are vertical and have the
 **Tate mode** setting.
 
-**Dragon's Lair**, Cinematronics' 1983 laserdisc game, runs on every board.
-The game is not included: besides MAME's `dlair.zip`, it needs its laserdisc,
-which you convert once on a computer from MAME's `dlair.chd` into the file
-`lair.pld` with the Windows program `ld2pico.exe`. Both go to `/roms/arcade/DLAIR` on the card; see the
-[pico-dragonslair README](https://github.com/PicoPlus-devel/pico-dragonslair#game-data).
-
 **updateAll** puts the ROMs of the arcade games on the card: OutRun, Phoenix,
-Moon Cresta, the six Galagino games and Dragon's Lair (its ROMs; not the
-laserdisc). It is in the `updateAll` folder of the SD-card
+Moon Cresta and the six Galagino games. It is in the `updateAll` folder of the SD-card
 archive: `updateAll.exe` for Windows, and the same tool as a Python and a
 PowerShell script for other systems. Give it the MAME zips you have and it puts
 each game's files in the folder the game reads. Zips you do not have are
