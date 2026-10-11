@@ -230,6 +230,19 @@
         { "name": "sb-2.d1",   "size": 256,   "crc": "8bb8b3df" },
         { "name": "sb-8.k3",   "size": 256,   "crc": "f6fad943" }
       ]
+    },
+    {
+      "id": "dlair",
+      "name": "Dragon's Lair",
+      "set": "MAME dlair (Cinematronics, revision F2)",
+      "zips": ["dlair.zip"],
+      "destination": "/roms/arcade/DLAIR",
+      "files": [
+        { "name": "dl_f2_u1.bin", "size": 8192, "crc": "f5ea3b9d" },
+        { "name": "dl_f2_u2.bin", "size": 8192, "crc": "dcc1dff2" },
+        { "name": "dl_f2_u3.bin", "size": 8192, "crc": "ab514e5b" },
+        { "name": "dl_f2_u4.bin", "size": 8192, "crc": "f5ec23d2" }
+      ]
     }
   ]
 }

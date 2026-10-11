@@ -19,6 +19,9 @@ Three equivalent implementations are provided: `updateAll.exe`, a Windows progra
 | `frogger` | pico-galagino | `frogger.zip` | `/roms/arcade/FROGGER` |
 | `digdug` | pico-galagino | `digdug.zip` | `/roms/arcade/DIGDUG` |
 | `1942` | pico-galagino | `1942.zip` (revision B) | `/roms/arcade/1942` |
+| `dlair` | pico-dragonslair | `dlair.zip` (revision F2) | `/roms/arcade/DLAIR` |
+
+pico-dragonslair also needs its laserdisc, the file `lair.pld`, which updateAll does not install: it is converted from MAME's `dlair.chd` as described in the [pico-dragonslair README](https://github.com/PicoPlus-devel/pico-dragonslair#game-data).
 
 pico-galagino plays the Midway Pac-Man, MAME's `pacman`, a clone of `puckman`. A merged `puckman.zip`, which the download database provides, holds all of its files; with a split set, have `pacman.zip` and `puckman.zip` in the zip folder together.
 

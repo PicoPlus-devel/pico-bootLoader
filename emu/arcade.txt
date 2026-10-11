@@ -23,7 +23,13 @@
 # MAME zip (or its files unzipped) from its own folder below /roms/arcade:
 # PACMAN (puckman.zip), GALAGA, DONKEYKONG, FROGGER, DIGDUG, 1942. Without
 # PSRAM it copies the sets into flash at start-up, once.
+#
+# picoDragonsLair runs on every supported board. The game is copyright
+# Cinematronics and Don Bluth: it reads MAME's dlair.zip (or its files unzipped)
+# and the laserdisc file lair.pld, converted from MAME's dlair.chd with the
+# pico-dragonslair tools, from /roms/arcade/DLAIR.
 picoOutRun;outrun;OutRun
 picoPhoenix;phoenix;Phoenix
 picoMoonCresta;mooncresta;Moon Cresta
 picoGalagino;galagino;Galagino
+picoDragonsLair;dragonslair;Dragon's Lair

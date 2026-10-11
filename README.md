@@ -78,6 +78,7 @@ its own repository and identified by the program name embedded in its `.uf2`.
 | **Phoenix** (arcade) | `picoPhoenix` | [pico-phoenix](https://github.com/PicoPlus-devel/pico-phoenix) | <img width="280" alt="Phoenix menu artwork" src="emu/assets/themes/0/phoenix.png" /> |
 | **Moon Cresta** (arcade) | `picoMoonCresta` | [pico-mooncresta](https://github.com/PicoPlus-devel/pico-mooncresta) | <img width="280" alt="Moon Cresta menu artwork" src="emu/assets/themes/0/mooncresta.png" /> |
 | **Galagino** (arcade: Pac-Man, Galaga, Donkey Kong, Frogger, Dig Dug, 1942) | `picoGalagino` | [pico-galagino](https://github.com/PicoPlus-devel/pico-galagino) | <img width="280" alt="Galagino menu artwork" src="emu/assets/themes/0/galagino.png" /> |
+| **Dragon's Lair** (arcade, laserdisc) | `picoDragonsLair` | [pico-dragonslair](https://github.com/PicoPlus-devel/pico-dragonslair) | <img width="280" alt="Dragon's Lair menu artwork" src="emu/assets/themes/0/dragonslair.png" /> |
 
 The following emulators need a bios in `/bios` on SD:
 - *Nintendo Entertainment System* : For Famicom Disk System games `fds-bios.rom`
@@ -165,6 +166,17 @@ into flash at start-up, once; when the loader has since written another
 application over that flash, the copy is made again, which takes a few seconds.
 It has the same *Tate mode* setting as Phoenix, and *Quit game* in its settings
 menu returns to its game menu.
+
+*Dragon's Lair* is the fifth **Arcade** entry: an emulation of Cinematronics'
+1983 laserdisc arcade board and its Pioneer LD-V1000 player. It runs on every
+board the loader supports and needs neither PSRAM nor HSTX. The game is
+copyright Cinematronics and Don Bluth and is not distributed with the bundle.
+Two files are needed in `/roms/arcade/DLAIR` on the SD card: MAME's `dlair.zip`
+(revision F2), either as it is or unzipped, and the laserdisc file `lair.pld`.
+The latter is converted once on a computer from MAME's laserdisc image
+`dlair.chd`, with the Windows program `ld2pico.exe` of
+[pico-dragonslair](https://github.com/PicoPlus-devel/pico-dragonslair#game-data);
+it is about 260 MB. Missing files are named on screen.
 
 The ROM sets of the Arcade entries can also be installed with `updateAll`, which
 the SD-card archive holds in its `updateAll` folder: `updateAll.exe` for

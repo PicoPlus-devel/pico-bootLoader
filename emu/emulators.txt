@@ -22,6 +22,7 @@ picoOutRun;outrun;OutRun
 picoPhoenix;phoenix;Phoenix
 picoMoonCresta;mooncresta;Moon Cresta
 picoGalagino;galagino;Galagino
+picoDragonsLair;dragonslair;Dragon's Lair
 
 # --- Computer ---
 pico994A;ti99;TI99/4A
