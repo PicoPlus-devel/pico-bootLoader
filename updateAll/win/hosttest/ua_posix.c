@@ -202,7 +202,8 @@ static void shell_quote(char *dst, size_t size, const char *s)
     dst[o] = 0;
 }
 
-int ua_http_get(const char *url, ua_sink sink, void *ctx, int *status, char *err, size_t errlen)
+int ua_http_get(const char *url, ua_sink sink, void *ctx, int *status, int timeout_s, char *err,
+                size_t errlen)
 {
     char hdr[] = "/tmp/ua_hdr_XXXXXX", body[] = "/tmp/ua_body_XXXXXX", cerr[] = "/tmp/ua_err_XXXXXX";
     int fds[3] = { mkstemp(hdr), mkstemp(body), mkstemp(cerr) };
@@ -212,8 +213,8 @@ int ua_http_get(const char *url, ua_sink sink, void *ctx, int *status, char *err
     char qurl[8192], cmd[9000];
     shell_quote(qurl, sizeof qurl, url);
     snprintf(cmd, sizeof cmd,
-             "curl -sS -L --max-time 60 -A 'updateAll (pico-bootLoader)' -D %s -o %s %s 2>%s",
-             hdr, body, qurl, cerr);
+             "curl -sS -L --max-time %d -A 'updateAll (pico-bootLoader)' -D %s -o %s %s 2>%s",
+             timeout_s, hdr, body, qurl, cerr);
     int rc = system(cmd);
     *status = 0;
 

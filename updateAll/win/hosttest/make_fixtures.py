@@ -215,6 +215,21 @@ with open(os.path.join(OUT, "cfg_nodb.json"), "w") as f:
     json.dump({"cores": remote}, f, indent=2)
 
 # ---------------------------------------------------------------------------
+# Configurations read from a config_url
+# ---------------------------------------------------------------------------
+
+# The served configuration has other sets and a database the local one lacks,
+# and a config_url of its own that must not be followed.
+remote_cfg = serve("cfg_remote.json", json.dumps(
+    {"config_url": f"{URL}/no-such-cfg.json", "databases": [f"{URL}/db.json.zip"],
+     "cores": remote}, indent=2).encode())
+for name, url in (("fetch", remote_cfg), ("fetch404", f"{URL}/no-such-cfg.json"),
+                  ("fetchbroken", f"{URL}/broken.json"), ("fetchnocores", f"{URL}/nofiles.json"),
+                  ("fetchoff", "")):
+    with open(os.path.join(OUT, f"cfg_{name}.json"), "w") as f:
+        json.dump({"config_url": url, "cores": local}, f, indent=2)
+
+# ---------------------------------------------------------------------------
 # Invalid configurations
 # ---------------------------------------------------------------------------
 
@@ -238,3 +253,5 @@ bad("filename", {"cores": [dict(good, files=[{"name": "x:y", "size": 1, "crc": "
 bad("crc", {"cores": [dict(good, files=[{"name": "x", "size": 1, "crc": "xyz"}])]})
 bad("size", {"cores": [dict(good, files=[{"name": "x", "size": "big", "crc": "0"}])]})
 bad("databases", {"databases": "http://x", "cores": [good]})
+bad("config_url", {"config_url": "ftp://x/updateAll.json", "cores": [good]})
+bad("config_url_type", {"config_url": ["http://x"], "cores": [good]})

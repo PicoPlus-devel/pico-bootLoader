@@ -18,6 +18,8 @@
 #include "third_party/miniz/miniz.h"
 
 #define DOWNLOAD_ATTEMPTS 3
+#define TIMEOUT 60
+#define CONFIG_TIMEOUT 15
 
 /* ------------------------------------------------------------------------- */
 /* Helpers                                                                   */
@@ -466,6 +468,18 @@ int ua_config_parse(const char *text, size_t len, const char *path, const char *
     cfg->databases = dbs.v;
     cfg->ndatabases = dbs.n;
     memset(&dbs, 0, sizeof dbs);
+
+    /* null and "" mean none, as in updateAll.py */
+    const cJSON *url = cJSON_GetObjectItemCaseSensitive(root, "config_url");
+    if (url && !cJSON_IsNull(url) && !(cJSON_IsString(url) && !*url->valuestring)) {
+        if (!cJSON_IsString(url) || !ua_is_url(url->valuestring)) {
+            set_err(err, errlen, "%s: 'config_url' must be an http or https URL", path);
+            goto done;
+        }
+        cfg->config_url = xstrdup(url->valuestring);
+    }
+    cfg->config_dir = xstrdup(config_dir);
+    cfg->source = xstrdup(path);
     rc = 0;
 done:
     strv_free(&ids);
@@ -492,6 +506,11 @@ int ua_config_load(const char *path, ua_config *cfg, char *err, size_t errlen)
     if (n > 1 && (dir[n - 1] == '/' || dir[n - 1] == UA_SEP) && dir[n - 2] != ':')
         dir[n - 1] = 0;
     int rc = ua_config_parse(text, len, path, dir, cfg, err, errlen);
+    if (!rc) {
+        free(cfg->source);
+        cfg->source = abs;
+        abs = NULL;
+    }
     free(dir);
     free(abs);
     free(text);
@@ -522,6 +541,10 @@ void ua_config_free(ua_config *cfg)
     }
     free(cfg->cores);
     free_list(cfg->databases);
+    free(cfg->config_url);
+    free(cfg->config_dir);
+    free(cfg->source);
+    free(cfg->fetch_error);
     memset(cfg, 0, sizeof *cfg);
 }
 
@@ -622,6 +645,43 @@ static int mem_sink(void *ctx, const void *data, size_t len, long long total)
     return 0;
 }
 
+/* fetch_config(); here, with the downloads it shares mem_sink with. */
+int ua_config_fetch(const char *url, const char *config_dir, ua_config *cfg, char *err,
+                    size_t errlen)
+{
+    memset(cfg, 0, sizeof *cfg);
+    membuf m = { 0 };
+    char why[512];
+    int status;
+    if (ua_http_get(url, mem_sink, &m, &status, CONFIG_TIMEOUT, why, sizeof why)) {
+        free(m.buf);
+        set_err(err, errlen, "cannot read %s: %s", url, why);
+        return -1;
+    }
+    int rc = ua_config_parse(m.buf ? m.buf : "", m.len, url, config_dir, cfg, err, errlen);
+    free(m.buf);
+    if (!rc) {
+        free(cfg->config_url);   /* not followed: it only says where this came from */
+        cfg->config_url = xstrdup(url);
+    }
+    return rc;
+}
+
+void ua_config_update(ua_config *cfg)
+{
+    if (!cfg->config_url)
+        return;
+    ua_config latest;
+    char err[1024];
+    if (ua_config_fetch(cfg->config_url, cfg->config_dir, &latest, err, sizeof err)) {
+        free(cfg->fetch_error);
+        cfg->fetch_error = xstrdup(err);
+        return;
+    }
+    ua_config_free(cfg);
+    *cfg = latest;
+}
+
 typedef struct {
     char *source;
     char *id;
@@ -640,7 +700,7 @@ static int database_load(database *db, const char *source, char **err)
         membuf m = { 0 };
         char why[512];
         int status;
-        if (ua_http_get(source, mem_sink, &m, &status, why, sizeof why)) {
+        if (ua_http_get(source, mem_sink, &m, &status, TIMEOUT, why, sizeof why)) {
             free(m.buf);
             *err = xstrdup(why);
             return -1;
@@ -909,7 +969,7 @@ static long long download(const db_hit *hit, const char *dest, const ua_hooks *h
             why = os_error(errno, tmp);
         } else {
             int status = 0;
-            int rc = ua_http_get(hit->url, dl_sink, &s, &status, err, sizeof err);
+            int rc = ua_http_get(hit->url, dl_sink, &s, &status, TIMEOUT, err, sizeof err);
             if (fclose(s.out) && !rc) {
                 rc = -1;
                 s.write_errno = errno ? errno : EIO;
@@ -1433,6 +1493,10 @@ int ua_run(const ua_config *cfg, const ua_options *opt, const ua_hooks *h)
             cores[ncores++] = &cfg->cores[i];
     }
 
+    if (cfg->config_url && cfg->fetch_error)
+        out(h, "Sets from:    %s (%s)", cfg->source, cfg->fetch_error);
+    else if (cfg->config_url)
+        out(h, "Sets from:    %s", cfg->source);
     char *abs = zips ? ua_abspath(zips) : NULL;
     out(h, "Zips from:    %s", abs ? abs : "downloads only");
     free(abs);

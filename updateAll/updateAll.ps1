@@ -14,9 +14,12 @@
     into a temporary folder that is removed afterwards. A database uses the
     format of the MiSTer Downloader: a JSON file, optionally zipped, whose
     "files" map gives each zip a "url" (or a "base_files_url" to prefix), a
-    "size" and an MD5 "hash". No database is configured by default. A set that
-    is already complete on the card needs no zip, so nothing is downloaded for
-    it.
+    "size" and an MD5 "hash". A set that is already complete on the card needs
+    no zip, so nothing is downloaded for it.
+
+    When updateAll.json has a "config_url", the configuration is first read
+    from there, so that sets added since this copy was made are installed too.
+    If it cannot be read, the local file is used.
 
     Only the files listed for a set are extracted. They are found by size and
     CRC32 rather than by name, as the applications themselves do, so merged,
@@ -47,7 +50,9 @@
     Use only the zips already in the zip folder.
 
 .PARAMETER Config
-    Configuration file. Default: updateAll.json next to this script.
+    Configuration file. Default: updateAll.json next to this script. When it
+    has a config_url, the configuration is read from there, and from this file
+    only if that fails.
 
 .PARAMETER DryRun
     Show what would be downloaded and written without doing it.
@@ -148,6 +153,7 @@ namespace UpdateAll
 $script:UserAgent = 'updateAll (pico-bootLoader)'
 $script:DownloadAttempts = 3
 $script:TimeoutSec = 60
+$script:ConfigTimeoutSec = 15
 
 # PowerShell 7 takes the CRC from the zip directory. Windows PowerShell 5.1
 # (.NET Framework) does not expose it, so there the entries are read instead.
@@ -173,7 +179,20 @@ function Read-Config([string] $Path) {
         throw "configuration not found: $Path"
     }
     try {
-        $cfg = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
+        $text = Get-Content -LiteralPath $Path -Raw -Encoding UTF8
+    } catch {
+        throw "cannot read ${Path}: $($_.Exception.Message)"
+    }
+    # Relative database paths are relative to the configuration file.
+    $configDir = Split-Path -Parent ((Resolve-Path -LiteralPath $Path).ProviderPath)
+    return ConvertFrom-Config $text $Path $configDir
+}
+
+# Read-Config of a configuration that is already read; Path names it in
+# messages, and relative database paths are made relative to ConfigDir.
+function ConvertFrom-Config([string] $Text, [string] $Path, [string] $ConfigDir) {
+    try {
+        $cfg = $Text | ConvertFrom-Json
     } catch {
         throw "cannot read ${Path}: $($_.Exception.Message)"
     }
@@ -231,17 +250,44 @@ function Read-Config([string] $Path) {
         }
     }
 
-    # Relative database paths are relative to the configuration file.
-    $configDir = Split-Path -Parent ((Resolve-Path -LiteralPath $Path).ProviderPath)
     $sources = @(Get-Field $cfg 'databases' | Where-Object { $null -ne $_ })
     if (@($sources | Where-Object { $_ -isnot [string] }).Count -gt 0) {
         throw "${Path}: 'databases' must be a list of URLs or paths"
     }
     $sources = @($sources | ForEach-Object {
-        if (Test-Url $_) { $_ } else { Join-Path $configDir $_ }
+        if (Test-Url $_) { $_ } else { Join-Path $ConfigDir $_ }
     })
 
-    return [pscustomobject]@{ Cores = @($defs); Databases = $sources }
+    # Not Get-Field: returning a list of one unrolls it into its item.
+    $configUrl = $null
+    $p = $cfg.PSObject.Properties['config_url']
+    if ($p) { $configUrl = $p.Value }
+    if ($configUrl -is [string] -and $configUrl -eq '') {
+        $configUrl = $null
+    } elseif ($null -ne $configUrl -and ($configUrl -isnot [string] -or -not (Test-Url $configUrl))) {
+        throw "${Path}: 'config_url' must be an http or https URL"
+    }
+
+    return [pscustomobject]@{ Cores = @($defs); Databases = $sources; ConfigUrl = $configUrl }
+}
+
+# The configuration at Url, as Read-Config returns it. Its own config_url is
+# not followed.
+function Read-ConfigUrl([string] $Url, [string] $ConfigDir) {
+    $tmp = [System.IO.Path]::GetTempFileName()
+    try {
+        try {
+            Save-Url $Url $tmp $script:ConfigTimeoutSec
+        } catch {
+            $status = Get-HttpStatus $_
+            if ($status) { $reason = "HTTP $status" } else { $reason = $_.Exception.Message }
+            throw "cannot read ${Url}: $reason"
+        }
+        $text = [System.IO.File]::ReadAllText($tmp, [System.Text.Encoding]::UTF8)
+    } finally {
+        Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+    }
+    return ConvertFrom-Config $text $Url $ConfigDir
 }
 
 function Resolve-Folder([string] $Path, [string] $What) {
@@ -262,9 +308,9 @@ function Get-HttpStatus($ErrorRecord) {
     return 0
 }
 
-function Save-Url([string] $Url, [string] $Path) {
+function Save-Url([string] $Url, [string] $Path, [int] $TimeoutSec = $script:TimeoutSec) {
     Invoke-WebRequest -Uri $Url -OutFile $Path -UseBasicParsing -UserAgent $script:UserAgent `
-        -TimeoutSec $script:TimeoutSec
+        -TimeoutSec $TimeoutSec
 }
 
 function Read-Database([string] $Source, [string[]] $WantedZips) {
@@ -577,6 +623,19 @@ $exitCode = 1
 $tempDir = $null
 try {
     $cfg = Read-Config $Config
+    # The configuration at config_url replaces the local one; the local one
+    # is kept when that cannot be read.
+    $setsFrom = $null
+    if ($cfg.ConfigUrl) {
+        $url = $cfg.ConfigUrl
+        $localPath = (Resolve-Path -LiteralPath $Config).ProviderPath
+        try {
+            $cfg = Read-ConfigUrl $url (Split-Path -Parent $localPath)
+            $setsFrom = $url
+        } catch {
+            $setsFrom = "$localPath ($($_.Exception.Message))"
+        }
+    }
     $defs = @($cfg.Cores)
     $script:DbSources = @($cfg.Databases)
     # -File passes "a,b" as one string, so split on commas here as well.
@@ -593,6 +652,7 @@ try {
                 $d.Id, $d.Name, ($d.Zips -join ', '), $d.DestShown, $d.Set, $d.Files.Count)
         }
         Write-Host ''
+        if ($setsFrom) { Write-Host "Sets from:    $setsFrom" }
         if ($script:DbSources.Count -gt 0) {
             Write-Host 'Databases:'
             foreach ($src in $script:DbSources) { Write-Host "  $src" }
@@ -627,6 +687,7 @@ try {
         $defs = @($defs | Where-Object { $requested -contains $_.Id })
     }
 
+    if ($setsFrom) { Write-Host "Sets from:    $setsFrom" }
     if ($Zips) { Write-Host "Zips from:    $zipDir" } else { Write-Host 'Zips from:    downloads only' }
     Write-Host "SD card:      $sdRoot"
     if ($mayDownload) {

@@ -82,6 +82,7 @@ int main(int argc, char **argv)
         free(dbs);
         return 1;
     }
+    ua_config_update(&cfg);
     int rc;
     if (!opt.sd) {
         fprintf(stderr, "error: --sd is required (or use --list)\n");

@@ -38,11 +38,12 @@ void ua_sleep_ms(int ms);
    length, or -1. A non-zero return aborts the transfer. */
 typedef int (*ua_sink)(void *ctx, const void *data, size_t len, long long total);
 
-/* GET url, following redirects, and pass the body to sink. Returns 0 on a
-   2xx response that was received in full. Otherwise err describes the
-   failure, as "HTTP <code> <reason>" for an HTTP error, whose code is then
-   stored in *status (0 for any other failure). */
-int ua_http_get(const char *url, ua_sink sink, void *ctx, int *status,
+/* GET url, following redirects, and pass the body to sink; each step of the
+   transfer may take up to timeout_s seconds. Returns 0 on a 2xx response
+   that was received in full. Otherwise err describes the failure, as
+   "HTTP <code> <reason>" for an HTTP error, whose code is then stored in
+   *status (0 for any other failure). */
+int ua_http_get(const char *url, ua_sink sink, void *ctx, int *status, int timeout_s,
                 char *err, size_t errlen);
 
 #ifdef _WIN32

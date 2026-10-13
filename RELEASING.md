@@ -26,6 +26,11 @@ not to re-flash.
 Both forms are matched by the existing `push:` tag globs, and `v*.*-alpha` is
 available for dry runs.
 
+A set added to `updateAll/updateAll.json` needs no release: every copy of
+updateAll from v0.7.2 on reads that file from `main` at start-up (its
+`config_url`), and falls back to the copy on the card only when it cannot. Keep
+the file on `main` at least as complete as the one in the latest archive.
+
 ## Prerequisites
 
 ```bash

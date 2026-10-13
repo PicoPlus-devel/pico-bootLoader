@@ -47,10 +47,17 @@ CASES = [
                   "--db {url}/broken.json,db_nojson.zip --zips {zips} --sd {card} --core theta,omicron", None),
     ("db-error-and-good", "--config cfg_nodb.json --db {url}/nope.json,{url}/db.json --zips {zips} "
                           "--sd {card} --core theta", None),
+    ("config-url", "--config cfg_fetch.json --zips {zips} --sd {card} --core theta,omicron", None),
+    ("config-url-404", "--config cfg_fetch404.json --zips {zips} --sd {card} --core alpha", None),
+    ("config-url-broken", "--config cfg_fetchbroken.json --zips {zips} --sd {card} --core alpha", None),
+    ("config-url-nocores", "--config cfg_fetchnocores.json --zips {zips} --sd {card} --core alpha", None),
+    ("config-url-off", "--config cfg_fetchoff.json --zips {zips} --sd {card} --core alpha", None),
+    ("config-url-sd-missing", "--config cfg_fetch.json --zips {zips} --sd {fx}/no-card", None),
 ]
 CASES += [(f"bad-config-{n}", f"--config bad_{n}.json --zips {{zips}} --sd {{card}}", None)
           for n in ("syntax", "nocores", "missing_key", "twice", "dest", "dest_empty", "nozips",
-                    "zipname", "filename", "crc", "size", "databases")]
+                    "zipname", "filename", "crc", "size", "databases", "config_url",
+                    "config_url_type")]
 
 # Error texts that only the platform decides: a JSON parser's own wording.
 NORMALISE = [

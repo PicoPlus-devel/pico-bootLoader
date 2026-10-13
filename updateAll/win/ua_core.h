@@ -32,6 +32,10 @@ typedef struct {
     int ncores;
     char **databases;   /* NULL-terminated; relative paths already resolved */
     int ndatabases;
+    char *config_url;   /* where the latest configuration is read from, or NULL */
+    char *config_dir;   /* what relative database paths are relative to */
+    char *source;       /* the file or URL this configuration came from */
+    char *fetch_error;  /* why config_url was not used, or NULL */
 } ua_config;
 
 /* Parses a configuration. path names it in messages; relative database paths
@@ -39,6 +43,13 @@ typedef struct {
 int ua_config_parse(const char *text, size_t len, const char *path,
                     const char *config_dir, ua_config *cfg, char *err, size_t errlen);
 int ua_config_load(const char *path, ua_config *cfg, char *err, size_t errlen);
+/* Reads the configuration at url, as fetch_config of updateAll.py does; its
+   own config_url is not followed. Returns 0, or -1 with err set. */
+int ua_config_fetch(const char *url, const char *config_dir, ua_config *cfg, char *err,
+                    size_t errlen);
+/* Replaces cfg with the configuration at its config_url, or, when that cannot
+   be read, keeps it and sets fetch_error. */
+void ua_config_update(ua_config *cfg);
 void ua_config_free(ua_config *cfg);
 
 typedef struct {

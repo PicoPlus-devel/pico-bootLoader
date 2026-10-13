@@ -32,9 +32,10 @@
 #define WM_APP_PROGRESS (WM_APP + 2)   /* lParam: 0..1000 */
 #define WM_APP_STATUS   (WM_APP + 3)   /* wParam: set, lParam: files current, -1 for no card */
 #define WM_APP_DONE     (WM_APP + 4)   /* wParam: job kind, lParam: exit status */
+#define WM_APP_CONFIG   (WM_APP + 5)   /* lParam: malloc'd fetched */
 #define TIMER_CHECK     1
 
-enum { JOB_NONE, JOB_CHECK, JOB_INSTALL };
+enum { JOB_NONE, JOB_CHECK, JOB_INSTALL, JOB_CONFIG };
 
 typedef struct {
     int kind;
@@ -42,7 +43,15 @@ typedef struct {
     char **ids;              /* NULL-terminated, or NULL for every set */
     int no_download, dry_run;
     int last_permille;
+    char *config_url, *config_dir;
 } job;
+
+/* What a JOB_CONFIG read from the configuration's config_url. */
+typedef struct {
+    int ok;
+    ua_config cfg;
+    char err[1024];
+} fetched;
 
 /* How each control follows the window when it is resized. */
 enum { MOVE_X = 1, MOVE_Y = 2, GROW_X = 4, GROW_Y = 8 };
@@ -60,6 +69,7 @@ static struct {
     int ready;               /* the dialog is set up */
     ua_config cfg;
     int cfg_ok;
+    wchar_t source[MAX_PATH + 32];   /* the local or built-in configuration */
     int running;             /* an install was asked for and has not finished */
     int job;                 /* the job the worker thread runs, JOB_NONE if idle */
     job *queued;             /* an install waiting for a card check to stop */
@@ -118,6 +128,8 @@ static void job_free(job *j)
         return;
     free(j->sd);
     free(j->zips);
+    free(j->config_url);
+    free(j->config_dir);
     if (j->ids)
         for (char **p = j->ids; *p; p++)
             free(*p);
@@ -134,6 +146,13 @@ static unsigned __stdcall worker(void *arg)
         for (int i = 0; i < app.cfg.ncores && !app.cancel; i++)
             PostMessageW(app.dlg, WM_APP_STATUS, i,
                          card ? ua_count_current(&app.cfg.cores[i], j->sd) : -1);
+    } else if (j->kind == JOB_CONFIG) {
+        fetched *f = calloc(1, sizeof *f);
+        f->ok = !ua_config_fetch(j->config_url, j->config_dir, &f->cfg, f->err, sizeof f->err);
+        if (!PostMessageW(app.dlg, WM_APP_CONFIG, 0, (LPARAM)f)) {
+            ua_config_free(&f->cfg);
+            free(f);
+        }
     } else {
         ua_hooks hooks = { hook_log, hook_set, hook_bytes, hook_cancelled, j };
         ua_options opt = { j->sd, j->zips, (const char **)j->ids, NULL, j->no_download,
@@ -292,7 +311,8 @@ static int may_download(void)
 
 static void update_buttons(void)
 {
-    int ready = app.cfg_ok && !app.running && GetWindowTextLengthW(item(IDC_SD)) > 0 &&
+    int ready = app.cfg_ok && !app.running && app.job != JOB_CONFIG &&
+                GetWindowTextLengthW(item(IDC_SD)) > 0 &&
                 checked_sets() > 0 &&
                 (GetWindowTextLengthW(item(IDC_ZIPS)) > 0 || may_download());
     EnableWindow(item(IDOK), ready);
@@ -330,6 +350,10 @@ static void check_card(void)
 {
     if (!app.cfg_ok || app.running)
         return;
+    if (app.job == JOB_CONFIG) {
+        app.check_again = 1;     /* once the sets are known */
+        return;
+    }
     if (app.job == JOB_CHECK) {
         app.cancel = 1;          /* restart it for the new card */
         app.check_again = 1;
@@ -383,6 +407,8 @@ static void install(void)
 static void job_done(int kind, int rc)
 {
     app.job = JOB_NONE;
+    if (kind == JOB_CONFIG)
+        update_buttons();
     if (kind == JOB_INSTALL) {
         SendMessageW(item(IDC_PROGRESS), PBM_SETPOS, 1000, 0);
         SendMessageW(item(IDC_PROGRESS), PBM_SETSTATE, rc ? PBST_ERROR : PBST_NORMAL, 0);
@@ -464,8 +490,10 @@ static void browse(int field, const wchar_t *title)
 
 /* updateAll.json next to the program wins over the built-in configuration,
    so that sets can be added without a new program. */
-static void load_config(wchar_t *source, size_t size)
+static void load_config(void)
 {
+    wchar_t *source = app.source;
+    size_t size = sizeof app.source / sizeof app.source[0];
     wchar_t exe[MAX_PATH], dir[MAX_PATH];
     GetModuleFileNameW(NULL, exe, MAX_PATH);
     wcscpy(dir, exe);
@@ -511,6 +539,13 @@ static void init_sets(void)
         LVCOLUMNW col = { .mask = LVCF_TEXT | LVCF_WIDTH, .cx = 100, .pszText = (LPWSTR)titles[c] };
         ListView_InsertColumn(lv, c, &col);
     }
+}
+
+/* One row per set, all ticked but those whose id is in unticked. */
+static void fill_sets(char **unticked)
+{
+    HWND lv = item(IDC_SETS);
+    ListView_DeleteAllItems(lv);
     for (int i = 0; i < app.cfg.ncores; i++) {
         const ua_core *c = &app.cfg.cores[i];
         wchar_t *name = ua_widen(c->name), *dest = ua_widen(c->dest_shown);
@@ -528,7 +563,10 @@ static void init_sets(void)
         ListView_InsertItem(lv, &it);
         ListView_SetItemText(lv, i, 1, wzips);
         ListView_SetItemText(lv, i, 2, dest);
-        ListView_SetCheckState(lv, i, TRUE);
+        int tick = 1;
+        for (char **u = unticked; u && *u && tick; u++)
+            tick = _stricmp(*u, c->id) != 0;
+        ListView_SetCheckState(lv, i, tick);
         free(name);
         free(dest);
         free(zips);
@@ -547,6 +585,72 @@ static void size_status_column(void)
     for (int c = 0; c < 3; c++)
         used += ListView_GetColumnWidth(lv, c);
     ListView_SetColumnWidth(lv, 3, r.right - used > 80 ? r.right - used : 80);
+}
+
+/* The download box and the hint in the zip folder field follow whether there
+   is a database; had is how many there were before the configuration
+   changed. */
+static void show_databases(int had)
+{
+    SendMessageW(item(IDC_ZIPS), EM_SETCUEBANNER, TRUE,
+                 (LPARAM)(app.cfg.ndatabases ? L"Optional: folder with MAME zips"
+                                             : L"Folder with MAME zips"));
+    if (app.cfg.ndatabases) {
+        SetDlgItemTextW(app.dlg, IDC_DOWNLOAD, L"&Download missing zips");
+        EnableWindow(item(IDC_DOWNLOAD), !app.running);
+        if (!had)
+            CheckDlgButton(app.dlg, IDC_DOWNLOAD, BST_CHECKED);
+    } else {
+        SetDlgItemTextW(app.dlg, IDC_DOWNLOAD, L"Download missing zips (no database configured)");
+        CheckDlgButton(app.dlg, IDC_DOWNLOAD, BST_UNCHECKED);
+        EnableWindow(item(IDC_DOWNLOAD), FALSE);
+    }
+}
+
+static void log_config(void)
+{
+    const ua_config *c = &app.cfg;
+    wchar_t *from = c->config_url && !c->fetch_error ? ua_widen(c->source) : _wcsdup(app.source);
+    wchar_t *why = c->fetch_error ? ua_widen(c->fetch_error) : NULL;
+    size_t n = wcslen(from) + (why ? wcslen(why) : 0) + 160;
+    wchar_t *line = malloc(n * sizeof *line);
+    swprintf(line, n, L"Configuration: %ls, %d set%ls, %d download database%ls%ls%ls%ls\r\n", from,
+             c->ncores, c->ncores == 1 ? L"" : L"s", c->ndatabases, c->ndatabases == 1 ? L"" : L"s",
+             why ? L" (" : L"", why ? why : L"", why ? L")" : L"");
+    log_text(line);
+    log_text(c->ndatabases
+                 ? L"Choose the SD card, and the folder with your MAME zips if you have one. "
+                   L"Zips that are not in it are downloaded.\r\n"
+                 : L"Choose the SD card and the folder with your MAME zips.\r\n");
+    free(line);
+    free(why);
+    free(from);
+}
+
+/* The end of JOB_CONFIG: the latest configuration replaces the one shown, or
+   the reason it could not be read is kept, as ua_config_update does. */
+static void config_fetched(fetched *f)
+{
+    if (f->ok) {
+        /* Sets unticked in the meantime stay unticked. */
+        char **unticked = calloc((size_t)app.cfg.ncores + 1, sizeof *unticked);
+        for (int i = 0, n = 0; i < app.cfg.ncores; i++)
+            if (!ListView_GetCheckState(item(IDC_SETS), i))
+                unticked[n++] = _strdup(app.cfg.cores[i].id);
+        int had = app.cfg.ndatabases;
+        ua_config_free(&app.cfg);
+        app.cfg = f->cfg;
+        fill_sets(unticked);
+        size_status_column();
+        show_databases(had);
+        for (char **u = unticked; *u; u++)
+            free(*u);
+        free(unticked);
+    } else {
+        app.cfg.fetch_error = _strdup(f->err);
+    }
+    free(f);
+    log_config();
 }
 
 static void layout(void)
@@ -603,32 +707,25 @@ static void init_dialog(HWND dlg)
     SendMessageW(item(IDC_LOG), EM_SETLIMITTEXT, 0, 0);
     SendMessageW(item(IDC_PROGRESS), PBM_SETRANGE32, 0, 1000);
 
-    wchar_t source[MAX_PATH + 32];
     log_text(L"updateAll installs arcade ROM sets on the SD card. The ROM sets are copyright "
              L"of their manufacturers and are not included with this program.\r\n\r\n");
-    load_config(source, MAX_PATH + 32);
+    load_config();
     if (app.cfg_ok) {
         init_sets();
-        wchar_t line[MAX_PATH + 160];
-        swprintf(line, MAX_PATH + 160, L"Configuration: %ls, %d set%ls, %d download database%ls\r\n",
-                 source, app.cfg.ncores, app.cfg.ncores == 1 ? L"" : L"s", app.cfg.ndatabases,
-                 app.cfg.ndatabases == 1 ? L"" : L"s");
-        log_text(line);
-        log_text(app.cfg.ndatabases
-                     ? L"Choose the SD card, and the folder with your MAME zips if you have one. "
-                       L"Zips that are not in it are downloaded.\r\n"
-                     : L"Choose the SD card and the folder with your MAME zips.\r\n");
+        fill_sets(NULL);
     }
 
     SendMessageW(item(IDC_SD), CB_SETCUEBANNER, 0, (LPARAM)L"Root of the SD card");
-    SendMessageW(item(IDC_ZIPS), EM_SETCUEBANNER, TRUE,
-                 (LPARAM)(app.cfg.ndatabases ? L"Optional: folder with MAME zips"
-                                             : L"Folder with MAME zips"));
-    if (app.cfg.ndatabases) {
-        CheckDlgButton(dlg, IDC_DOWNLOAD, BST_CHECKED);
-    } else {
-        SetDlgItemTextW(dlg, IDC_DOWNLOAD, L"Download missing zips (no database configured)");
-        EnableWindow(item(IDC_DOWNLOAD), FALSE);
+    show_databases(0);
+    if (app.cfg_ok && app.cfg.config_url) {
+        /* The sets above are shown until the latest configuration is in. */
+        job *j = calloc(1, sizeof *j);
+        j->kind = JOB_CONFIG;
+        j->config_url = _strdup(app.cfg.config_url);
+        j->config_dir = _strdup(app.cfg.config_dir);
+        start_job(j);
+    } else if (app.cfg_ok) {
+        log_config();
     }
     if (!app.cfg_ok) {
         static const int inputs[] = { IDC_SD,   IDC_SD_BROWSE, IDC_ZIPS, IDC_ZIPS_BROWSE,
@@ -715,6 +812,10 @@ static INT_PTR CALLBACK dlg_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
     case WM_APP_STATUS:
         if (!app.running && app.job == JOB_CHECK && !app.cancel)
             set_status((int)wp, (int)lp);
+        return TRUE;
+
+    case WM_APP_CONFIG:
+        config_fetched((fetched *)lp);
         return TRUE;
 
     case WM_APP_DONE:

@@ -24,7 +24,6 @@
 #endif
 
 #define USER_AGENT L"updateAll (pico-bootLoader)"
-#define TIMEOUT_MS 60000
 
 static char last_error[2048];
 
@@ -318,7 +317,8 @@ static void http_error(char *err, size_t errlen)
         error_text(code, NULL, err, errlen);
 }
 
-int ua_http_get(const char *url, ua_sink sink, void *ctx, int *status, char *err, size_t errlen)
+int ua_http_get(const char *url, ua_sink sink, void *ctx, int *status, int timeout_s, char *err,
+                size_t errlen)
 {
     *status = 0;
     int result = -1;
@@ -359,7 +359,8 @@ int ua_http_get(const char *url, ua_sink sink, void *ctx, int *status, char *err
         protocols = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 | WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_1;
         WinHttpSetOption(session, WINHTTP_OPTION_SECURE_PROTOCOLS, &protocols, sizeof protocols);
     }
-    WinHttpSetTimeouts(session, TIMEOUT_MS, TIMEOUT_MS, TIMEOUT_MS, TIMEOUT_MS);
+    int ms = timeout_s * 1000;
+    WinHttpSetTimeouts(session, ms, ms, ms, ms);
 
     conn = WinHttpConnect(session, host, uc.nPort, 0);
     req = conn ? WinHttpOpenRequest(conn, L"GET", target, NULL, WINHTTP_NO_REFERER,

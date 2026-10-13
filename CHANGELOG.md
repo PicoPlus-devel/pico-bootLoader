@@ -6,6 +6,18 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 
 [Binaries for each configuration and PCB design are at the end of this page](#downloads___).
 
+## v0.7.2
+
+An SD-card update: **updateAll** now also installs the ROM sets of the games
+of GalaginoPlus, which Galagino is being extended to: 47 sets in all, each in
+its own folder below `/roms/arcade`. Galagino lists a game once it can play it.
+
+**updateAll** now fetches the latest list of sets from GitHub each time it
+starts, so sets added later no longer need an SD-card update.
+
+> **Do you need to update?** Only the `updateAll` folder of the card. The board
+> does not have to be re-flashed.
+
 ## v0.7.1
 
 An SD-card update: **Dragon's Lair** joins the Arcade category, and Phoenix,

@@ -11,9 +11,13 @@ A zip that is not in the folder is downloaded into it first, from the
 databases listed in updateAll.json or given with --db; without --zips, into a
 temporary folder that is removed afterwards. A database uses the format of the
 MiSTer Downloader: a JSON file, optionally zipped, whose "files" map gives each
-zip a "url" (or a "base_files_url" to prefix), a "size" and an MD5 "hash". No
-database is configured by default. A set that is already complete on the card
-needs no zip, so nothing is downloaded for it.
+zip a "url" (or a "base_files_url" to prefix), a "size" and an MD5 "hash". A
+set that is already complete on the card needs no zip, so nothing is
+downloaded for it.
+
+When updateAll.json has a "config_url", the configuration is first read from
+there, so that sets added since this copy was made are installed too. If it
+cannot be read, the local file is used.
 
 Only the files listed for a set are extracted. They are found by size and
 CRC32 rather than by name, as the applications themselves do, so merged, split
@@ -32,6 +36,7 @@ otherwise.
 
 import argparse
 import hashlib
+import http.client
 import io
 import json
 import os
@@ -51,6 +56,7 @@ DEFAULT_CONFIG = os.path.join(SCRIPT_DIR, "updateAll.json")
 USER_AGENT = "updateAll (pico-bootLoader)"
 DOWNLOAD_ATTEMPTS = 3
 TIMEOUT = 60
+CONFIG_TIMEOUT = 15
 
 
 class ConfigError(Exception):
@@ -71,12 +77,22 @@ def _is_url(src):
 
 
 def load_config(path):
-    """Returns (cores, databases); relative database paths are made relative
-    to the configuration file."""
+    """Returns (cores, databases, config_url); relative database paths are
+    made relative to the configuration file."""
     try:
         with open(path, "r", encoding="utf-8") as f:
-            cfg = json.load(f)
+            text = f.read()
     except (OSError, ValueError) as e:
+        raise ConfigError(f"cannot read {path}: {e}")
+    return parse_config(text, path, os.path.dirname(os.path.abspath(path)))
+
+
+def parse_config(text, path, config_dir):
+    """load_config of a configuration that is already read; path names it in
+    messages, and relative database paths are made relative to config_dir."""
+    try:
+        cfg = json.loads(text)
+    except ValueError as e:
         raise ConfigError(f"cannot read {path}: {e}")
 
     cores = cfg.get("cores") if isinstance(cfg, dict) else None
@@ -119,10 +135,27 @@ def load_config(path):
     databases = cfg.get("databases", [])
     if not isinstance(databases, list) or not all(isinstance(d, str) for d in databases):
         raise ConfigError(f"{path}: 'databases' must be a list of URLs or paths")
-    config_dir = os.path.dirname(os.path.abspath(path))
     databases = [d if _is_url(d) else os.path.join(config_dir, os.path.expanduser(d))
                  for d in databases]
-    return cores, databases
+
+    config_url = cfg.get("config_url")
+    if config_url in (None, ""):
+        config_url = None
+    elif not (isinstance(config_url, str) and _is_url(config_url)):
+        raise ConfigError(f"{path}: 'config_url' must be an http or https URL")
+    return cores, databases, config_url
+
+
+def fetch_config(url, config_dir):
+    """The configuration at url, as load_config returns it. Its own
+    config_url is not followed."""
+    try:
+        with _open_url(url, CONFIG_TIMEOUT) as r:
+            text = r.read().decode("utf-8")
+    except (OSError, ValueError, http.client.HTTPException) as e:
+        raise ConfigError(f"cannot read {url}: {_describe(e)}")
+    cores, databases, _ = parse_config(text, url, config_dir)
+    return cores, databases, url
 
 
 # ---------------------------------------------------------------------------
@@ -137,9 +170,9 @@ def _describe(e):
     return str(e)
 
 
-def _open_url(url):
+def _open_url(url, timeout=TIMEOUT):
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    return urllib.request.urlopen(req, timeout=TIMEOUT)
+    return urllib.request.urlopen(req, timeout=timeout)
 
 
 class Database:
@@ -389,12 +422,14 @@ def install_core(core, zip_dir, zip_listing, sd_root, dry_run):
     return res, [os.path.basename(p) for p in zip_paths]
 
 
-def list_cores(cores, databases):
+def list_cores(cores, databases, sets_from):
     print(f"{'ID':<12} {'Name':<14} {'Zip':<14} {'SD card folder':<26} Set")
     for c in cores:
         print(f"{c['id']:<12} {c['name']:<14} {', '.join(c['zips']):<14} "
               f"{c['_dest_shown']:<26} {c.get('set', '')}, {len(c['files'])} files")
     print()
+    if sets_from:
+        print(f"Sets from:    {sets_from}")
     if databases:
         print("Databases:")
         for d in databases:
@@ -424,7 +459,9 @@ def main(argv=None):
     ap.add_argument("--no-download", action="store_true",
                     help="use only the zips already in the zip folder")
     ap.add_argument("--config", metavar="FILE", default=DEFAULT_CONFIG,
-                    help="configuration file (default: updateAll.json next to this script)")
+                    help="configuration file (default: updateAll.json next to this "
+                         "script); when it has a config_url, the configuration is read "
+                         "from there, and from this file only if that fails")
     ap.add_argument("--dry-run", action="store_true",
                     help="show what would be downloaded and written without doing it")
     ap.add_argument("--list", action="store_true",
@@ -432,15 +469,24 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     try:
-        cores, db_sources = load_config(args.config)
+        cores, db_sources, config_url = load_config(args.config)
     except ConfigError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
+    # The configuration at config_url replaces the local one; the local one
+    # is kept when that cannot be read.
+    sets_from = None
+    if config_url:
+        try:
+            cores, db_sources, sets_from = fetch_config(
+                config_url, os.path.dirname(os.path.abspath(args.config)))
+        except ConfigError as e:
+            sets_from = f"{os.path.abspath(args.config)} ({e})"
     extra = [d.strip() for arg in args.db for d in arg.split(",") if d.strip()]
     db_sources += [d if _is_url(d) else os.path.abspath(os.path.expanduser(d)) for d in extra]
 
     if args.list:
-        list_cores(cores, db_sources)
+        list_cores(cores, db_sources, sets_from)
         return 0
 
     if not args.sd:
@@ -468,6 +514,8 @@ def main(argv=None):
             return 1
         cores = [c for c in cores if c["id"].lower() in requested]
 
+    if sets_from:
+        print(f"Sets from:    {sets_from}")
     print(f"Zips from:    {os.path.abspath(args.zips) if args.zips else 'downloads only'}")
     print(f"SD card:      {os.path.abspath(args.sd)}")
     if may_download:
