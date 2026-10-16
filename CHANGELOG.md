@@ -8,15 +8,26 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 
 ## v0.7.2
 
-An SD-card update: **updateAll** now also installs the ROM sets of the games
-of GalaginoPlus, which Galagino is being extended to: 47 sets in all, each in
-its own folder below `/roms/arcade`. Galagino lists a game once it can play it.
+An SD-card update: **1943** joins the Arcade category, and **updateAll** now
+also installs the ROM sets of the games of GalaginoPlus, which Galagino is being
+extended to: 47 sets in all, each in its own folder below `/roms/arcade`.
+Galagino lists a game once it can play it.
 
 **updateAll** now fetches the latest list of sets from GitHub each time it
 starts, so sets added later no longer need an SD-card update.
 
-> **Do you need to update?** Only the `updateAll` folder of the card. The board
-> does not have to be re-flashed.
+> **Do you need to update?** Only the card. Replace the `/emu` folder on it with
+> the one in the new `pico-bootLoader_sdcard.zip`, and copy its `updateAll`
+> folder as well. The board does not have to be re-flashed, and your ROMs, save
+> states and everything else outside `/emu` are untouched.
+
+### New on the card
+
+**1943** plays Capcom's *1943: The Battle of Midway* and *1943 Kai: Midway
+Kaisen* on every board. When both games are on the card, a menu chooses one at
+start-up. The games are not included: copy MAME's `1943.zip` to
+`/roms/arcade/1943` and `1943kai.zip` to `/roms/arcade/1943KAI`, or let
+**updateAll** install them.
 
 ## v0.7.1
 

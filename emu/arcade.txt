@@ -29,8 +29,16 @@
 # Cinematronics and Don Bluth: it reads MAME's dlair.zip (or its files unzipped)
 # and the laserdisc file lair.pld, converted from MAME's dlair.chd with the
 # pico-dragonslair tools, from /roms/arcade/DLAIR.
+#
+# pico1943 runs on every supported board: 1943: The Battle of Midway and 1943
+# Kai: Midway Kaisen, chosen at start when both sets are on the card. The games
+# are copyright Capcom: they read MAME's 1943.zip (1943u, 1943, 1943j or 1943ua)
+# from /roms/arcade/1943 and 1943kai.zip from /roms/arcade/1943KAI, zipped or
+# unzipped; updateAll installs both. Without PSRAM a game is copied into flash
+# the first time it is started.
 picoOutRun;outrun;OutRun
 picoPhoenix;phoenix;Phoenix
 picoMoonCresta;mooncresta;Moon Cresta
 picoGalagino;galagino;Galagino
 picoDragonsLair;dragonslair;Dragon's Lair
+pico1943;1943;1943/1943 Kai

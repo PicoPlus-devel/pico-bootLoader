@@ -79,6 +79,7 @@ its own repository and identified by the program name embedded in its `.uf2`.
 | **Moon Cresta** (arcade) | `picoMoonCresta` | [pico-mooncresta](https://github.com/PicoPlus-devel/pico-mooncresta) | <img width="280" alt="Moon Cresta menu artwork" src="emu/assets/themes/0/mooncresta.png" /> |
 | **Galagino** (arcade: Pac-Man, Galaga, Donkey Kong, Frogger, Dig Dug, 1942) | `picoGalagino` | [pico-galagino](https://github.com/PicoPlus-devel/pico-galagino) | <img width="280" alt="Galagino menu artwork" src="emu/assets/themes/0/galagino.png" /> |
 | **Dragon's Lair** (arcade, laserdisc) | `picoDragonsLair` | [pico-dragonslair](https://github.com/PicoPlus-devel/pico-dragonslair) | <img width="280" alt="Dragon's Lair menu artwork" src="emu/assets/themes/0/dragonslair.png" /> |
+| **1943** (arcade: 1943 and 1943 Kai) | `pico1943` | [pico-1943](https://github.com/PicoPlus-devel/pico-1943) | <img width="280" alt="1943 menu artwork" src="emu/assets/themes/0/1943.png" /> |
 
 The following emulators need a bios in `/bios` on SD:
 - *Nintendo Entertainment System* : For Famicom Disk System games `fds-bios.rom`
@@ -179,6 +180,20 @@ holds in its `ld2pico` folder; it is about 260 MB. See
 [ld2pico/README.md](ld2pico/README.md), and for other systems the
 [pico-dragonslair README](https://github.com/PicoPlus-devel/pico-dragonslair#game-data).
 Missing files are named on screen.
+
+*1943* is the sixth **Arcade** entry: an emulation of Capcom's 1987 arcade
+board, which plays *1943: The Battle of Midway* and *1943 Kai: Midway Kaisen*.
+It runs on every board the loader supports and needs neither PSRAM nor HSTX.
+The games are copyright Capcom and are not distributed with the bundle: copy
+MAME's `1943.zip` to `/roms/arcade/1943` and `1943kai.zip` to
+`/roms/arcade/1943KAI` on the SD card, either as they are or unzipped. Of 1943,
+the US, European and Japanese sets are all accepted; a merged `1943.zip` holds
+them all. When both games are on the card, a menu chooses one at start-up, and
+*Quit game* in the settings menu returns to it. On boards without PSRAM a game
+is copied into flash the first time it is started; when the loader has since
+written another application over that flash, the copy is made again, which
+takes a few seconds. Missing files are named on screen. It has the same *Tate
+mode* setting as Phoenix.
 
 The ROM sets of the Arcade entries can also be installed with `updateAll`, which
 the SD-card archive holds in its `updateAll` folder: `updateAll.exe` for
@@ -1186,6 +1201,10 @@ gh release upload v0.2.1 releases/pico-bootLoader_sdcard.zip
 - The six games of *Galagino* are emulated by
   [Galagino](https://github.com/harbaum/galagino), by Till Harbaum, of which
   [pico-galagino](https://github.com/PicoPlus-devel/pico-galagino) is a port.
+- *1943* follows MAME's 1943 driver, and the research of
+  [Liu Szuping](https://github.com/szuping) for an earlier RP2350 port of the
+  game served as a reference; see the
+  [pico-1943 README](https://github.com/PicoPlus-devel/pico-1943#credits-and-licence).
 - [updateAll](updateAll/README.md) downloads missing ROM zips from
   [ArcadeROMsDB_MiSTer](https://github.com/zakk4223/ArcadeROMsDB_MiSTer), a
   database maintained by [zakk4223](https://github.com/zakk4223) for the MiSTer

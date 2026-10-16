@@ -59,10 +59,14 @@ Three equivalent implementations are provided: `updateAll.exe`, a Windows progra
 | `vanguard` | pico-galagino | `vanguard.zip` | `/roms/arcade/VANGUARD` |
 | `xevious` | pico-galagino | `xevious.zip` | `/roms/arcade/XEVIOUS` |
 | `dlair` | pico-dragonslair | `dlair.zip` (revision F2) | `/roms/arcade/DLAIR` |
+| `1943` | pico-1943 | `1943.zip` (merged), or `1943u.zip` with `1943.zip` | `/roms/arcade/1943` |
+| `1943kai` | pico-1943 | `1943kai.zip` | `/roms/arcade/1943KAI` |
 
 pico-dragonslair also needs its laserdisc, the file `lair.pld`, which updateAll does not install: it is converted from MAME's `dlair.chd` with `ld2pico.exe`, which the SD-card archive holds in the `ld2pico` folder next to this one. See [ld2pico/README.md](../ld2pico/README.md), and for other systems the [pico-dragonslair README](https://github.com/PicoPlus-devel/pico-dragonslair#game-data).
 
 pico-galagino plays the Midway Pac-Man, MAME's `pacman`, a clone of `puckman`. A merged `puckman.zip`, which the download database provides, holds all of its files; with a split set, have `pacman.zip` and `puckman.zip` in the zip folder together. The same holds for the other games that use a clone: Bagman (`bagmanm2`), Bump 'n' Jump (`bnjm`, a clone of `brubber`), Donkey Kong Jr. (`dkongjrj`), Fantasy (`fantasy`, now `fantasyu` in MAME) and The Glob (`theglobp`, a clone of `suprglob`). Phoenix and Moon Cresta share their folders and sets with pico-phoenix and pico-mooncresta.
+
+pico-1943 plays four versions of 1943; updateAll installs the US one, MAME's `1943u` (revision C), a clone of `1943`. A merged `1943.zip`, which the download database provides, holds all of its files; with a split set, have `1943u.zip` and `1943.zip` in the zip folder together. pico-1943's table of sets, `c1943/c1943_sets.c`, is the source of the two entries: `tools/mkupdateall.py` in pico-1943 writes them into `updateAll.json`.
 
 The pico-galagino sets are those of the games of GalaginoPlus; they are installed in full even while the application does not play all of them yet. Its table of sets, `galagino/gal_games.c`, is the source of these entries: `tools/mkupdateall.py` in pico-galagino writes them into `updateAll.json`.
 
