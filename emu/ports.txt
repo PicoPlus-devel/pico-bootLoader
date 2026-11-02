@@ -9,3 +9,4 @@ doom_tiny;doom;Doom!;doom/doom1-whx-bootloader.uf2
 doom_tiny_full;doom_full;Doom Full!
 duke3d_game;duke3d;Duke Nukem 3D
 pico-quake2;quake2;Quake II
+pico-lutionX;diablo;Diablo

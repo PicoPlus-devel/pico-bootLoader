@@ -340,6 +340,89 @@ write("card_data_partial/roms/SIGMA/base/s1", sigma["base/s1"])
 write("card_data_partial/roms/SIGMA/readme.txt", b"edited")
 
 # ---------------------------------------------------------------------------
+# BIOS files: game data in form, some built from their download
+# ---------------------------------------------------------------------------
+
+
+def bios_entry(bid, url, dest, files):
+    """files: name -> (contents, extra keys of that file)."""
+    entry = data_entry(bid, url, dest, {k: v for k, (v, _) in files.items()})
+    entry["name"] = "Test BIOS"
+    for f in entry["files"]:
+        f.update(files[f["name"]][1])
+    return entry
+
+
+bios = []
+
+# A plain file, installed under another name. Its name has brackets, as the
+# Sega CD BIOSes of the MiSTer BIOS database: PowerShell 5.1 takes them for a
+# wildcard pattern where a path is not literal.
+b_plain = blob(1024)
+serve("bios/[BIOS] o2.bin", b_plain)
+bios.append(bios_entry("b_plain", f"{URL}/bios/%5BBIOS%5D%20o2.bin", "/bios",
+                       {"o2rom.bin": (b_plain, {})}))
+write("zips_bios/[BIOS] o2.bin", b_plain)
+
+# A zip of several files, the wanted one among others.
+b_zip = {"cd_us.md": blob(2048), "cd_eu.md": blob(2048)}
+bios.append(bios_entry("b_zip", serve("bios/MegaCD.zip", zip_bytes(
+    [("Other.md", blob(2048))] + [(f"bios/{k}", v) for k, v in b_zip.items()])),
+    "/bios", {k: (v, {}) for k, v in b_zip.items()}))
+
+# One file, two parts of it cut out, as the TI-99/4A console ROM and GROM
+# come from MiSTer's boot0.rom; the offsets with and without "0x".
+boot = blob(3000)
+bios.append(bios_entry("b_slice", serve("bios/boot0.rom", boot), "/bios",
+                       {"rom.bin": (boot[0x200:0x600], {"offset": "0x200"}),
+                        "grom.bin": (boot[0x800:0xA00], {"offset": "800"})}))
+write("zips_bios/boot0.rom", boot)
+
+# A part with another CRC; a part that runs past the end of the file; and one
+# that starts past it.
+boot1 = blob(2000)
+bios.append(bios_entry("b_slicebad", serve("bios/boot1.rom", boot1), "/bios/bad",
+                       {"x.bin": (blob(256), {"offset": "0x10"}),
+                        "y.bin": (blob(200), {"offset": "0x76C"}),
+                        "z.bin": (blob(16), {"offset": "0x10000"})}))
+
+# Two entries of a zip joined, as the TI disk controller ROM from MAME's
+# ti99_fdc: the root before a subfolder, a part only in a subfolder, and
+# names in another case.
+fdc = (blob(400), blob(500))
+bios.append(bios_entry("b_join", serve("bios/fdc.zip", zip_bytes(
+    [("sub/fdc.u26", blob(400)), ("FDC.U26", fdc[0]), ("dsr/fdc.u27", fdc[1]),
+     ("readme.txt", b"fdc")])), "/bios",
+    {"disk.bin": (fdc[0] + fdc[1], {"parts": ["fdc.u26", "FDC.u27"]})}))
+make_zip("zips_bios/fdc.zip", [("fdc.u26", fdc[0]), ("fdc.u27", fdc[1])])
+
+# A part missing; the parts in the wrong order; and a part that is damaged.
+bios.append(bios_entry("b_joinmissing", serve("bios/fdc2.zip", zip_bytes(
+    [("fdc.u26", fdc[0])])), "/bios/missing",
+    {"disk.bin": (fdc[0] + fdc[1], {"parts": ["fdc.u26", "fdc.u27"]})}))
+bios.append(bios_entry("b_joinbad", serve("bios/fdc3.zip", zip_bytes(
+    [("fdc.u26", fdc[0]), ("fdc.u27", fdc[1])])), "/bios/bad",
+    {"disk.bin": (fdc[0] + fdc[1], {"parts": ["fdc.u27", "fdc.u26"]})}))
+damaged = make_zip("srv/bios/fdc4.zip", [("fdc.u26", fdc[0]), ("fdc.u27", fdc[1])],
+                   zipfile.ZIP_STORED)
+corrupt_entry(damaged, "fdc.u27")
+bios.append(bios_entry("b_joindamaged", f"{URL}/bios/fdc4.zip", "/bios/damaged",
+                       {"disk.bin": (fdc[0] + fdc[1], {"parts": ["fdc.u26", "fdc.u27"]})}))
+
+# "offset" and "parts" only mean something in "bios": in "data" they are
+# ignored, as older copies of updateAll ignore them everywhere.
+gdata = data_entry("g_offset", serve("bios/g.bin", boot), "/roms/G", {"g.bin": boot})
+gdata["files"][0]["offset"] = "0x200"
+
+with open(os.path.join(OUT, "cfg_bios.json"), "w") as f:
+    json.dump({"databases": [f"{URL}/db.json.zip"], "cores": [remote[0]], "data": [gdata],
+               "bios": bios}, f, indent=2)
+
+# A card with one part of b_slice on it, and the other wrong.
+write("card_bios_partial/bios/rom.bin", boot[0x200:0x600])
+write("card_bios_partial/bios/grom.bin", b"edited")
+
+# ---------------------------------------------------------------------------
 # Invalid configurations
 # ---------------------------------------------------------------------------
 
@@ -381,3 +464,30 @@ bad("data_uf2_type", {"cores": [good], "data": [dict(good_data, uf2="0x10200000"
 bad("data_uf2_nofamily", {"cores": [good], "data": [dict(good_data, uf2={"address": "0x10200000"})]})
 bad("data_uf2_big", {"cores": [good], "data": [dict(good_data, uf2={"address": "100000000",
                                                                     "family": "0"})]})
+
+good_bios = data_entry("b", "http://x/b.bin", "/bios", {"b.bin": b"b"})
+
+
+def bios_file(**keys):
+    return dict(good_bios, files=[dict(good_bios["files"][0], **keys)])
+
+
+bad("bios_type", {"cores": [good], "bios": {"b": good_bios}})
+bad("bios_reserved", {"cores": [dict(good, id="Bios")]})
+bad("bios_reserved_data", {"cores": [good], "data": [dict(good_data, id="bios")]})
+bad("bios_dup_id", {"cores": [good], "data": [good_data], "bios": [dict(good_bios, id="D")]})
+bad("bios_offset", {"cores": [good], "bios": [bios_file(offset="xyz")]})
+bad("bios_offset_type", {"cores": [good], "bios": [bios_file(offset=16)]})
+bad("bios_offset_null", {"cores": [good], "bios": [bios_file(offset=None)]})
+bad("bios_parts_type", {"cores": [good], "bios": [bios_file(parts="a.u1")]})
+bad("bios_parts_empty", {"cores": [good], "bios": [bios_file(parts=[])]})
+bad("bios_parts_name", {"cores": [good], "bios": [bios_file(parts=["a.u1", "sub/b.u2"])]})
+bad("bios_parts_item", {"cores": [good], "bios": [bios_file(parts=["a.u1", 2])]})
+bad("bios_offset_parts", {"cores": [good], "bios": [dict(good_bios, files=[
+    {"name": "x", "size": 1, "crc": "0", "offset": "0"},
+    {"name": "y", "size": 1, "crc": "0", "parts": ["a"]}])]})
+bad("bios_offset_uf2", {"cores": [good], "bios": [dict(bios_file(offset="0"),
+                                                      uf2={"address": "0", "family": "0"})]})
+bad("bios_parts_uf2", {"cores": [good], "bios": [dict(bios_file(parts=["a"]),
+                                                     uf2={"address": "0", "family": "0"})]})
+bad("bios_slash", {"cores": [good], "bios": [bios_file(name="sub/../b.bin")]})

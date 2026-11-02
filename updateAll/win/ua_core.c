@@ -380,10 +380,14 @@ static const char *str_field(const cJSON *obj, const char *key)
     return cJSON_IsString(v) ? v->valuestring : NULL;
 }
 
-/* One entry of "cores", or of "data" when is_data is set. */
-static int parse_core(const cJSON *d, int is_data, ua_core *c, strv *ids, const char *path,
+enum { KIND_CORES, KIND_DATA, KIND_BIOS };
+
+/* One entry of "cores", "data" or "bios", as kind says; a BIOS entry has the
+   form of game data. */
+static int parse_core(const cJSON *d, int kind, ua_core *c, strv *ids, const char *path,
                       char *err, size_t errlen)
 {
+    int is_data = kind != KIND_CORES;
     const char *cid = str_field(d, "id");
     if (!cid)
         cid = "?";
@@ -403,6 +407,10 @@ static int parse_core(const cJSON *d, int is_data, ua_core *c, strv *ids, const 
                 "strings, 'zips' and 'files' lists", path, cid);
         return -1;
     }
+    if (ieq(cid, "bios")) {
+        set_err(err, errlen, "%s: core '%s' has a reserved id", path, cid);
+        return -1;
+    }
     for (int i = 0; i < ids->n; i++) {
         if (ieq(ids->v[i], cid)) {
             set_err(err, errlen, "%s: core '%s' is defined twice", path, cid);
@@ -413,6 +421,7 @@ static int parse_core(const cJSON *d, int is_data, ua_core *c, strv *ids, const 
     c->id = xstrdup(cid);
     c->name = xstrdup(name);
     c->set = xstrdup(str_field(d, "set") ? str_field(d, "set") : "");
+    c->bios = kind == KIND_BIOS;
 
     strv zv = { 0 };
     if (is_data) {
@@ -542,14 +551,59 @@ static int parse_core(const cJSON *d, int is_data, ua_core *c, strv *ids, const 
             return -1;
         }
         ua_file *uf = &c->files[c->nfiles];
+        memset(uf, 0, sizeof *uf);
         if (parse_crc(cJSON_GetObjectItemCaseSensitive(f, "crc"), &uf->crc) ||
             parse_int(cJSON_GetObjectItemCaseSensitive(f, "size"), &uf->size)) {
             set_err(err, errlen, "%s: core '%s', file '%s' needs a numeric 'size' and a "
                     "hexadecimal 'crc'", path, cid, fname);
             return -1;
         }
+        /* A BIOS file may be part of a download that is one file, or the
+           entries of a zip joined; older copies do not know either. */
+        const cJSON *offset = cJSON_GetObjectItemCaseSensitive(f, "offset");
+        if (kind == KIND_BIOS && offset) {
+            if (parse_crc(offset, &uf->offset)) {
+                set_err(err, errlen, "%s: core '%s', file '%s' needs a hexadecimal 'offset'",
+                        path, cid, fname);
+                return -1;
+            }
+            uf->has_offset = 1;
+        }
+        const cJSON *join = cJSON_GetObjectItemCaseSensitive(f, "parts");
+        if (kind == KIND_BIOS && join) {
+            strv pv = { 0 };
+            int ok = cJSON_IsArray(join) && cJSON_GetArraySize(join) > 0;
+            const cJSON *p;
+            if (ok) {
+                cJSON_ArrayForEach(p, join) {
+                    if (!cJSON_IsString(p) || bad_name(p->valuestring)) {
+                        ok = 0;
+                        break;
+                    }
+                    strv_push(&pv, xstrdup(p->valuestring));
+                }
+            }
+            if (!ok) {
+                set_err(err, errlen, "%s: core '%s', file '%s' has an invalid 'parts' list",
+                        path, cid, fname);
+                strv_free(&pv);
+                return -1;
+            }
+            uf->parts = pv.v;
+            uf->nparts = pv.n;
+        }
         uf->name = xstrdup(fname);
         c->nfiles++;
+    }
+    int joined = 0;
+    for (int i = 0; i < c->nfiles; i++) {
+        c->sliced |= c->files[i].has_offset;
+        joined |= c->files[i].nparts > 0;
+    }
+    if (c->sliced + joined + c->uf2 > 1) {
+        set_err(err, errlen, "%s: core '%s' cannot combine 'offset', 'parts' and 'uf2'", path,
+                cid);
+        return -1;
     }
     return 0;
 }
@@ -580,14 +634,21 @@ int ua_config_parse(const char *text, size_t len, const char *path, const char *
         set_err(err, errlen, "%s: 'data' must be a list", path);
         goto done;
     }
-    cfg->cores = xmalloc((size_t)(cJSON_GetArraySize(cores) + cJSON_GetArraySize(data)) *
-                         sizeof *cfg->cores);
-    for (int is_data = 0; is_data < 2; is_data++) {
-        const cJSON *list = is_data ? data : cores, *d;
+    /* The BIOS files, in the form of game data; a key of its own for the
+       same reason, and so that they can be selected as one set. */
+    const cJSON *bios = cJSON_GetObjectItemCaseSensitive(root, "bios");
+    if (bios && !cJSON_IsArray(bios)) {
+        set_err(err, errlen, "%s: 'bios' must be a list", path);
+        goto done;
+    }
+    cfg->cores = xmalloc((size_t)(cJSON_GetArraySize(cores) + cJSON_GetArraySize(data) +
+                                  cJSON_GetArraySize(bios)) * sizeof *cfg->cores);
+    for (int kind = KIND_CORES; kind <= KIND_BIOS; kind++) {
+        const cJSON *list = kind == KIND_BIOS ? bios : kind == KIND_DATA ? data : cores, *d;
         cJSON_ArrayForEach(d, list) {
             ua_core *c = &cfg->cores[cfg->ncores++];
             memset(c, 0, sizeof *c);
-            if (parse_core(d, is_data, c, &ids, path, err, errlen))
+            if (parse_core(d, kind, c, &ids, path, err, errlen))
                 goto done;
         }
     }
@@ -678,8 +739,10 @@ void ua_config_free(ua_config *cfg)
         free_list(c->zips);
         free_list(c->dest_parts);
         free(c->dest_shown);
-        for (int k = 0; k < c->nfiles; k++)
+        for (int k = 0; k < c->nfiles; k++) {
             free(c->files[k].name);
+            free_list(c->files[k].parts);
+        }
         free(c->files);
         free(c->url);
         free_list(c->archives);
@@ -1323,8 +1386,25 @@ typedef struct {
     unsigned char *plain;   /* a plain file's bytes, or its UF2 image; or NULL */
     size_t plain_size;
     uint32_t plain_crc;
+    char *plain_name;       /* the name of that one file, when not label: a BIOS
+                               file cut out of a download, or joined from a zip */
     char *label;    /* "x.zip", or "x.zip:INNER.ZIP", as messages name it */
 } archive;
+
+/* MemoryArchive.add(): one more archive holding just data, as name. */
+static void add_plain(archive **arcs, int *narcs, int *cap, const char *label, const char *name,
+                      unsigned char *data, size_t len)
+{
+    if (*narcs == *cap)
+        *arcs = xrealloc(*arcs, (size_t)(*cap = *cap + 8) * sizeof **arcs);
+    archive *a = &(*arcs)[(*narcs)++];
+    memset(a, 0, sizeof *a);
+    a->label = xstrdup(label);
+    a->plain = data;
+    a->plain_size = len;
+    a->plain_crc = (uint32_t)mz_crc32(MZ_CRC32_INIT, data, len);
+    a->plain_name = name ? xstrdup(name) : NULL;
+}
 
 static void put32(unsigned char *p, uint32_t v)
 {
@@ -1432,7 +1512,7 @@ static void open_archives(const ua_core *core, const char *path, const char *nam
     archive *a = &(*arcs)[*narcs];
     memset(a, 0, sizeof *a);
     a->label = xstrdup(name);
-    if (core->url && (core->uf2 || !is_zip_file(path))) {
+    if (core->url && (core->uf2 || core->sliced || !is_zip_file(path))) {
         char *data, *why;
         size_t len;
         if (read_file(path, &data, &len, &why)) {
@@ -1451,7 +1531,21 @@ static void open_archives(const ua_core *core, const char *path, const char *nam
             a->plain_size = len;
         }
         a->plain_crc = (uint32_t)mz_crc32(MZ_CRC32_INIT, a->plain, a->plain_size);
-        (*narcs)++;
+        int whole = (*narcs)++;
+        /* A BIOS file with an offset is that part of the download, under its
+           own name. */
+        for (int i = 0; i < core->nfiles; i++) {
+            const ua_file *f = &core->files[i];
+            if (!f->has_offset)
+                continue;
+            const archive *w = &(*arcs)[whole];
+            size_t from = f->offset < w->plain_size ? f->offset : w->plain_size;
+            size_t want = f->size > 0 ? (size_t)f->size : 0;
+            size_t n = w->plain_size - from < want ? w->plain_size - from : want;
+            unsigned char *part = xmalloc(n + 1);
+            memcpy(part, w->plain + from, n);
+            add_plain(arcs, narcs, cap, name, base_name(f->name), part, n);
+        }
         return;
     }
     mz_zip_zero_struct(&a->za);
@@ -1504,6 +1598,79 @@ static void open_archives(const ua_core *core, const char *path, const char *nam
     }
 }
 
+/* The files of arcs[from..to) that are not folders, appended to *entries. */
+static void index_archives(archive *arcs, int from, int to, zip_entry **entries,
+                           int *nentries, int *cap)
+{
+    for (int a = from; a < to; a++) {
+        mz_uint n = arcs[a].plain ? 1 : mz_zip_reader_get_num_files(&arcs[a].za);
+        for (mz_uint i = 0; i < n; i++) {
+            mz_zip_archive_file_stat st;
+            if (*nentries == *cap)
+                *entries = xrealloc(*entries, (size_t)(*cap = *cap ? *cap * 2 : 64) *
+                                                  sizeof **entries);
+            zip_entry *e = &(*entries)[*nentries];
+            if (arcs[a].plain) {
+                e->size = (long long)arcs[a].plain_size;
+                e->crc = arcs[a].plain_crc;
+                e->name = xstrdup(arcs[a].plain_name ? arcs[a].plain_name : arcs[a].label);
+            } else {
+                if (!mz_zip_reader_file_stat(&arcs[a].za, i, &st) || st.m_is_directory)
+                    continue;
+                e->size = (long long)st.m_uncomp_size;
+                e->crc = st.m_crc32;
+                e->name = xstrdup(st.m_filename);
+            }
+            (*nentries)++;
+            e->arch = a;
+            e->index = i;
+            e->in_subfolder = strchr(e->name, '/') || strchr(e->name, '\\');
+            e->base = e->name;
+            for (const char *s = e->name; *s; s++)
+                if (*s == '/' || *s == '\\')
+                    e->base = s + 1;
+        }
+    }
+}
+
+/* join_parts(): the BIOS file f, made of the entries that its "parts" name,
+   joined in that order, as one more archive holding just that file; nothing
+   when a part is not there or cannot be read, which goes to res->errors. */
+static void join_parts(const ua_file *f, archive **arcs, int *narcs, int *cap,
+                       const zip_entry *entries, int nentries, result *res)
+{
+    unsigned char *data = xmalloc(1);
+    size_t len = 0;
+    for (int p = 0; p < f->nparts; p++) {
+        const char *part = f->parts[p];
+        const zip_entry *best = NULL;
+        for (int k = 0; k < nentries; k++)
+            if (ieq(entries[k].base, part) && (!best || rank(&entries[k], part) < rank(best, part)))
+                best = &entries[k];
+        if (!best) {
+            strv_push(&res->errors, fmt("%s holds no %s", (*arcs)[0].label, part));
+            free(data);
+            return;
+        }
+        archive *a = &(*arcs)[best->arch];
+        size_t n = a->plain_size;
+        void *bytes = a->plain;
+        if (!a->plain && !(bytes = mz_zip_reader_extract_to_heap(&a->za, best->index, &n, 0))) {
+            char *why = extract_error(&a->za, best->name);
+            strv_push(&res->errors, fmt("%s:%s: %s", a->label, best->name, why));
+            free(why);
+            free(data);
+            return;
+        }
+        data = xrealloc(data, len + n + 1);
+        memcpy(data + len, bytes, n);
+        len += n;
+        if (!a->plain)
+            mz_free(bytes);
+    }
+    add_plain(arcs, narcs, cap, (*arcs)[0].label, base_name(f->name), data, len);
+}
+
 static void install_core(const ua_core *core, const char *zip_dir, const strv *listing,
                          const char *sd_root, int dry_run, result *res, const ua_hooks *h)
 {
@@ -1532,34 +1699,12 @@ static void install_core(const ua_core *core, const char *zip_dir, const strv *l
 
     zip_entry *entries = NULL;
     int nentries = 0, cap = 0;
-    for (int a = 0; a < narcs; a++) {
-        mz_uint n = arcs[a].plain ? 1 : mz_zip_reader_get_num_files(&arcs[a].za);
-        for (mz_uint i = 0; i < n; i++) {
-            mz_zip_archive_file_stat st;
-            if (nentries == cap)
-                entries = xrealloc(entries, (size_t)(cap = cap ? cap * 2 : 64) * sizeof *entries);
-            zip_entry *e = &entries[nentries];
-            if (arcs[a].plain) {
-                e->size = (long long)arcs[a].plain_size;
-                e->crc = arcs[a].plain_crc;
-                e->name = xstrdup(arcs[a].label);
-            } else {
-                if (!mz_zip_reader_file_stat(&arcs[a].za, i, &st) || st.m_is_directory)
-                    continue;
-                e->size = (long long)st.m_uncomp_size;
-                e->crc = st.m_crc32;
-                e->name = xstrdup(st.m_filename);
-            }
-            nentries++;
-            e->arch = a;
-            e->index = i;
-            e->in_subfolder = strchr(e->name, '/') || strchr(e->name, '\\');
-            e->base = e->name;
-            for (const char *s = e->name; *s; s++)
-                if (*s == '/' || *s == '\\')
-                    e->base = s + 1;
-        }
-    }
+    index_archives(arcs, 0, narcs, &entries, &nentries, &cap);
+    int opened = narcs;
+    for (int i = 0; i < core->nfiles && opened; i++)
+        if (core->files[i].nparts)
+            join_parts(&core->files[i], &arcs, &narcs, &acap, entries, nentries, res);
+    index_archives(arcs, opened, narcs, &entries, &nentries, &cap);
 
     char *dest = dest_dir(core, sd_root);
     for (int i = 0; i < core->nfiles && !is_cancelled(h); i++) {
@@ -1639,6 +1784,7 @@ static void install_core(const ua_core *core, const char *zip_dir, const strv *l
             mz_zip_reader_end(&arcs[a].za);
         mz_free(arcs[a].mem);
         free(arcs[a].plain);
+        free(arcs[a].plain_name);
         free(arcs[a].label);
     }
     free(arcs);
@@ -1799,9 +1945,12 @@ int ua_run(const ua_config *cfg, const ua_options *opt, const ua_hooks *h)
 
     if (opt->core_ids && opt->core_ids[0]) {
         requested = 1;
+        int any_bios = 0;
+        for (int i = 0; i < cfg->ncores; i++)
+            any_bios |= cfg->cores[i].bios;
         strv unknown = { 0 };
         for (const char **id = opt->core_ids; *id; id++) {
-            int known = 0;
+            int known = any_bios && ieq(*id, "bios");      /* every BIOS file */
             for (int i = 0; i < cfg->ncores && !known; i++)
                 known = ieq(cfg->cores[i].id, *id);
             if (!known) {
@@ -1825,7 +1974,7 @@ int ua_run(const ua_config *cfg, const ua_options *opt, const ua_hooks *h)
         }
         for (int i = 0; i < cfg->ncores; i++)
             for (const char **id = opt->core_ids; *id; id++)
-                if (ieq(cfg->cores[i].id, *id)) {
+                if (ieq(cfg->cores[i].id, *id) || (cfg->cores[i].bios && ieq(*id, "bios"))) {
                     cores[ncores++] = &cfg->cores[i];
                     break;
                 }

@@ -13,6 +13,12 @@ file to install; its files may go into subfolders, and zips inside the
 download that it names under "archives" are searched as well. An entry with
 "uf2" turns the downloaded file into a UF2 image for the loader to flash.
 
+The "bios" list adds the BIOS files that the emulators need, in the same form
+as "data". The Windows program shows them as one set, and --core bios selects
+them together. A BIOS file may be built from its download rather than taken
+from it as is: "offset" cuts it out of a download that is one file, and
+"parts" joins entries of a zip.
+
 A zip that is not in the folder is downloaded into it first, from the
 databases listed in updateAll.json or given with --db; without --zips, into a
 temporary folder that is removed afterwards. A database uses the format of the
@@ -119,17 +125,27 @@ def parse_config(text, path, config_dir):
     data = cfg.get("data", [])
     if not isinstance(data, list):
         raise ConfigError(f"{path}: 'data' must be a list")
+    # "bios" holds the BIOS files, in the form of game data; a key of its own
+    # for the same reason, and so that they can be selected as one set.
+    bios = cfg.get("bios", [])
+    if not isinstance(bios, list):
+        raise ConfigError(f"{path}: 'bios' must be a list")
 
     ids = set()
-    for core, is_data in [(c, False) for c in cores] + [(d, True) for d in data]:
+    for core, kind in ([(c, "cores") for c in cores] + [(d, "data") for d in data] +
+                       [(b, "bios") for b in bios]):
+        is_data = kind != "cores"
         cid = core.get("id", "?")
         for key in ("id", "name", "url" if is_data else "zips", "destination", "files"):
             if key not in core:
                 raise ConfigError(f"{path}: core '{cid}' has no '{key}'")
+        if cid.lower() == "bios":
+            raise ConfigError(f"{path}: core '{cid}' has a reserved id")
         if cid.lower() in ids:
             raise ConfigError(f"{path}: core '{cid}' is defined twice")
         ids.add(cid.lower())
 
+        core["_bios"] = kind == "bios"
         core["_url"] = None
         core["_archives"] = []
         core["_uf2"] = None
@@ -183,6 +199,27 @@ def parse_config(text, path, config_dir):
             except (KeyError, TypeError, ValueError):
                 raise ConfigError(f"{path}: core '{cid}', file '{f['name']}' needs "
                                   "a numeric 'size' and a hexadecimal 'crc'")
+            # A BIOS file may be part of a download that is one file, or the
+            # entries of a zip joined; older copies do not know either.
+            f["_offset"] = None
+            f["_join"] = []
+            if kind == "bios" and "offset" in f:
+                try:
+                    f["_offset"] = _hex32(f["offset"])
+                except (TypeError, ValueError):
+                    raise ConfigError(f"{path}: core '{cid}', file '{f['name']}' needs "
+                                      "a hexadecimal 'offset'")
+            if kind == "bios" and "parts" in f:
+                join = f["parts"]
+                if (not isinstance(join, list) or not join or
+                        any(not isinstance(p, str) or _bad_name(p) for p in join)):
+                    raise ConfigError(f"{path}: core '{cid}', file '{f['name']}' has "
+                                      "an invalid 'parts' list")
+                f["_join"] = join
+        core["_sliced"] = any(f["_offset"] is not None for f in core["files"])
+        joined = any(f["_join"] for f in core["files"])
+        if core["_sliced"] + joined + (core["_uf2"] is not None) > 1:
+            raise ConfigError(f"{path}: core '{cid}' cannot combine 'offset', 'parts' and 'uf2'")
 
     databases = cfg.get("databases", [])
     if not isinstance(databases, list) or not all(isinstance(d, str) for d in databases):
@@ -195,7 +232,7 @@ def parse_config(text, path, config_dir):
         config_url = None
     elif not (isinstance(config_url, str) and _is_url(config_url)):
         raise ConfigError(f"{path}: 'config_url' must be an http or https URL")
-    return cores + data, databases, config_url
+    return cores + data + bios, databases, config_url
 
 
 def fetch_config(url, config_dir):
@@ -408,30 +445,69 @@ def to_uf2(data, address, family):
     return bytes(out)
 
 
-class PlainFile:
-    """A downloaded game-data file that is not a zip, opened as if it were a
-    zip holding just itself, so that install_core treats both alike. With a
-    (address, family) for uf2, it holds the file as a UF2 image instead."""
+class MemoryArchive:
+    """Files held in memory, opened as if they were a zip holding them, so
+    that install_core treats them like the entries of a zip."""
 
-    def __init__(self, path, uf2=None):
-        with open(path, "rb") as f:
-            self.data = f.read()
-        if uf2:
-            self.data = to_uf2(self.data, *uf2)
-        self.filename = path
-        self.label = os.path.basename(path)
-        self.info = zipfile.ZipInfo(self.label)
-        self.info.file_size = len(self.data)
-        self.info.CRC = zlib.crc32(self.data) & 0xFFFFFFFF
+    def __init__(self, label):
+        self.label = label
+        self.entries = []
+
+    def add(self, name, data):
+        info = zipfile.ZipInfo(name)
+        info.file_size = len(data)
+        info.CRC = zlib.crc32(data) & 0xFFFFFFFF
+        self.entries.append((info, data))
 
     def infolist(self):
-        return [self.info]
+        return [info for info, _ in self.entries]
 
     def read(self, info):
-        return self.data
+        return next(data for i, data in self.entries if i is info)
 
     def close(self):
         pass
+
+
+class PlainFile(MemoryArchive):
+    """A downloaded game-data file that is not a zip, held as if it were a
+    zip holding just itself. With a (address, family) for uf2, it holds the
+    file as a UF2 image instead. A BIOS file with an offset is held as well,
+    under its own name, as that part of the download."""
+
+    def __init__(self, path, uf2=None, files=()):
+        with open(path, "rb") as f:
+            data = f.read()
+        if uf2:
+            data = to_uf2(data, *uf2)
+        super().__init__(os.path.basename(path))
+        self.add(self.label, data)
+        for f in files:
+            if f["_offset"] is not None:
+                self.add(f["_parts"][-1], data[f["_offset"]:f["_offset"] + f["_size"]])
+
+
+def join_parts(f, archives, res):
+    """The BIOS file f, made of the entries that its "parts" name, joined in
+    that order, as an archive holding just that file; None when a part is not
+    there or cannot be read, which is added to res.errors."""
+    data = b""
+    for part in f["_join"]:
+        found = [(zf, i) for zf in archives for i in zf.infolist()
+                 if not i.is_dir() and
+                 i.filename.replace("\\", "/").rsplit("/", 1)[-1].lower() == part.lower()]
+        if not found:
+            res.errors.append(f"{archives[0].label} holds no {part}")
+            return None
+        zf, info = min(found, key=lambda c: entry_rank(c[1], part))
+        try:
+            data += zf.read(info)
+        except (OSError, zipfile.BadZipFile, NotImplementedError, zlib.error) as e:
+            res.errors.append(f"{zf.label}:{info.filename}: {e}")
+            return None
+    joined = MemoryArchive(archives[0].label)
+    joined.add(f["_parts"][-1], data)
+    return joined
 
 
 def uf2_note(name, address, dry_run):
@@ -444,9 +520,9 @@ def open_archives(core, path, res, dry_run):
     the zips inside it that the core names in "archives". Problems are added
     to res.errors, and a conversion to res.notes."""
     name = os.path.basename(path)
-    if core["_url"] and (core["_uf2"] or not zipfile.is_zipfile(path)):
+    if core["_url"] and (core["_uf2"] or core["_sliced"] or not zipfile.is_zipfile(path)):
         try:
-            plain = PlainFile(path, core["_uf2"])
+            plain = PlainFile(path, core["_uf2"], core["files"])
         except OSError as e:
             res.errors.append(f"cannot open {name}: {e}")
             return []
@@ -508,6 +584,12 @@ def install_core(core, zip_dir, zip_listing, sd_root, dry_run):
     try:
         for p in zip_paths:
             archives += open_archives(core, p, res, dry_run)
+        opened = list(archives)
+        for f in core["files"]:
+            if f["_join"] and opened:
+                joined = join_parts(f, opened, res)
+                if joined:
+                    archives.append(joined)
 
         index = {}
         by_name = {}
@@ -600,8 +682,9 @@ def main(argv=None):
                     help="root of the SD card, e.g. E:\\ or /media/user/SDCARD; "
                          "any existing folder will do")
     ap.add_argument("--core", metavar="ID", action="append",
-                    help="install only this core; repeat or separate with commas "
-                         "(default: every core in the configuration)")
+                    help="install only this core; repeat or separate with commas; "
+                         "bios selects every BIOS file (default: every core in the "
+                         "configuration)")
     ap.add_argument("--db", metavar="URL|FILE", action="append", default=[],
                     help="download database to use in addition to those in the "
                          "configuration; repeat or separate with commas")
@@ -659,12 +742,15 @@ def main(argv=None):
     if args.core:
         requested = [cid.strip().lower() for arg in args.core for cid in arg.split(",") if cid.strip()]
         known = {c["id"].lower() for c in cores}
+        if any(c["_bios"] for c in cores):
+            known.add("bios")       # every BIOS file
         unknown = [cid for cid in requested if cid not in known]
         if unknown:
             print(f"ERROR: unknown core: {', '.join(unknown)}. Configured: "
                   f"{', '.join(c['id'] for c in cores)}", file=sys.stderr)
             return 1
-        cores = [c for c in cores if c["id"].lower() in requested]
+        cores = [c for c in cores
+                 if c["id"].lower() in requested or (c["_bios"] and "bios" in requested)]
 
     if sets_from:
         print(f"Sets from:    {sets_from}")

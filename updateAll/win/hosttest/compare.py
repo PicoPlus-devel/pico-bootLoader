@@ -68,13 +68,30 @@ CASES = [
     ("data-uf2-mismatch", "--config cfg_data.json --zips {zips} --sd {card} --core omegabad", None),
     ("data-core-filter", "--config cfg_data.json --zips {zips} --sd {card} --core TAU,theta", None),
     ("data-only", "--config cfg_data.json --zips {zips} --sd {card} --core upsilon,phi,chi,psi", None),
+    ("bios-http", "--config cfg_bios.json --zips {zips} --sd {card}", None),
+    ("bios-dry-run", "--config cfg_bios.json --zips {zips} --sd {card} --dry-run", None),
+    ("bios-alias", "--config cfg_bios.json --sd {card} --core bios", None),
+    ("bios-alias-case", "--config cfg_bios.json --sd {card} --core BIOS,b_plain", None),
+    ("bios-alias-and-set", "--config cfg_bios.json --zips {zips} --sd {card} --core theta --core bios", None),
+    ("bios-one", "--config cfg_bios.json --sd {card} --core b_slice,b_join", None),
+    ("bios-again", "--config cfg_bios.json --sd {card} --core b_plain,b_zip,b_slice,b_join", "full_bios"),
+    ("bios-partial", "--config cfg_bios.json --zips {zips} --sd {card} --core b_slice", "card_bios_partial"),
+    ("bios-local", "--config cfg_bios.json --zips {fx}/zips_bios --sd {card} --no-download "
+                   "--core b_plain,b_slice,b_join", None),
+    ("bios-local-dry-run", "--config cfg_bios.json --zips {fx}/zips_bios --sd {card} --no-download "
+                           "--dry-run --core b_slice,b_join", None),
+    ("bios-alias-without-bios", "--config cfg_data.json --zips {zips} --sd {card} --core bios", None),
 ]
 CASES += [(f"bad-config-{n}", f"--config bad_{n}.json --zips {{zips}} --sd {{card}}", None)
           for n in ("syntax", "nocores", "missing_key", "twice", "dest", "dest_empty", "nozips",
                     "zipname", "filename", "crc", "size", "databases", "config_url",
                     "config_url_type", "data_type", "data_nourl", "data_url", "data_url_name",
                     "data_name", "data_archives", "data_dup_id", "data_slash_in_core",
-                    "data_uf2", "data_uf2_type", "data_uf2_nofamily", "data_uf2_big")]
+                    "data_uf2", "data_uf2_type", "data_uf2_nofamily", "data_uf2_big",
+                    "bios_type", "bios_reserved", "bios_reserved_data", "bios_dup_id",
+                    "bios_offset", "bios_offset_type", "bios_offset_null", "bios_parts_type",
+                    "bios_parts_empty", "bios_parts_name", "bios_parts_item",
+                    "bios_offset_parts", "bios_offset_uf2", "bios_parts_uf2", "bios_slash")]
 
 # Error texts that only the platform decides: a JSON parser's own wording.
 NORMALISE = [
@@ -144,6 +161,12 @@ def main():
         os.makedirs(full_data)
         subprocess.run([sys.executable, SCRIPT, "--config", "cfg_data.json", "--core",
                         "rho,sigma,tau,omega", "--sd", full_data], cwd=fx, env=env,
+                       stdout=subprocess.DEVNULL)
+        # And the card a BIOS run leaves, for "bios-again".
+        full_bios = os.path.join(fx, "full_bios")
+        os.makedirs(full_bios)
+        subprocess.run([sys.executable, SCRIPT, "--config", "cfg_bios.json", "--core",
+                        "b_plain,b_zip,b_slice,b_join", "--sd", full_bios], cwd=fx, env=env,
                        stdout=subprocess.DEVNULL)
 
         failures = 0

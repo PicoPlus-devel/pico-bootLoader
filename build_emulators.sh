@@ -99,16 +99,19 @@ declare -A REPO_OF=(
     [picoPacPlus]=pico-pacPlus
     [picosnesPlus]=pico-snesPlus
     [pico994A]=pico-994A
+    [picoC64]=pico-c64
     [picoOutRun]=pico-outrun
     [picoPhoenix]=pico-phoenix
     [picoMoonCresta]=pico-mooncresta
     [picoGalagino]=pico-galagino
     [picoDragonsLair]=pico-dragonslair
     [pico1943]=pico-1943
+    [picoSalamander]=pico-salamander
     [doom_tiny]=pico-doom
     [doom_tiny_full]=pico-doom
     [duke3d_game]=pico-duke3D
     [pico-quake2]=pico-quake2
+    [pico-lutionX]=pico-lutionX
     [colecojam]=cogliano/Adafruit_ColecoJam
 )
 
@@ -158,6 +161,13 @@ repo_name() { echo "${REPO_OF[$1]##*/}"; }
 # It needs PSRAM and 16 MB of flash, and PIO USB on both boards. Its CMake target
 # is quake2, so the UF2 it produces is quake2.uf2, not <prog>.uf2.
 #
+# pico-lutionX (Diablo, on the DevilutionX engine) ships one, pico-lutionX, for
+# boards 2 and 8, built like pico-quake2: no companion image, the game data in
+# /roms/devilutionx on the SD card, and a flash cache of level graphics above its
+# own image. It needs PSRAM and 16 MB of flash. Its CMake stops without
+# Pico-PIO-USB on both boards, although on board 2 it uses the native USB port.
+# Its CMake target is pico_lutionx, so the UF2 it produces is pico_lutionx.uf2.
+#
 # Adafruit_ColecoJam ships one, colecojam, for the Fruit Jam only. It is hosted
 # outside $GITHUB_OWNER and its tags carry no "v" prefix (1.3), which
 # latest_tag_of handles as is. Its build script fetches FatFs, Pico-PIO-USB,
@@ -173,6 +183,7 @@ declare -A SCRIPTED_BRANCH=(
     [doom_tiny_full]=main
     [duke3d_game]=fix/audio-production-rate
     [pico-quake2]=main
+    [pico-lutionX]=main
     [colecojam]=main
 )
 declare -A SCRIPTED_CLONE_OF=(
@@ -180,6 +191,7 @@ declare -A SCRIPTED_CLONE_OF=(
     [doom_tiny_full]=pico-doom-full
     [duke3d_game]=pico-duke3D
     [pico-quake2]=pico-quake2
+    [pico-lutionX]=pico-lutionX
     [colecojam]=Adafruit_ColecoJam
 )
 # The git ref each variant is actually cloned at — a tag when one exists, else
@@ -192,6 +204,7 @@ declare -A SCRIPTED_SCRIPT_FMT=(
     [doom_tiny_full]="%s-build-full-forbootloader.sh"
     [duke3d_game]="%s-build-forbootloader.sh"
     [pico-quake2]="%s-build-forbootloader.sh"
+    [pico-lutionX]="%s-build-forbootloader.sh"
     [colecojam]="%s-build-forbootloader.sh"
 )
 declare -A SCRIPTED_BUILD_FMT=(
@@ -199,16 +212,18 @@ declare -A SCRIPTED_BUILD_FMT=(
     [doom_tiny_full]="build_bl_full_%s"
     [duke3d_game]="build_bl_%s"
     [pico-quake2]="build_bl_%s"
+    [pico-lutionX]="build_bl_%s"
     [colecojam]="build_bl_%s"
 )
 # Where under the build tree the produced UF2s land. pico-doom puts them in
-# src/; pico-duke3D and pico-quake2 one level deeper, in src/pico/;
-# Adafruit_ColecoJam in the build tree itself.
+# src/; pico-duke3D, pico-quake2 and pico-lutionX one level deeper, in
+# src/pico/; Adafruit_ColecoJam in the build tree itself.
 declare -A SCRIPTED_OUT_SUBDIR=(
     [doom_tiny]="src"
     [doom_tiny_full]="src"
     [duke3d_game]="src/pico"
     [pico-quake2]="src/pico"
+    [pico-lutionX]="src/pico"
     [colecojam]="."
 )
 # The app UF2's file name in that directory, for a variant whose CMake target is
@@ -216,6 +231,7 @@ declare -A SCRIPTED_OUT_SUBDIR=(
 # It is installed as emu/<hw>/<prog>.uf2 either way.
 declare -A SCRIPTED_UF2_OF=(
     [pico-quake2]="quake2.uf2"
+    [pico-lutionX]="pico_lutionx.uf2"
 )
 # Companion DATA-family UF2 the variant must produce (emulators.txt aux_uf2
 # column), or "" when it needs none. Every per-board build script that emits one
@@ -225,24 +241,28 @@ declare -A SCRIPTED_AUX_OF=(
     [doom_tiny_full]=""
     [duke3d_game]=""
     [pico-quake2]=""
+    [pico-lutionX]=""
     [colecojam]=""
 )
 # 1 for a variant whose build resolves its toolchain through pico-extras.
-# pico-doom does (via its pico-env.sh); pico-duke3D, pico-quake2 and
-# Adafruit_ColecoJam do not, so they must still build when PICO_EXTRAS_PATH is
-# unset.
+# pico-doom does (via its pico-env.sh); pico-duke3D, pico-quake2, pico-lutionX
+# and Adafruit_ColecoJam do not, so they must still build when PICO_EXTRAS_PATH
+# is unset.
 declare -A SCRIPTED_NEEDS_EXTRAS=(
     [doom_tiny]=1
     [doom_tiny_full]=1
     [duke3d_game]=0
     [pico-quake2]=0
+    [pico-lutionX]=0
     [colecojam]=0
 )
 # 1 for a variant that needs PICO_PIO_USB_PATH on every board it builds for,
 # including boards outside PIOUSB_CONFIGS. pico-quake2 drives USB host over PIO
-# on HW_CONFIG 2 as well, and its CMake stops without Pico-PIO-USB.
+# on HW_CONFIG 2 as well, and its CMake stops without Pico-PIO-USB; pico-lutionX's
+# CMake stops without it on every board too.
 declare -A SCRIPTED_NEEDS_PIOUSB=(
     [pico-quake2]=1
+    [pico-lutionX]=1
 )
 # HW_CONFIG -> board "tag" naming the per-board build script and build tree.
 # Shared across the family: the tag is the board's canonical short name and every
@@ -266,6 +286,7 @@ declare -A SCRIPTED_HWCONFIGS=(
     [doom_tiny_full]="2 8 13 14 15"
     [duke3d_game]="2 8 13 15"
     [pico-quake2]="2 8"
+    [pico-lutionX]="2 8"
     [colecojam]="8"
 )
 
@@ -302,10 +323,16 @@ PIOUSB_CONFIGS=(7 8 9 14)
 # required because the bit-banged PicoDVI path ties the system clock to the
 # pixel clock (capped at 324 MHz, where the engine is too slow) and puts the
 # sound chain back on core0. See pico-outrun/buildAll.sh.
+#
+# picoSalamander is restricted to the same five boards, for the same reasons:
+# the machine's ROMs and data are held in PSRAM, and it runs at a fixed 384 MHz,
+# which the PicoDVI path cannot. Its CMake stops on a board without HSTX. See
+# pico-salamander/buildAll.sh.
 declare -A EXCLUDE_HWCONFIGS=(
     [picogenesisPlus]="7"
     [picosnesPlus]="1 5 6 7 9"
     [picoOutRun]="1 5 6 7 9"
+    [picoSalamander]="1 5 6 7 9"
 )
 
 die()  { echo "ERROR: $*" >&2; exit 1; }

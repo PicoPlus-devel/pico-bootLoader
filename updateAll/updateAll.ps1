@@ -16,6 +16,12 @@
     with "uf2" turns the downloaded file into a UF2 image for the loader to
     flash.
 
+    The "bios" list adds the BIOS files that the emulators need, in the same
+    form as "data". The Windows program shows them as one set, and -Core bios
+    selects them together. A BIOS file may be built from its download rather
+    than taken from it as is: "offset" cuts it out of a download that is one
+    file, and "parts" joins entries of a zip.
+
     A zip that is not in the folder is downloaded into it first, from the
     databases listed in updateAll.json or given with -Database; without -Zips,
     into a temporary folder that is removed afterwards. A database uses the
@@ -46,8 +52,8 @@
     Root of the SD card, for example E:\. Any existing folder will do.
 
 .PARAMETER Core
-    Install only these cores, by the IDs that -List shows. Default: every core
-    in the configuration.
+    Install only these cores, by the IDs that -List shows; bios selects every
+    BIOS file. Default: every core in the configuration.
 
 .PARAMETER Database
     Download databases to use in addition to those in the configuration: URLs
@@ -241,12 +247,15 @@ function Get-UrlFileName([string] $Url) {
     return [Uri]::UnescapeDataString($path.Substring($path.LastIndexOf('/') + 1))
 }
 
-# One entry of "cores", or of "data" when IsData is set.
-function ConvertFrom-Core($d, [bool] $IsData, [string] $Path, [hashtable] $Ids) {
+# One entry of "cores", "data" or "bios", as Kind says; a BIOS entry has the
+# form of game data.
+function ConvertFrom-Core($d, [string] $Kind, [string] $Path, [hashtable] $Ids) {
+    $IsData = $Kind -ne 'cores'
     $id = [string](Get-Field $d 'id')
     foreach ($key in 'id', 'name', $(if ($IsData) { 'url' } else { 'zips' }), 'destination', 'files') {
         if ($null -eq (Get-Field $d $key)) { throw "${Path}: core '$id' has no '$key'" }
     }
+    if ($id -eq 'bios') { throw "${Path}: core '$id' has a reserved id" }
     if ($Ids.ContainsKey($id)) { throw "${Path}: core '$id' is defined twice" }
     $Ids[$id] = $true
 
@@ -313,7 +322,34 @@ function ConvertFrom-Core($d, [bool] $IsData, [string] $Path, [hashtable] $Ids) 
         } catch {
             throw "${Path}: core '$id', file '$name' needs a numeric 'size' and a hexadecimal 'crc'"
         }
-        [pscustomobject]@{ Name = $name; Size = [long]$size; Crc = $crc }
+        # A BIOS file may be part of a download that is one file, or the
+        # entries of a zip joined; older copies do not know either.
+        $offset = $null
+        $join = @()
+        $p = $f.PSObject.Properties['offset']
+        if ($Kind -eq 'bios' -and $p) {
+            try {
+                if ($p.Value -isnot [string]) { throw 'not a string' }
+                $offset = [Convert]::ToUInt32($p.Value, 16)
+            } catch {
+                throw "${Path}: core '$id', file '$name' needs a hexadecimal 'offset'"
+            }
+        }
+        # Not Get-Field: returning a list of one unrolls it into its item.
+        $p = $f.PSObject.Properties['parts']
+        if ($Kind -eq 'bios' -and $p) {
+            $join = $p.Value
+            if ($join -isnot [array] -or $join.Count -eq 0 -or
+                    @($join | Where-Object { $_ -isnot [string] -or (Test-BadName $_) }).Count -gt 0) {
+                throw "${Path}: core '$id', file '$name' has an invalid 'parts' list"
+            }
+        }
+        [pscustomobject]@{ Name = $name; Size = [long]$size; Crc = $crc; Offset = $offset; Parts = @($join) }
+    }
+    $sliced = @($files | Where-Object { $null -ne $_.Offset }).Count -gt 0
+    $joined = @($files | Where-Object { $_.Parts.Count -gt 0 }).Count -gt 0
+    if ([int]$sliced + [int]$joined + [int]($null -ne $uf2) -gt 1) {
+        throw "${Path}: core '$id' cannot combine 'offset', 'parts' and 'uf2'"
     }
 
     return [pscustomobject]@{
@@ -327,6 +363,8 @@ function ConvertFrom-Core($d, [bool] $IsData, [string] $Path, [hashtable] $Ids) 
         Url       = $url
         Archives  = @($archives)
         Uf2       = $uf2
+        Bios      = $Kind -eq 'bios'
+        Sliced    = $sliced
     }
 }
 
@@ -350,10 +388,19 @@ function ConvertFrom-Config([string] $Text, [string] $Path, [string] $ConfigDir)
         $data = $p.Value
         if ($data -isnot [array]) { throw "${Path}: 'data' must be a list" }
     }
+    # "bios" holds the BIOS files, in the form of game data; a key of its own
+    # for the same reason, and so that they can be selected as one set.
+    $bios = @()
+    $p = $cfg.PSObject.Properties['bios']
+    if ($p) {
+        $bios = $p.Value
+        if ($bios -isnot [array]) { throw "${Path}: 'bios' must be a list" }
+    }
 
     $ids = @{}
-    $defs = @(foreach ($d in @(Get-Field $cfg 'cores')) { ConvertFrom-Core $d $false $Path $ids }) +
-            @(foreach ($d in $data) { ConvertFrom-Core $d $true $Path $ids })
+    $defs = @(foreach ($d in @(Get-Field $cfg 'cores')) { ConvertFrom-Core $d 'cores' $Path $ids }) +
+            @(foreach ($d in $data) { ConvertFrom-Core $d 'data' $Path $ids }) +
+            @(foreach ($d in $bios) { ConvertFrom-Core $d 'bios' $Path $ids })
 
     $sources = @(Get-Field $cfg 'databases' | Where-Object { $null -ne $_ })
     if (@($sources | Where-Object { $_ -isnot [string] }).Count -gt 0) {
@@ -414,8 +461,23 @@ function Get-HttpStatus($ErrorRecord) {
 }
 
 function Save-Url([string] $Url, [string] $Path, [int] $TimeoutSec = $script:TimeoutSec) {
-    Invoke-WebRequest -Uri $Url -OutFile $Path -UseBasicParsing -UserAgent $script:UserAgent `
-        -TimeoutSec $TimeoutSec
+    # -OutFile is a wildcard pattern in Windows PowerShell 5.1, and escaping it
+    # puts the escapes into the name, so a path with [ or ] in it is written
+    # under a plain temporary name first.
+    $out = $Path
+    if ([Management.Automation.WildcardPattern]::ContainsWildcardCharacters($Path)) {
+        $out = Join-Path ([System.IO.Path]::GetTempPath()) ('updateAll-' + [guid]::NewGuid().ToString('N') + '.part')
+    }
+    try {
+        Invoke-WebRequest -Uri $Url -OutFile $out -UseBasicParsing -UserAgent $script:UserAgent `
+            -TimeoutSec $TimeoutSec
+        if ($out -ne $Path) {
+            if ([System.IO.File]::Exists($Path)) { [System.IO.File]::Delete($Path) }
+            [System.IO.File]::Move($out, $Path)
+        }
+    } finally {
+        if ($out -ne $Path -and [System.IO.File]::Exists($out)) { [System.IO.File]::Delete($out) }
+    }
 }
 
 function Read-Database([string] $Source, [string[]] $WantedZips) {
@@ -625,6 +687,14 @@ function Get-InnerMessage([System.Exception] $Exception) {
     return $Exception.Message
 }
 
+# A file held in memory, standing for an entry of a zip.
+function New-PlainEntry([string] $Name, [byte[]] $Bytes) {
+    return [pscustomobject]@{
+        Name = $Name; FullName = $Name; Length = [long]$Bytes.Length
+        Crc32 = [UpdateAll.Crc32]::Compute($Bytes); Data = $Bytes
+    }
+}
+
 # The archives to search in the file at Path, as @{ Label; Entries }: the zip
 # itself, or the file alone when game data is not a zip or is to become a UF2
 # image, plus the zips inside it that the core names in "archives". Opened zips
@@ -632,7 +702,7 @@ function Get-InnerMessage([System.Exception] $Exception) {
 # a conversion to Res.Notes.
 function Open-Archives($Def, [string] $Path, $Res, [System.Collections.ArrayList] $Opened, [bool] $Preview) {
     $leaf = Split-Path -Leaf $Path
-    if ($Def.Url -and ($Def.Uf2 -or -not (Test-Zip $Path))) {
+    if ($Def.Url -and ($Def.Uf2 -or $Def.Sliced -or -not (Test-Zip $Path))) {
         try {
             $bytes = [System.IO.File]::ReadAllBytes($Path)
         } catch {
@@ -643,11 +713,18 @@ function Open-Archives($Def, [string] $Path, $Res, [System.Collections.ArrayList
             $bytes = [UpdateAll.Uf2]::FromBinary($bytes, $Def.Uf2.Address, $Def.Uf2.Family)
             $Res.Notes += Get-Uf2Note $leaf $Def.Uf2.Address $Preview
         }
-        $entry = [pscustomobject]@{
-            Name = $leaf; FullName = $leaf; Length = [long]$bytes.Length
-            Crc32 = [UpdateAll.Crc32]::Compute($bytes); Data = $bytes
+        $entries = @(New-PlainEntry $leaf $bytes)
+        # A BIOS file with an offset is that part of the download, under its
+        # own name.
+        foreach ($f in $Def.Files) {
+            if ($null -eq $f.Offset) { continue }
+            $from = [Math]::Min([long]$f.Offset, [long]$bytes.Length)
+            $n = [Math]::Min([long]$bytes.Length - $from, [Math]::Max([long]$f.Size, [long]0))
+            $part = New-Object byte[] $n
+            [Array]::Copy($bytes, $from, $part, 0, $n)
+            $entries += New-PlainEntry $f.Name.Substring($f.Name.LastIndexOf('/') + 1) $part
         }
-        return [pscustomobject]@{ Label = $leaf; Entries = @($entry) }
+        return [pscustomobject]@{ Label = $leaf; Entries = $entries }
     }
     try {
         $zip = [System.IO.Compression.ZipFile]::OpenRead($Path)
@@ -676,6 +753,35 @@ function Open-Archives($Def, [string] $Path, $Res, [System.Collections.ArrayList
     }
 }
 
+# The BIOS file File, made of the entries that its "parts" name, joined in that
+# order, as an archive holding just that file; nothing when a part is not there
+# or cannot be read, which goes to Res.Errors.
+function Join-Parts($File, $Arcs, $Res) {
+    $data = New-Object System.IO.MemoryStream
+    foreach ($part in $File.Parts) {
+        $found = @(foreach ($arc in $Arcs) {
+            foreach ($entry in $arc.Entries) {
+                if ($entry.Name -and $entry.Name -eq $part) { [pscustomobject]@{ Zip = $arc.Label; Entry = $entry } }
+            }
+        })
+        if ($found.Count -eq 0) {
+            $Res.Errors += "$($Arcs[0].Label) holds no $part"
+            return
+        }
+        # The root of the zip before its subfolders.
+        $best = @(@($found | Where-Object { $_.Entry.FullName.IndexOfAny([char[]]'/\') -lt 0 }) + $found)[0]
+        try {
+            $bytes = Get-EntryBytes $best.Entry
+        } catch {
+            $Res.Errors += "$($best.Zip):$($best.Entry.FullName): $($_.Exception.Message)"
+            return
+        }
+        $data.Write($bytes, 0, $bytes.Length)
+    }
+    $name = $File.Name.Substring($File.Name.LastIndexOf('/') + 1)
+    return [pscustomobject]@{ Label = $Arcs[0].Label; Entries = @(New-PlainEntry $name $data.ToArray()) }
+}
+
 function Install-Core($Def, [string] $ZipDir, $ZipListing, [string] $SdRoot, [bool] $Preview) {
     $res = [pscustomobject]@{
         Written = 0; Current = 0; Missing = @(); Errors = @(); Notes = @(); Skipped = $null; Used = @()
@@ -702,30 +808,36 @@ function Install-Core($Def, [string] $ZipDir, $ZipListing, [string] $SdRoot, [bo
         $byName = @{}
         $unreadable = New-Object System.Collections.ArrayList
         $firstLabel = $null
-        foreach ($p in $paths) {
-            foreach ($arc in @(Open-Archives $Def $p $res $archives $Preview)) {
-                $zipLeaf = $arc.Label
-                if ($null -eq $firstLabel) { $firstLabel = $zipLeaf }
-                foreach ($entry in $arc.Entries) {
-                    if (-not $entry.Name) { continue }
-                    $nameKey = $entry.Name.ToLowerInvariant()
-                    if (-not $byName.ContainsKey($nameKey)) { $byName[$nameKey] = New-Object System.Collections.ArrayList }
-                    [void]$byName[$nameKey].Add([pscustomobject]@{ Zip = $zipLeaf; Entry = $entry })
-                    if (-not $wantedSizes.ContainsKey([long]$entry.Length)) { continue }
-                    try {
-                        if ($script:HasEntryCrc -or $entry -isnot [System.IO.Compression.ZipArchiveEntry]) {
-                            $crc = [uint32]$entry.Crc32
-                        } else {
-                            $crc = [UpdateAll.Crc32]::Compute((Get-EntryBytes $entry))
-                        }
-                    } catch {
-                        [void]$unreadable.Add("${zipLeaf}:$($entry.FullName)")
-                        continue
+        $arcs = @(foreach ($p in $paths) { Open-Archives $Def $p $res $archives $Preview })
+        $opened = $arcs
+        foreach ($f in $Def.Files) {
+            if ($f.Parts.Count -gt 0 -and $opened.Count -gt 0) {
+                $joined = Join-Parts $f $opened $res
+                if ($joined) { $arcs += $joined }
+            }
+        }
+        foreach ($arc in $arcs) {
+            $zipLeaf = $arc.Label
+            if ($null -eq $firstLabel) { $firstLabel = $zipLeaf }
+            foreach ($entry in $arc.Entries) {
+                if (-not $entry.Name) { continue }
+                $nameKey = $entry.Name.ToLowerInvariant()
+                if (-not $byName.ContainsKey($nameKey)) { $byName[$nameKey] = New-Object System.Collections.ArrayList }
+                [void]$byName[$nameKey].Add([pscustomobject]@{ Zip = $zipLeaf; Entry = $entry })
+                if (-not $wantedSizes.ContainsKey([long]$entry.Length)) { continue }
+                try {
+                    if ($script:HasEntryCrc -or $entry -isnot [System.IO.Compression.ZipArchiveEntry]) {
+                        $crc = [uint32]$entry.Crc32
+                    } else {
+                        $crc = [UpdateAll.Crc32]::Compute((Get-EntryBytes $entry))
                     }
-                    $key = "$([long]$entry.Length):$crc"
-                    if (-not $index.ContainsKey($key)) { $index[$key] = New-Object System.Collections.ArrayList }
-                    [void]$index[$key].Add([pscustomobject]@{ Zip = $zipLeaf; Entry = $entry })
+                } catch {
+                    [void]$unreadable.Add("${zipLeaf}:$($entry.FullName)")
+                    continue
                 }
+                $key = "$([long]$entry.Length):$crc"
+                if (-not $index.ContainsKey($key)) { $index[$key] = New-Object System.Collections.ArrayList }
+                [void]$index[$key].Add([pscustomobject]@{ Zip = $zipLeaf; Entry = $entry })
             }
         }
 
@@ -875,11 +987,12 @@ try {
         $requested = @($Core | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } |
             Where-Object { $_ })
         $known = @($defs | ForEach-Object { $_.Id })
-        $unknown = @($requested | Where-Object { $known -notcontains $_ })
+        $anyBios = @($defs | Where-Object { $_.Bios }).Count -gt 0
+        $unknown = @($requested | Where-Object { $known -notcontains $_ -and -not ($anyBios -and $_ -eq 'bios') })
         if ($unknown.Count -gt 0) {
             throw "unknown core: $($unknown -join ', '). Configured: $($known -join ', ')"
         }
-        $defs = @($defs | Where-Object { $requested -contains $_.Id })
+        $defs = @($defs | Where-Object { $requested -contains $_.Id -or ($_.Bios -and $requested -contains 'bios') })
     }
 
     if ($setsFrom) { Write-Host "Sets from:    $setsFrom" }

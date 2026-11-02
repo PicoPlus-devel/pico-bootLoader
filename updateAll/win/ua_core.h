@@ -13,6 +13,10 @@ typedef struct {
     char *name;         /* game data may give a subfolder: "baseq2/pak0.pak" */
     long long size;
     uint32_t crc;
+    int has_offset;     /* BIOS file: the size bytes at offset of the download */
+    uint32_t offset;
+    char **parts;       /* BIOS file: these entries of the zip, joined; */
+    int nparts;         /* NULL-terminated, or NULL */
 } ua_file;
 
 typedef struct {
@@ -31,6 +35,8 @@ typedef struct {
     int narchives;
     int uf2;            /* game data: install the download as a UF2 image */
     uint32_t uf2_address, uf2_family;
+    int bios;           /* from "bios": selected together as the set "bios" */
+    int sliced;         /* a file has an offset: the download is one file */
 } ua_core;
 
 typedef struct {

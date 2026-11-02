@@ -9,17 +9,43 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 ## v0.9
 
 USB controllers on the Adafruit Fruit Jam and the other boards with PIO-USB
-are now found at every start, in the menu and in the applications.
+are now found at every start, in the menu and in the applications. On boards
+with HSTX video the applications no longer show small dots or lines in the
+picture. *Diablo* joins the Ports category, *Salamander* the Arcade category,
+and **updateAll** now also installs the BIOS files the emulators need.
 
-> **Do you need to update?** Yes, on boards with PIO-USB: re-flash the board
-> and replace the `/emu` folder on the card with the one in the new
-> `pico-bootLoader_sdcard.zip`.
+> **Do you need to update?** Yes. On boards with PIO-USB, re-flash the board.
+> On every board, replace the `/emu` and `/updateAll` folders on the card with
+> the ones in the new `pico-bootLoader_sdcard.zip`, and run **updateAll** to
+> install *Diablo* and the BIOS files.
 
 ### Changes
 
 - **USB controllers on the Adafruit Fruit Jam and other boards with PIO-USB are
   now found at every start.** On boards with an older RP2350 chip they were
   often not detected, in the menu and in the applications.
+- **No more dots or lines in the picture.** On boards with HSTX video, some TVs
+  and monitors showed small dots or short dotted lines in some applications, for
+  example in the Genesis and Super Nintendo emulators, or with Overclock on. The
+  picture is now clean, and the built-in USB port can still be used for
+  controllers and USB drive mode. The **Video Clock Fix** setting of the
+  emulators is no longer needed and has been removed. Thanks to @szuping for the
+  hint that led to this fix.
+- **Diablo** joins the Ports category, as an early test version. It runs on the
+  Adafruit Fruit Jam and on a Pimoroni Pico Plus 2 with the Adafruit DVI and
+  microSD breakouts, and needs 8 MB of PSRAM and 16 MB of flash. updateAll
+  installs the shareware version and the files the game needs in
+  `/roms/devilutionx/`.
+- **Salamander** joins the Arcade category: Konami's *Salamander* and
+  *Lifeforce*. It runs on the boards with PSRAM and HSTX video, the same boards
+  as *OutRun*. The games are not included: copy MAME's `salamand.zip` to
+  `/roms/arcade/SALAMAND` and `lifefrce.zip` to `/roms/arcade/LIFEFRCE`, or let
+  updateAll install them.
+- **updateAll installs the BIOS files**, as MiSTer's Update All does: for the
+  TI-99/4A, Commodore 64 and 128, Videopac, ColecoVision and PC Engine CD, and
+  for Famicom Disk System games and Sega CD discs. The Windows program shows
+  them as one entry, **BIOS**, that can be unticked. As with the ROM sets,
+  holding the rights to them is your responsibility.
 
 ## v0.8
 
@@ -249,8 +275,8 @@ now run on the Olimex board, close the controller test by holding SELECT + UP fo
 (SELECT + START clashed with some 8BitDo controllers), and make B work
 straight away on the AliExpress SNES-style USB controller. The NES, Super
 Nintendo, Genesis, PC Engine and Master System emulators also have a new
-**Video Clock Fix** setting, for TVs and monitors that show small dots or lines
-in the picture. Each version below links to its own release notes.
+~~**Video Clock Fix** setting, for TVs and monitors that show small dots or lines
+in the picture~~ (removed in v0.9). Each version below links to its own release notes.
 
 - **Nintendo Entertainment System**
   [v0.53](https://github.com/PicoPlus-devel/pico-infonesPlus/releases/tag/v0.53)
@@ -280,7 +306,7 @@ in the picture. Each version below links to its own release notes.
   [v0.8](https://github.com/PicoPlus-devel/pico-pcePlus/releases/tag/v0.8) and
   **Master System / Game Gear**
   [v0.32](https://github.com/PicoPlus-devel/pico-smsplus/releases/tag/v0.32):
-  the Olimex board, the Video Clock Fix setting and the fixes above.
+  the Olimex board, ~~the Video Clock Fix setting~~ and the fixes above.
 - **Game Boy**
   [v0.15](https://github.com/PicoPlus-devel/pico-peanutGB/releases/tag/v0.15),
   **Videopac**

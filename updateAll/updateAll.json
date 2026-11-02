@@ -1185,6 +1185,38 @@
         { "name": "bmk8.8c",   "size": 256,   "crc": "dad17e2d" },
         { "name": "bmk7.7c",   "size": 256,   "crc": "76307f8d" }
       ]
+    },
+    {
+      "id": "salamand",
+      "name": "Salamander",
+      "set": "MAME salamand (version D)",
+      "zips": ["salamand.zip"],
+      "destination": "/roms/arcade/SALAMAND",
+      "files": [
+        { "name": "587-d02.18b", "size": 65536,  "crc": "a42297f9" },
+        { "name": "587-d05.18c", "size": 65536,  "crc": "f9130b0a" },
+        { "name": "587-c03.17b", "size": 131072, "crc": "e5caf6e6" },
+        { "name": "587-c06.17c", "size": 131072, "crc": "c2f567ea" },
+        { "name": "587-d09.11j", "size": 32768,  "crc": "5020972c" },
+        { "name": "587-d08.8g",  "size": 16384,  "crc": "f9ac6b82" },
+        { "name": "587-c01.10a", "size": 131072, "crc": "09fe0632" }
+      ]
+    },
+    {
+      "id": "lifefrce",
+      "name": "Lifeforce",
+      "set": "MAME lifefrce (US), a clone of salamand",
+      "zips": ["salamand.zip", "lifefrce.zip"],
+      "destination": "/roms/arcade/LIFEFRCE",
+      "files": [
+        { "name": "587-l02.18b", "size": 65536,  "crc": "4a44da18" },
+        { "name": "587-l05.18c", "size": 65536,  "crc": "2f8c1cbd" },
+        { "name": "6107.17b",    "size": 131072, "crc": "e5caf6e6" },
+        { "name": "6108.17c",    "size": 131072, "crc": "c2f567ea" },
+        { "name": "587-k09.11j", "size": 32768,  "crc": "2255fe8c" },
+        { "name": "587-k08.8g",  "size": 16384,  "crc": "7f0e9b41" },
+        { "name": "587-c01.10a", "size": 131072, "crc": "09fe0632" }
+      ]
     }
   ],
   "data": [
@@ -1279,6 +1311,326 @@
         { "name": "baseq2/players/male/viper_i.pcx",      "size": 1925,     "crc": "92600e86" },
         { "name": "baseq2/players/male/weapon.md2",       "size": 38912,    "crc": "47a7291d" },
         { "name": "baseq2/players/male/weapon.pcx",       "size": 9089,     "crc": "942b09fb" }
+      ]
+    },
+    {
+      "id": "diablo",
+      "name": "Diablo",
+      "set": "DevilutionX assets, pico-lutionX v0.1-alpha",
+      "url": "https://github.com/PicoPlus-devel/pico-lutionX/releases/download/v0.1-alpha/pico-lutionX_sdcard.zip",
+      "destination": "/roms/devilutionx",
+      "files": [
+        { "name": "assets/data/boxleftend.clx",         "size": 209,    "crc": "a1d0fb8e" },
+        { "name": "assets/data/boxmiddle.clx",          "size": 5080,   "crc": "fb31a536" },
+        { "name": "assets/data/boxrightend.clx",        "size": 201,    "crc": "c570d0f5" },
+        { "name": "assets/data/charbg.clx",             "size": 100332, "crc": "26c7879a" },
+        { "name": "assets/data/dirtybuc.clx",           "size": 1252,   "crc": "1762db6b" },
+        { "name": "assets/data/dirtybucp.clx",          "size": 1130,   "crc": "0e7d14b5" },
+        { "name": "assets/data/health.clx",             "size": 2028,   "crc": "82058fe0" },
+        { "name": "assets/data/healthbox.clx",          "size": 1257,   "crc": "7d336306" },
+        { "name": "assets/data/hintbox.clx",            "size": 411,    "crc": "ba087d97" },
+        { "name": "assets/data/hintboxbackground.clx",  "size": 1330,   "crc": "5afec1e9" },
+        { "name": "assets/data/hinticons.clx",          "size": 2746,   "crc": "386631fe" },
+        { "name": "assets/data/monstertags.clx",        "size": 460,    "crc": "a79bbd8a" },
+        { "name": "assets/data/panel8buc.clx",          "size": 1959,   "crc": "3e79ab61" },
+        { "name": "assets/data/panel8bucp.clx",         "size": 4625,   "crc": "0b74ece0" },
+        { "name": "assets/data/resistance.clx",         "size": 1903,   "crc": "d4cb1ee2" },
+        { "name": "assets/data/stash.clx",              "size": 67394,  "crc": "fdc0b39e" },
+        { "name": "assets/data/stashnavbtns.clx",       "size": 1594,   "crc": "305726ec" },
+        { "name": "assets/data/talkbutton.clx",         "size": 1492,   "crc": "b6d059cc" },
+        { "name": "assets/data/xpbar.clx",              "size": 1535,   "crc": "6d83996f" },
+        { "name": "assets/fonts/12-00.clx",             "size": 17383,  "crc": "0f5e45da" },
+        { "name": "assets/fonts/12-01.clx",             "size": 27309,  "crc": "6e6f5152" },
+        { "name": "assets/fonts/12-02.clx",             "size": 10113,  "crc": "ab86f6f5" },
+        { "name": "assets/fonts/12-03.clx",             "size": 14439,  "crc": "11b66f32" },
+        { "name": "assets/fonts/12-04.clx",             "size": 26927,  "crc": "c8ce5495" },
+        { "name": "assets/fonts/12-1f1.clx",            "size": 7155,   "crc": "ac3aa212" },
+        { "name": "assets/fonts/12-1f3.clx",            "size": 25488,  "crc": "87aeb5f5" },
+        { "name": "assets/fonts/12-1f4.clx",            "size": 25512,  "crc": "ea8f91e6" },
+        { "name": "assets/fonts/12-1f5.clx",            "size": 15190,  "crc": "306b3b27" },
+        { "name": "assets/fonts/12-1f6.clx",            "size": 19848,  "crc": "a303f44a" },
+        { "name": "assets/fonts/12-1f9.clx",            "size": 23370,  "crc": "7af705eb" },
+        { "name": "assets/fonts/12-20.clx",             "size": 15135,  "crc": "c6ac614f" },
+        { "name": "assets/fonts/12-26.clx",             "size": 10480,  "crc": "43925744" },
+        { "name": "assets/fonts/12-e0.clx",             "size": 18412,  "crc": "79b72da0" },
+        { "name": "assets/fonts/22-00.clx",             "size": 19296,  "crc": "aba57a24" },
+        { "name": "assets/fonts/22-01.clx",             "size": 31156,  "crc": "2e66b651" },
+        { "name": "assets/fonts/22-02.clx",             "size": 22829,  "crc": "bb60583e" },
+        { "name": "assets/fonts/22-03.clx",             "size": 16412,  "crc": "d45ce9b3" },
+        { "name": "assets/fonts/22-04.clx",             "size": 28848,  "crc": "8f996908" },
+        { "name": "assets/fonts/22-05.clx",             "size": 20732,  "crc": "3db38bbd" },
+        { "name": "assets/fonts/22-20.clx",             "size": 13037,  "crc": "36f5c389" },
+        { "name": "assets/fonts/24-00.clx",             "size": 31958,  "crc": "a91a5c03" },
+        { "name": "assets/fonts/24-01.clx",             "size": 52260,  "crc": "0524f6d4" },
+        { "name": "assets/fonts/24-02.clx",             "size": 17738,  "crc": "6467500d" },
+        { "name": "assets/fonts/24-03.clx",             "size": 25796,  "crc": "66aa1f44" },
+        { "name": "assets/fonts/24-04.clx",             "size": 51553,  "crc": "fc47da2d" },
+        { "name": "assets/fonts/24-1f1.clx",            "size": 11644,  "crc": "3bb83fb0" },
+        { "name": "assets/fonts/24-1f3.clx",            "size": 50257,  "crc": "949ab4ce" },
+        { "name": "assets/fonts/24-1f4.clx",            "size": 48412,  "crc": "813f6c52" },
+        { "name": "assets/fonts/24-1f5.clx",            "size": 28508,  "crc": "e2d7a449" },
+        { "name": "assets/fonts/24-1f6.clx",            "size": 37171,  "crc": "60f69921" },
+        { "name": "assets/fonts/24-1f9.clx",            "size": 45606,  "crc": "d25d7a2e" },
+        { "name": "assets/fonts/24-20.clx",             "size": 7885,   "crc": "4fb944fc" },
+        { "name": "assets/fonts/24-26.clx",             "size": 18302,  "crc": "71a63ede" },
+        { "name": "assets/fonts/24-e0.clx",             "size": 18875,  "crc": "e539d15a" },
+        { "name": "assets/fonts/30-00.clx",             "size": 41201,  "crc": "8614da59" },
+        { "name": "assets/fonts/30-01.clx",             "size": 67697,  "crc": "ba310729" },
+        { "name": "assets/fonts/30-02.clx",             "size": 22599,  "crc": "af7e8241" },
+        { "name": "assets/fonts/30-03.clx",             "size": 33750,  "crc": "2e20472a" },
+        { "name": "assets/fonts/30-04.clx",             "size": 66828,  "crc": "1889abe3" },
+        { "name": "assets/fonts/30-20.clx",             "size": 9190,   "crc": "c80a1709" },
+        { "name": "assets/fonts/30-e0.clx",             "size": 30339,  "crc": "fc5f9d77" },
+        { "name": "assets/fonts/42-00.clx",             "size": 71476,  "crc": "a8ba0741" },
+        { "name": "assets/fonts/42-01.clx",             "size": 117394, "crc": "2c252ae9" },
+        { "name": "assets/fonts/42-02.clx",             "size": 38242,  "crc": "61f9bd70" },
+        { "name": "assets/fonts/42-03.clx",             "size": 57457,  "crc": "5c2effdd" },
+        { "name": "assets/fonts/42-04.clx",             "size": 117240, "crc": "533ccb87" },
+        { "name": "assets/fonts/42-20.clx",             "size": 13597,  "crc": "ce17b2f4" },
+        { "name": "assets/fonts/46-00.clx",             "size": 90468,  "crc": "bf3a6555" },
+        { "name": "assets/fonts/46-01.clx",             "size": 151625, "crc": "5b2591c7" },
+        { "name": "assets/fonts/46-02.clx",             "size": 48047,  "crc": "b70aeb63" },
+        { "name": "assets/fonts/46-03.clx",             "size": 72124,  "crc": "b96661e6" },
+        { "name": "assets/fonts/46-04.clx",             "size": 149190, "crc": "87f0178a" },
+        { "name": "assets/fonts/46-20.clx",             "size": 80888,  "crc": "af0b8a60" },
+        { "name": "assets/fonts/black.trn",             "size": 256,    "crc": "615dfab9" },
+        { "name": "assets/fonts/blue.trn",              "size": 256,    "crc": "c8cdf011" },
+        { "name": "assets/fonts/buttonface.trn",        "size": 256,    "crc": "e502b94b" },
+        { "name": "assets/fonts/buttonpushed.trn",      "size": 256,    "crc": "1166d875" },
+        { "name": "assets/fonts/gamedialogred.trn",     "size": 256,    "crc": "f44cc47b" },
+        { "name": "assets/fonts/gamedialogwhite.trn",   "size": 256,    "crc": "6fddc45b" },
+        { "name": "assets/fonts/gamedialogyellow.trn",  "size": 256,    "crc": "b2948c53" },
+        { "name": "assets/fonts/goldui.trn",            "size": 256,    "crc": "577de220" },
+        { "name": "assets/fonts/golduis.trn",           "size": 256,    "crc": "52707a1c" },
+        { "name": "assets/fonts/grayui.trn",            "size": 256,    "crc": "c76b3d41" },
+        { "name": "assets/fonts/grayuis.trn",           "size": 256,    "crc": "8b89932b" },
+        { "name": "assets/fonts/orange.trn",            "size": 256,    "crc": "c51923a1" },
+        { "name": "assets/fonts/red.trn",               "size": 256,    "crc": "0bb876f5" },
+        { "name": "assets/fonts/tr/12-00.clx",          "size": 2615,   "crc": "fa5ab790" },
+        { "name": "assets/fonts/tr/24-00.clx",          "size": 2676,   "crc": "62c98d86" },
+        { "name": "assets/fonts/tr/30-00.clx",          "size": 2686,   "crc": "decd557c" },
+        { "name": "assets/fonts/tr/42-00.clx",          "size": 2791,   "crc": "32ec8c6c" },
+        { "name": "assets/fonts/tr/46-00.clx",          "size": 2848,   "crc": "8961ef4d" },
+        { "name": "assets/fonts/white.trn",             "size": 256,    "crc": "7b93f154" },
+        { "name": "assets/fonts/whitegold.trn",         "size": 256,    "crc": "ab184a46" },
+        { "name": "assets/fonts/yellow.trn",            "size": 256,    "crc": "9cda97bb" },
+        { "name": "assets/gendata/pause.trn",           "size": 256,    "crc": "2acd146a" },
+        { "name": "assets/levels/l1data/sklkngt.dun",   "size": 31454,  "crc": "fa8c148d" },
+        { "name": "assets/levels/l2data/bonechat.dun",  "size": 19588,  "crc": "fec3922d" },
+        { "name": "assets/levels/towndata/automap.amp", "size": 312,    "crc": "186cb81c" },
+        { "name": "assets/levels/towndata/automap.dun", "size": 54404,  "crc": "5e7a2d37" },
+        { "name": "assets/ui_art/diablo.pal",           "size": 768,    "crc": "8c7610a7" },
+        { "name": "assets/ui_art/dvl_but_sml.clx",      "size": 4139,   "crc": "94b1b5cd" },
+        { "name": "assets/ui_art/dvl_lrpopup.clx",      "size": 96218,  "crc": "563691e8" },
+        { "name": "assets/ui_art/hellfire.pal",         "size": 768,    "crc": "ffadb09f" },
+        { "name": "LICENSE-DevilutionX.md",             "size": 3629,   "crc": "077a1a63" },
+        { "name": "licenses/LICENSE.CC-BY.txt",         "size": 18657,  "crc": "2e986f34" },
+        { "name": "licenses/LICENSE.OFL.txt",           "size": 4535,   "crc": "83a288da" },
+        { "name": "licenses/LICENSE.zlib.txt",          "size": 1429,   "crc": "b20cd925" },
+        { "name": "README.txt",                         "size": 472,    "crc": "f1a200d2" }
+      ]
+    },
+    {
+      "id": "diablo_spawn",
+      "name": "Diablo",
+      "set": "shareware data (spawn.mpq)",
+      "url": "https://github.com/diasurgical/devilutionx-assets/releases/download/v2/spawn.mpq",
+      "destination": "/roms/devilutionx",
+      "files": [
+        { "name": "spawn.mpq", "size": 25448219, "crc": "36187f94" }
+      ]
+    }
+  ],
+  "bios": [
+    {
+      "id": "bios_videopac",
+      "name": "Videopac BIOS",
+      "set": "Magnavox Odyssey2 / Philips Videopac G7000",
+      "url": "https://raw.githubusercontent.com/archtaurus/RetroPieBIOS/c4ba6e653a7e431b31c5a3ec4a6577081102cf20/BIOS/o2rom.bin",
+      "destination": "/bios",
+      "files": [
+        { "name": "o2rom.bin", "size": 1024, "crc": "8016a315" }
+      ]
+    },
+    {
+      "id": "bios_coleco",
+      "name": "ColecoVision BIOS",
+      "set": "ColecoVision",
+      "url": "https://raw.githubusercontent.com/archtaurus/RetroPieBIOS/c4ba6e653a7e431b31c5a3ec4a6577081102cf20/BIOS/colecovision.rom",
+      "destination": "/coleco",
+      "files": [
+        { "name": "COLECO.BIN", "size": 8192, "crc": "3aa93ef3" }
+      ]
+    },
+    {
+      "id": "bios_ti99",
+      "name": "TI-99/4A BIOS",
+      "set": "console ROM and GROM, from the MiSTer BIOS database",
+      "url": "https://archive.org/download/mister_bios_db/TI-99_4A.zip/boot0.rom",
+      "destination": "/bios",
+      "files": [
+        { "name": "994aROM.bin",  "size": 8192,  "crc": "db8f33e5", "offset": "0x2A000" },
+        { "name": "994aGROM.bin", "size": 24576, "crc": "af5c2449", "offset": "0x10000" }
+      ]
+    },
+    {
+      "id": "bios_ti99_disk",
+      "name": "TI-99/4A BIOS",
+      "set": "TI Disk Controller, from the MAME set ti99_fdc",
+      "url": "https://raw.githubusercontent.com/Abdess/retrobios/e9ef630b3afde71523b56c902bc79efda3abf4b4/bios/Arcade/Arcade/ti99_fdc.zip",
+      "destination": "/bios",
+      "files": [
+        { "name": "994aDISK.bin", "size": 8192, "crc": "de1f2e25", "parts": ["fdc_dsr.u26", "fdc_dsr.u27"] }
+      ]
+    },
+    {
+      "id": "bios_ti99_speech",
+      "name": "TI-99/4A BIOS",
+      "set": "Speech Synthesizer vocabulary",
+      "url": "https://archive.org/download/retropiebiosfilesconfiguredforeverysystem_20190904/Retropie%20Bios%20Files%20Configured%20for%20Every%20System.zip/Retropie%20Bios%20Files%20Configured%20for%20Every%20System/BIOS/spchrom.bin",
+      "destination": "/bios",
+      "files": [
+        { "name": "spchrom.bin", "size": 32768, "crc": "58b155f7" }
+      ]
+    },
+    {
+      "id": "bios_pcecd",
+      "name": "PC Engine CD BIOS",
+      "set": "Super CD-ROM System v3.0 (Japan), from the MiSTer BIOS database",
+      "url": "https://archive.org/download/mister_bios_db/TurboGrafx16.zip/TurboGrafx16/Super%20CD%203.0.pce",
+      "destination": "/bios",
+      "files": [
+        { "name": "Super CD-ROM System (Japan) (v3.0).pce", "size": 262144, "crc": "6d9a73ef" }
+      ]
+    },
+    {
+      "id": "bios_fds",
+      "name": "Famicom Disk System BIOS",
+      "set": "Famicom Disk System, from the MiSTer BIOS database",
+      "url": "https://archive.org/download/mister_bios_db/NES.zip/fds-bios.rom",
+      "destination": "/bios",
+      "files": [
+        { "name": "fds-bios.rom", "size": 8192, "crc": "5e607dcf" }
+      ]
+    },
+    {
+      "id": "bios_segacd_us",
+      "name": "Sega CD BIOS",
+      "set": "Sega CD 2 (USA) (v2.00), from the MiSTer BIOS database",
+      "url": "https://archive.org/download/mister_bios_db/MegaCD.zip/%5BBIOS%5D%20Sega%20CD%202%20%28USA%29%20%28v2.00%29.md",
+      "destination": "/bios",
+      "files": [
+        { "name": "Sega CD 2 (USA) (v2.00).md", "size": 131072, "crc": "8af65f58" }
+      ]
+    },
+    {
+      "id": "bios_segacd_eu",
+      "name": "Sega CD BIOS",
+      "set": "Mega-CD 2 (Europe) (v2.00), from the MiSTer BIOS database",
+      "url": "https://archive.org/download/mister_bios_db/MegaCD.zip/%5BBIOS%5D%20Mega-CD%202%20%28Europe%29%20%28v2.00%29.md",
+      "destination": "/bios",
+      "files": [
+        { "name": "Mega-CD 2 (Europe) (v2.00).md", "size": 131072, "crc": "0507b590" }
+      ]
+    },
+    {
+      "id": "bios_segacd_jp",
+      "name": "Sega CD BIOS",
+      "set": "Mega-CD 2 (Japan) (v2.00C), from the MiSTer BIOS database",
+      "url": "https://archive.org/download/mister_bios_db/MegaCD.zip/%5BBIOS%5D%20Mega-CD%202%20%28Japan%29%20%28v2.00C%29.md",
+      "destination": "/bios",
+      "files": [
+        { "name": "Mega-CD 2 (Japan) (v2.00C).md", "size": 131072, "crc": "dd6cc972" }
+      ]
+    },
+    {
+      "id": "bios_c64_basic",
+      "name": "C64 BIOS",
+      "set": "BASIC V2 (901226-01)",
+      "url": "https://www.zimmers.net/anonftp/pub/cbm/firmware/computers/c64/basic.901226-01.bin",
+      "destination": "/roms/C64/bios",
+      "files": [
+        { "name": "c64basic.rom", "size": 8192, "crc": "f833d117" }
+      ]
+    },
+    {
+      "id": "bios_c64_kernal",
+      "name": "C64 BIOS",
+      "set": "KERNAL (901227-03)",
+      "url": "https://www.zimmers.net/anonftp/pub/cbm/firmware/computers/c64/kernal.901227-03.bin",
+      "destination": "/roms/C64/bios",
+      "files": [
+        { "name": "c64kernal.rom", "size": 8192, "crc": "dbe3e7c7" }
+      ]
+    },
+    {
+      "id": "bios_c64_chargen",
+      "name": "C64 BIOS",
+      "set": "character set (901225-01)",
+      "url": "https://www.zimmers.net/anonftp/pub/cbm/firmware/computers/c64/characters.901225-01.bin",
+      "destination": "/roms/C64/bios",
+      "files": [
+        { "name": "c64chargen.rom", "size": 4096, "crc": "ec4272ee" }
+      ]
+    },
+    {
+      "id": "bios_c64_1541",
+      "name": "C64 BIOS",
+      "set": "1541-II DOS (251968-03)",
+      "url": "https://www.zimmers.net/anonftp/pub/cbm/firmware/drives/new/1541/1541-II.251968-03.bin",
+      "destination": "/roms/C64/bios",
+      "files": [
+        { "name": "1541.rom", "size": 16384, "crc": "899fa3c5" }
+      ]
+    },
+    {
+      "id": "bios_c128_basic",
+      "name": "C128 BIOS",
+      "set": "BASIC 7.0, low and high (318022-02)",
+      "url": "https://www.zimmers.net/anonftp/pub/cbm/firmware/computers/c128/basic.318022-02.bin",
+      "destination": "/roms/C64/bios",
+      "files": [
+        { "name": "c128basic.rom", "size": 32768, "crc": "af1ae1e8" }
+      ]
+    },
+    {
+      "id": "bios_c128_kernal",
+      "name": "C128 BIOS",
+      "set": "KERNAL (318020-05)",
+      "url": "https://www.zimmers.net/anonftp/pub/cbm/firmware/computers/c128/kernal.318020-05.bin",
+      "destination": "/roms/C64/bios",
+      "files": [
+        { "name": "c128kernal.rom", "size": 16384, "crc": "ba456b8e" }
+      ]
+    },
+    {
+      "id": "bios_c128_chargen",
+      "name": "C128 BIOS",
+      "set": "character set (390059-01)",
+      "url": "https://www.zimmers.net/anonftp/pub/cbm/firmware/computers/c128/characters.390059-01.bin",
+      "destination": "/roms/C64/bios",
+      "files": [
+        { "name": "c128chargen.rom", "size": 8192, "crc": "6aaaafe6" }
+      ]
+    },
+    {
+      "id": "bios_c128_c64",
+      "name": "C128 BIOS",
+      "set": "C64 mode (251913-01)",
+      "url": "https://www.zimmers.net/anonftp/pub/cbm/firmware/computers/c64/64c.251913-01.bin",
+      "destination": "/roms/C64/bios",
+      "files": [
+        { "name": "c128c64.rom", "size": 16384, "crc": "0010ec31" }
+      ]
+    },
+    {
+      "id": "bios_c128_1571",
+      "name": "C128 BIOS",
+      "set": "1571 DOS (310654-05)",
+      "url": "https://www.zimmers.net/anonftp/pub/cbm/firmware/drives/new/1571/1571-rom.310654-05.bin",
+      "destination": "/roms/C64/bios",
+      "files": [
+        { "name": "1571.rom", "size": 32768, "crc": "5755bae3" }
       ]
     }
   ]

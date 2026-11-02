@@ -30,7 +30,7 @@
 
 #define WM_APP_LOG      (WM_APP + 1)   /* lParam: malloc'd text */
 #define WM_APP_PROGRESS (WM_APP + 2)   /* lParam: 0..1000 */
-#define WM_APP_STATUS   (WM_APP + 3)   /* wParam: set, lParam: files current, -1 for no card */
+#define WM_APP_STATUS   (WM_APP + 3)   /* wParam: row, lParam: files current, -1 for no card */
 #define WM_APP_DONE     (WM_APP + 4)   /* wParam: job kind, lParam: exit status */
 #define WM_APP_CONFIG   (WM_APP + 5)   /* lParam: malloc'd fetched */
 #define TIMER_CHECK     1
@@ -80,6 +80,40 @@ static struct {
     SIZE client0;
     POINT min_track;
 } app;
+
+/* ------------------------------------------------------------------------- */
+/* Rows of the list                                                          */
+/* ------------------------------------------------------------------------- */
+
+/* The list has a row for each set, except that the BIOS files, which come
+   last in the configuration, share one: the row of the set "bios". */
+static int bios_first(void)
+{
+    int i = app.cfg.ncores;
+    while (i > 0 && app.cfg.cores[i - 1].bios)
+        i--;
+    return i;
+}
+
+static int row_count(void)
+{
+    int b = bios_first();
+    return b + (b < app.cfg.ncores);
+}
+
+/* The sets a row stands for: cores first .. first + n - 1. */
+static void row_sets(int row, int *first, int *n)
+{
+    int b = bios_first();
+    *first = row < b ? row : b;
+    *n = row < b ? 1 : app.cfg.ncores - b;
+}
+
+/* The id the row is selected by, as with --core. */
+static const char *row_id(int row)
+{
+    return row < bios_first() ? app.cfg.cores[row].id : "bios";
+}
 
 /* ------------------------------------------------------------------------- */
 /* Worker thread                                                             */
@@ -143,9 +177,13 @@ static unsigned __stdcall worker(void *arg)
     int rc = 0;
     if (j->kind == JOB_CHECK) {
         int card = ua_is_dir(j->sd);
-        for (int i = 0; i < app.cfg.ncores && !app.cancel; i++)
-            PostMessageW(app.dlg, WM_APP_STATUS, i,
-                         card ? ua_count_current(&app.cfg.cores[i], j->sd) : -1);
+        for (int r = 0, rows = row_count(); r < rows && !app.cancel; r++) {
+            int first, n, current = 0;
+            row_sets(r, &first, &n);
+            for (int i = first; i < first + n && card && !app.cancel; i++)
+                current += ua_count_current(&app.cfg.cores[i], j->sd);
+            PostMessageW(app.dlg, WM_APP_STATUS, r, card ? current : -1);
+        }
     } else if (j->kind == JOB_CONFIG) {
         fetched *f = calloc(1, sizeof *f);
         f->ok = !ua_config_fetch(j->config_url, j->config_dir, &f->cfg, f->err, sizeof f->err);
@@ -299,8 +337,8 @@ static void fill_drives(int choose)
 static int checked_sets(void)
 {
     int n = 0;
-    for (int i = 0; i < app.cfg.ncores; i++)
-        n += ListView_GetCheckState(item(IDC_SETS), i) != 0;
+    for (int r = 0; r < row_count(); r++)
+        n += ListView_GetCheckState(item(IDC_SETS), r) != 0;
     return n;
 }
 
@@ -334,7 +372,7 @@ static void set_running(int running)
                                   IDC_SETS, IDC_DOWNLOAD,  IDC_DRYRUN };
     app.running = running;
     for (size_t i = 0; i < sizeof inputs / sizeof inputs[0]; i++)
-        EnableWindow(item(inputs[i]), !running && (inputs[i] != IDC_DOWNLOAD || app.cfg.ndatabases));
+        EnableWindow(item(inputs[i]), !running && (inputs[i] != IDC_DOWNLOAD || can_download()));
     SetDlgItemTextW(app.dlg, IDCANCEL, running ? L"Cancel" : L"Close");
     EnableWindow(item(IDCANCEL), TRUE);
     update_buttons();
@@ -342,17 +380,20 @@ static void set_running(int running)
         SetFocus(item(IDCANCEL));
 }
 
-static void set_status(int set, int current)
+static void set_status(int row, int current)
 {
     wchar_t text[64] = L"";
-    int total = app.cfg.cores[set].nfiles;
+    int first, n, total = 0;
+    row_sets(row, &first, &n);
+    for (int i = first; i < first + n; i++)
+        total += app.cfg.cores[i].nfiles;
     if (current == total)
         wcscpy(text, L"Up to date");
     else if (current == 0)
         wcscpy(text, L"Not installed");
     else if (current > 0)
         swprintf(text, 64, L"%d of %d files missing", total - current, total);
-    ListView_SetItemText(item(IDC_SETS), set, 3, text);
+    ListView_SetItemText(item(IDC_SETS), row, 3, text);
 }
 
 /* Checks which sets are complete on the card, for the status column. */
@@ -372,8 +413,8 @@ static void check_card(void)
     wchar_t sd[MAX_PATH * 2];
     sd_path(sd, MAX_PATH * 2);
     if (!*sd) {
-        for (int i = 0; i < app.cfg.ncores; i++)
-            set_status(i, -1);
+        for (int r = 0; r < row_count(); r++)
+            set_status(r, -1);
         return;
     }
     job *j = calloc(1, sizeof *j);
@@ -395,11 +436,11 @@ static void install(void)
     j->no_download = !may_download();
     j->dry_run = IsDlgButtonChecked(app.dlg, IDC_DRYRUN) == BST_CHECKED;
     /* Unticked sets work like --core with the ticked ones. */
-    if (checked_sets() < app.cfg.ncores) {
-        j->ids = calloc((size_t)app.cfg.ncores + 1, sizeof *j->ids);
-        for (int i = 0, n = 0; i < app.cfg.ncores; i++)
-            if (ListView_GetCheckState(item(IDC_SETS), i))
-                j->ids[n++] = _strdup(app.cfg.cores[i].id);
+    if (checked_sets() < row_count()) {
+        j->ids = calloc((size_t)row_count() + 1, sizeof *j->ids);
+        for (int r = 0, n = 0; r < row_count(); r++)
+            if (ListView_GetCheckState(item(IDC_SETS), r))
+                j->ids[n++] = _strdup(row_id(r));
     }
 
     SetDlgItemTextW(app.dlg, IDC_LOG, L"");
@@ -551,36 +592,73 @@ static void init_sets(void)
     }
 }
 
-/* One row per set, all ticked but those whose id is in unticked. */
+/* The texts of a row: the set's name, its zips and its folder; for the BIOS
+   row, the number of downloads and the folders they go to. */
+static void row_texts(int row, char **name, char **zips, char **dest)
+{
+    int first, n;
+    row_sets(row, &first, &n);
+    const ua_core *c = &app.cfg.cores[first];
+    if (!c->bios) {
+        size_t len = 1;
+        for (int z = 0; z < c->nzips; z++)
+            len += strlen(c->zips[z]) + 2;
+        *zips = calloc(1, len);
+        for (int z = 0; z < c->nzips; z++) {
+            if (z)
+                strcat(*zips, ", ");
+            strcat(*zips, c->zips[z]);
+        }
+        *name = _strdup(c->name);
+        *dest = _strdup(c->dest_shown);
+        return;
+    }
+    int downloads = 0;
+    size_t len = 1;
+    for (int i = first; i < first + n; i++) {
+        downloads += app.cfg.cores[i].nzips;
+        len += strlen(app.cfg.cores[i].dest_shown) + 2;
+    }
+    *zips = malloc(32);
+    snprintf(*zips, 32, "%d download%s", downloads, downloads == 1 ? "" : "s");
+    *dest = calloc(1, len);
+    for (int i = first; i < first + n; i++) {
+        int seen = 0;
+        for (int k = first; k < i && !seen; k++)
+            seen = !_stricmp(app.cfg.cores[k].dest_shown, app.cfg.cores[i].dest_shown);
+        if (seen)
+            continue;
+        if (**dest)
+            strcat(*dest, ", ");
+        strcat(*dest, app.cfg.cores[i].dest_shown);
+    }
+    *name = _strdup("BIOS");
+}
+
+/* One row per set, and one for all BIOS files; all ticked but those whose id
+   is in unticked. */
 static void fill_sets(char **unticked)
 {
     HWND lv = item(IDC_SETS);
     ListView_DeleteAllItems(lv);
-    for (int i = 0; i < app.cfg.ncores; i++) {
-        const ua_core *c = &app.cfg.cores[i];
-        wchar_t *name = ua_widen(c->name), *dest = ua_widen(c->dest_shown);
-        size_t len = 1;
-        for (int z = 0; z < c->nzips; z++)
-            len += strlen(c->zips[z]) + 2;
-        char *zips = calloc(1, len);
-        for (int z = 0; z < c->nzips; z++) {
-            if (z)
-                strcat(zips, ", ");
-            strcat(zips, c->zips[z]);
-        }
-        wchar_t *wzips = ua_widen(zips);
-        LVITEMW it = { .mask = LVIF_TEXT, .iItem = i, .pszText = name };
+    for (int r = 0; r < row_count(); r++) {
+        char *name, *zips, *dest;
+        row_texts(r, &name, &zips, &dest);
+        wchar_t *wname = ua_widen(name), *wzips = ua_widen(zips), *wdest = ua_widen(dest);
+        LVITEMW it = { .mask = LVIF_TEXT, .iItem = r, .pszText = wname };
         ListView_InsertItem(lv, &it);
-        ListView_SetItemText(lv, i, 1, wzips);
-        ListView_SetItemText(lv, i, 2, dest);
+        ListView_SetItemText(lv, r, 1, wzips);
+        ListView_SetItemText(lv, r, 2, wdest);
         int tick = 1;
         for (char **u = unticked; u && *u && tick; u++)
-            tick = _stricmp(*u, c->id) != 0;
-        ListView_SetCheckState(lv, i, tick);
+            tick = _stricmp(*u, row_id(r)) != 0;
+        ListView_SetCheckState(lv, r, tick);
         free(name);
-        free(dest);
         free(zips);
+        free(dest);
+        free(wname);
         free(wzips);
+        free(wdest);
     }
     for (int c = 0; c < 3; c++)
         ListView_SetColumnWidth(lv, c, LVSCW_AUTOSIZE_USEHEADER);
@@ -625,7 +703,7 @@ static void log_config(void)
     size_t n = wcslen(from) + (why ? wcslen(why) : 0) + 160;
     wchar_t *line = malloc(n * sizeof *line);
     swprintf(line, n, L"Configuration: %ls, %d set%ls, %d download database%ls%ls%ls%ls\r\n", from,
-             c->ncores, c->ncores == 1 ? L"" : L"s", c->ndatabases, c->ndatabases == 1 ? L"" : L"s",
+             row_count(), row_count() == 1 ? L"" : L"s", c->ndatabases, c->ndatabases == 1 ? L"" : L"s",
              why ? L" (" : L"", why ? why : L"", why ? L")" : L"");
     log_text(line);
     log_text(can_download()
@@ -643,10 +721,10 @@ static void config_fetched(fetched *f)
 {
     if (f->ok) {
         /* Sets unticked in the meantime stay unticked. */
-        char **unticked = calloc((size_t)app.cfg.ncores + 1, sizeof *unticked);
-        for (int i = 0, n = 0; i < app.cfg.ncores; i++)
-            if (!ListView_GetCheckState(item(IDC_SETS), i))
-                unticked[n++] = _strdup(app.cfg.cores[i].id);
+        char **unticked = calloc((size_t)row_count() + 1, sizeof *unticked);
+        for (int r = 0, n = 0; r < row_count(); r++)
+            if (!ListView_GetCheckState(item(IDC_SETS), r))
+                unticked[n++] = _strdup(row_id(r));
         int had = can_download();
         ua_config_free(&app.cfg);
         app.cfg = f->cfg;
@@ -717,9 +795,10 @@ static void init_dialog(HWND dlg)
     SendMessageW(item(IDC_LOG), EM_SETLIMITTEXT, 0, 0);
     SendMessageW(item(IDC_PROGRESS), PBM_SETRANGE32, 0, 1000);
 
-    log_text(L"updateAll installs arcade ROM sets, and the shareware or demo data of the ported "
-             L"games, on the SD card. The ROM sets are copyright of their manufacturers and are "
-             L"not included with this program.\r\n\r\n");
+    log_text(L"updateAll installs arcade ROM sets, the BIOS files of the emulators, and the "
+             L"shareware or demo data of the ported games, on the SD card. The ROM sets and BIOS "
+             L"files are copyright of their manufacturers and are not included with this "
+             L"program.\r\n\r\n");
     load_config();
     if (app.cfg_ok) {
         init_sets();
