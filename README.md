@@ -219,7 +219,7 @@ yourself, copy them to the folders given:
   both required — nothing runs without them. `994aDISK.bin` (disk controller)
   and `spchrom.bin` (speech vocabulary) are optional.
 - *Commodore 64/128*: the BASIC, KERNAL and character ROMs in
-  `/roms/C64/bios`, as `c64basic.rom`, `c64kernal.rom` and `c64chargen.rom`,
+  `/bios`, as `c64basic.rom`, `c64kernal.rom` and `c64chargen.rom`,
   and the 1541 drive ROM as `1541.rom`; for the C128, `c128basic.rom`,
   `c128kernal.rom`, `c128chargen.rom`, `c128c64.rom` and `1571.rom`. The
   [pico-c64 README](https://github.com/PicoPlus-devel/pico-c64#rom-files)

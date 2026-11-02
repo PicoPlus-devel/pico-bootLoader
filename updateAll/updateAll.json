@@ -1548,7 +1548,7 @@
       "name": "C64 BIOS",
       "set": "BASIC V2 (901226-01)",
       "url": "https://www.zimmers.net/anonftp/pub/cbm/firmware/computers/c64/basic.901226-01.bin",
-      "destination": "/roms/C64/bios",
+      "destination": "/bios",
       "files": [
         { "name": "c64basic.rom", "size": 8192, "crc": "f833d117" }
       ]
@@ -1558,7 +1558,7 @@
       "name": "C64 BIOS",
       "set": "KERNAL (901227-03)",
       "url": "https://www.zimmers.net/anonftp/pub/cbm/firmware/computers/c64/kernal.901227-03.bin",
-      "destination": "/roms/C64/bios",
+      "destination": "/bios",
       "files": [
         { "name": "c64kernal.rom", "size": 8192, "crc": "dbe3e7c7" }
       ]
@@ -1568,7 +1568,7 @@
       "name": "C64 BIOS",
       "set": "character set (901225-01)",
       "url": "https://www.zimmers.net/anonftp/pub/cbm/firmware/computers/c64/characters.901225-01.bin",
-      "destination": "/roms/C64/bios",
+      "destination": "/bios",
       "files": [
         { "name": "c64chargen.rom", "size": 4096, "crc": "ec4272ee" }
       ]
@@ -1578,7 +1578,7 @@
       "name": "C64 BIOS",
       "set": "1541-II DOS (251968-03)",
       "url": "https://www.zimmers.net/anonftp/pub/cbm/firmware/drives/new/1541/1541-II.251968-03.bin",
-      "destination": "/roms/C64/bios",
+      "destination": "/bios",
       "files": [
         { "name": "1541.rom", "size": 16384, "crc": "899fa3c5" }
       ]
@@ -1588,7 +1588,7 @@
       "name": "C128 BIOS",
       "set": "BASIC 7.0, low and high (318022-02)",
       "url": "https://www.zimmers.net/anonftp/pub/cbm/firmware/computers/c128/basic.318022-02.bin",
-      "destination": "/roms/C64/bios",
+      "destination": "/bios",
       "files": [
         { "name": "c128basic.rom", "size": 32768, "crc": "af1ae1e8" }
       ]
@@ -1598,7 +1598,7 @@
       "name": "C128 BIOS",
       "set": "KERNAL (318020-05)",
       "url": "https://www.zimmers.net/anonftp/pub/cbm/firmware/computers/c128/kernal.318020-05.bin",
-      "destination": "/roms/C64/bios",
+      "destination": "/bios",
       "files": [
         { "name": "c128kernal.rom", "size": 16384, "crc": "ba456b8e" }
       ]
@@ -1608,7 +1608,7 @@
       "name": "C128 BIOS",
       "set": "character set (390059-01)",
       "url": "https://www.zimmers.net/anonftp/pub/cbm/firmware/computers/c128/characters.390059-01.bin",
-      "destination": "/roms/C64/bios",
+      "destination": "/bios",
       "files": [
         { "name": "c128chargen.rom", "size": 8192, "crc": "6aaaafe6" }
       ]
@@ -1618,7 +1618,7 @@
       "name": "C128 BIOS",
       "set": "C64 mode (251913-01)",
       "url": "https://www.zimmers.net/anonftp/pub/cbm/firmware/computers/c64/64c.251913-01.bin",
-      "destination": "/roms/C64/bios",
+      "destination": "/bios",
       "files": [
         { "name": "c128c64.rom", "size": 16384, "crc": "0010ec31" }
       ]
@@ -1628,7 +1628,7 @@
       "name": "C128 BIOS",
       "set": "1571 DOS (310654-05)",
       "url": "https://www.zimmers.net/anonftp/pub/cbm/firmware/drives/new/1571/1571-rom.310654-05.bin",
-      "destination": "/roms/C64/bios",
+      "destination": "/bios",
       "files": [
         { "name": "1571.rom", "size": 32768, "crc": "5755bae3" }
       ]

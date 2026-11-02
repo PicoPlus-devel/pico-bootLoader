@@ -100,14 +100,14 @@ The *Doom!* data file is flashed by the loader together with the game; `/roms/do
 | PC Engine CD (`picopcePlus`) | `Super CD-ROM System (Japan) (v3.0).pce` | `/bios` | MiSTer BIOS database |
 | NES (`piconesPlus`), for Famicom Disk System games | `fds-bios.rom` | `/bios` | MiSTer BIOS database |
 | Genesis (`picogenesisPlus`), for Sega CD discs | `Sega CD 2 (USA) (v2.00).md`, `Mega-CD 2 (Europe) (v2.00).md` and `Mega-CD 2 (Japan) (v2.00C).md` | `/bios` | MiSTer BIOS database |
-| Commodore 64 (`picoC64`) | `c64basic.rom`, `c64kernal.rom`, `c64chargen.rom` and `1541.rom` | `/roms/C64/bios` | [zimmers.net](https://www.zimmers.net/anonftp/pub/cbm/firmware/) |
-| Commodore 128 (`picoC64`) | `c128basic.rom`, `c128kernal.rom`, `c128chargen.rom`, `c128c64.rom` and `1571.rom` | `/roms/C64/bios` | zimmers.net |
+| Commodore 64 (`picoC64`) | `c64basic.rom`, `c64kernal.rom`, `c64chargen.rom` and `1541.rom` | `/bios` | [zimmers.net](https://www.zimmers.net/anonftp/pub/cbm/firmware/) |
+| Commodore 128 (`picoC64`) | `c128basic.rom`, `c128kernal.rom`, `c128chargen.rom`, `c128c64.rom` and `1571.rom` | `/bios` | zimmers.net |
 
 The MiSTer BIOS database is [BiosDB_MiSTer](https://github.com/ajgowans/BiosDB_MiSTer), the database that the BIOS option of MiSTer's Update All uses; its files are held by the Internet Archive. None of the sources is part of this project, and each file is checked against the size and CRC32 in the configuration before it is written.
 
 The BIOS files are listed under `bios` in `updateAll.json`, one entry for each download, with an id that starts with `bios_`. Together they form the set `bios`: the Windows program shows them as one row, **BIOS**, and `--core bios` or `-Core bios` selects all of them.
 
-The files are installed under the names the applications look for. The Videopac, PC Engine CD and Genesis emulators recognise a BIOS by its contents rather than by its name, so a BIOS already in `/bios` under another name is used as well. pico-c64 also finds its ROMs in `/bios/c64`, `/bios` and `/roms/bios`.
+The files are installed under the names the applications look for. The Videopac, PC Engine CD and Genesis emulators recognise a BIOS by its contents rather than by its name, so a BIOS already in `/bios` under another name is used as well. pico-c64 also finds its ROMs in `/roms/C64/bios`, `/bios/c64` and `/roms/bios`; a copy in either of the first two is used before the one in `/bios`.
 
 ## Windows program
 
