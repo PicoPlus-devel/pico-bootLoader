@@ -107,10 +107,9 @@ for the boards it supports. `SKIP` is expected for excluded combinations
 (`picogenesisPlus` on HW 7; `picosnesPlus` and `picoOutRun` on HW 1, 5, 6, 7, 9;
 Doom outside boards 2, 8, 13, 14, 15; `duke3d_game` outside boards 2, 8, 13, 15;
 `pico-quake2` and `pico-lutionX` outside boards 2, 8; `colecojam` outside
-board 8). Until pico-lutionX has a release tag, the summary warns that it is
-built from its `main` branch; the updateAll entry `diablo` downloads the
-SD-card assets of pico-lutionX's release v0.1-alpha, so that release must exist
-before this archive is published. A `FAIL` for
+board 8). The updateAll entry `diablo` downloads the SD-card assets of
+pico-lutionX's release v0.1-alpha, so that release must stay published.
+A `FAIL` for
 `pico-quake2` that says `fruitjam-build-forbootloader.sh not found` means its
 latest release tag predates the bootloader build scripts; tag a newer
 pico-quake2 release first. Likewise, a `FAIL` for `doom_tiny` that says

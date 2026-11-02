@@ -79,10 +79,11 @@ they are **not** emulated.
 4. **Add your games.** The archive contains no games, ROMs or BIOS files. Each
    emulator's file browser opens in its own folder: `/roms/NES`, `/roms/SNES`,
    `/roms/MD` (Genesis / Mega Drive), `/roms/PCE`, `/roms/GB`, `/roms/SMS`
-   (Master System and Game Gear), `/roms/O2E` (Videopac) or `/roms/TI99`, and
-   at the root of the card when that folder does not exist. The BIOS files and
-   the folders of *ColecoVision*, *Doom*, *Duke Nukem 3D*, *Quake II*, *Diablo*
-   and the arcade games are given under [Bootable applications](#bootable-applications).
+   (Master System and Game Gear), `/roms/O2E` (Videopac), `/roms/TI99` or
+   `/roms/C64`, and at the root of the card when that folder does not exist.
+   The BIOS files and the folders of *ColecoVision*, *Doom*, *Duke Nukem 3D*,
+   *Quake II*, *Diablo* and the arcade games are given under
+   [Bootable applications](#bootable-applications).
 5. **Run it.** Insert the card and power on the board. The menu appears.
 
 The Releases page provides two kinds of download: the per-board bootloader
@@ -232,6 +233,21 @@ them. TI BASIC is reachable without a cartridge. A USB keyboard acts as the TI
 keyboard, and joysticks come from USB gamepads, NES/SNES pads or Wii
 controllers. **PSRAM** is not required, but without it the disk drives are
 unavailable and cartridge ROM is capped at 32 KB.
+
+*Commodore 64/128* is built for every board the loader supports. Programs
+(`.prg`, `.t64`), disk images (`.d64`, `.g64`, and `.d71` for the Commodore 128),
+tapes (`.tap`) and cartridges (`.crt`) go in `/roms/C64`. The file
+`C64 BASIC.c64`, created in that folder at start-up, starts BASIC with nothing
+loaded. A USB keyboard acts as the Commodore keyboard, and joysticks come from
+USB gamepads, NES/SNES pads, Wii controllers or the numeric keypad. **PSRAM** is
+not required for the Commodore 64: without it, the ROM files are copied from the
+SD card into flash at the first start, and a cartridge is written to flash before
+it starts. The Commodore 128 needs both **HSTX** video and **PSRAM**; on other
+boards its entries and `.d71` files are not offered. The emulation is PAL only.
+Only the Adafruit Fruit Jam (HW_CONFIG 8) and the Adafruit DVI + MicroSD breakout
+combination (2) have been tried on real hardware; the
+[pico-c64 README](https://github.com/PicoPlus-devel/pico-c64#supported-boards)
+gives the state of each board.
 
 *ColecoVision* runs on the Adafruit Fruit Jam (HW_CONFIG 8) only. The emulator,
 [Adafruit_ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam), is
@@ -1209,12 +1225,11 @@ which are installed as `pico-quake2.uf2` and `pico-lutionX.uf2` (the
 `SCRIPTED_UF2_OF` table). Both need `PICO_PIO_USB_PATH` on both of their boards;
 without it, they are skipped on HW_CONFIG 2 as well.
 
-Of these repositories, all but pico-lutionX are tagged and are built from their
-latest tag like the emulators, so `versions.txt` records a real version for
-`doom_tiny`, `doom_tiny_full`, `duke3d_game`, `pico-quake2` and `colecojam`;
-`pico-lutionX` is built from its `main` branch until its first release is
-tagged, and `versions.txt` records `main@<sha>` for it. The tag is simply the newest by
-version order, whether or not it carries a `v` prefix (Adafruit_ColecoJam's
+All of these repositories are tagged and are built from their latest tag like
+the emulators, so `versions.txt` records a real version for `doom_tiny`,
+`doom_tiny_full`, `duke3d_game`, `pico-quake2`, `pico-lutionX` and `colecojam`.
+The tag is simply the newest by version order, whether or not it carries a `v`
+prefix (Adafruit_ColecoJam's
 tags do not), so later tags are picked up with no change here. This applies to
 the emulators as well: a tag whose GitHub release is marked as a pre-release,
 such as Adafruit_ColecoJam's beta `2.0b1`, is skipped in favour of the newest

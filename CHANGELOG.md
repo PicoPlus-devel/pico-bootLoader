@@ -12,7 +12,8 @@ USB controllers on the Adafruit Fruit Jam and the other boards with PIO-USB
 are now found at every start, in the menu and in the applications. On boards
 with HSTX video the applications no longer show small dots or lines in the
 picture. *Diablo* joins the Ports category, *Salamander* the Arcade category,
-and **updateAll** now also installs the BIOS files the emulators need.
+the *Commodore 64 and 128* the Computer category, and **updateAll** now also
+installs the BIOS files the emulators need.
 
 > **Do you need to update?** Yes. On boards with PIO-USB, re-flash the board.
 > On every board, replace the `/emu` and `/updateAll` folders on the card with
@@ -41,6 +42,12 @@ and **updateAll** now also installs the BIOS files the emulators need.
   as *OutRun*. The games are not included: copy MAME's `salamand.zip` to
   `/roms/arcade/SALAMAND` and `lifefrce.zip` to `/roms/arcade/LIFEFRCE`, or let
   updateAll install them.
+- **Commodore 64 and 128** join the Computer category. The Commodore 64 runs on
+  every board; the Commodore 128 needs HSTX video and PSRAM. The emulator has so
+  far been tried only on the Adafruit Fruit Jam and with the Adafruit DVI and
+  microSD breakouts. Programs, disks, tapes and cartridges go in `/roms/C64`, and
+  updateAll installs the ROM files it needs. See the
+  [pico-c64 README](https://github.com/PicoPlus-devel/pico-c64#readme).
 - **updateAll installs the BIOS files**, as MiSTer's Update All does: for the
   TI-99/4A, Commodore 64 and 128, Videopac, ColecoVision and PC Engine CD, and
   for Famicom Disk System games and Sega CD discs. The Windows program shows
