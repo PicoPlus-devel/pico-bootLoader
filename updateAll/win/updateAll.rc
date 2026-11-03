@@ -30,14 +30,21 @@ BEGIN
     LTEXT           "&Zip folder:", -1, 7, 27, 52, 8
     EDITTEXT        IDC_ZIPS, 62, 25, 288, 13, ES_AUTOHSCROLL
     PUSHBUTTON      "B&rowse...", IDC_ZIPS_BROWSE, 356, 24, 57, 14
-    LTEXT           "Se&ts to install:", -1, 7, 45, 120, 8
+    /* Before the label below, whose mnemonic goes to the control after it. */
+    CONTROL         "Select &all", IDC_SELECT_ALL, "Button", BS_3STATE | WS_TABSTOP, 70, 44, 80, 10
+    LTEXT           "Se&ts to install:", -1, 7, 45, 60, 8
     CONTROL         "", IDC_SETS, WC_LISTVIEW, LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL |
                     LVS_NOSORTHEADER | WS_BORDER | WS_TABSTOP, 7, 55, 406, 74
     AUTOCHECKBOX    "&Download missing files", IDC_DOWNLOAD, 7, 134, 220, 10
     AUTOCHECKBOX    "Dry r&un: only show what would be done", IDC_DRYRUN, 230, 134, 183, 10
-    LTEXT           "&Log:", -1, 7, 150, 60, 8
-    EDITTEXT        IDC_LOG, 7, 160, 406, 110, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL |
+    AUTOCHECKBOX    "Show lo&g", IDC_SHOWLOG, 363, 149, 50, 10
+    LTEXT           "&Log:", IDC_VIEW_LABEL, 7, 150, 60, 8
+    /* These two share one place; the window shows one of them. */
+    EDITTEXT        IDC_LOG, 7, 160, 406, 101, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL |
                     WS_VSCROLL | WS_TABSTOP
+    CONTROL         "", IDC_FILES, WC_LISTVIEW, LVS_REPORT | LVS_SINGLESEL | LVS_NOSORTHEADER |
+                    WS_BORDER | WS_TABSTOP, 7, 160, 406, 101
+    LTEXT           "", IDC_STATUS, 7, 265, 406, 8, SS_ENDELLIPSIS | SS_NOPREFIX
     CONTROL         "", IDC_PROGRESS, PROGRESS_CLASS, PBS_SMOOTH, 7, 279, 282, 12
     DEFPUSHBUTTON   "&Install", IDOK, 296, 277, 57, 14
     PUSHBUTTON      "Close", IDCANCEL, 356, 277, 57, 14

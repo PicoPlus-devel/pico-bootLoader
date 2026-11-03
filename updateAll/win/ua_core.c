@@ -277,6 +277,13 @@ static void out_err(const ua_hooks *h, const char *f, ...)
     free(s);
 }
 
+static void file_event(const ua_hooks *h, const char *set, const char *file, int state,
+                       const char *detail)
+{
+    if (h->on_file)
+        h->on_file(h->ctx, set, file, state, detail);
+}
+
 static int read_file(const char *path, char **data, size_t *len, char **err)
 {
     FILE *f = ua_fopen(path, "rb");
@@ -1085,12 +1092,19 @@ static int databases_find(databases *d, const char *zip_name, db_hit *hit)
         d->loaded = xmalloc((size_t)(d->nsources ? d->nsources : 1) * sizeof *d->loaded);
         for (int i = 0; i < d->nsources; i++) {
             char *err = NULL;
+            const char *file = base_name(d->sources[i]);
+            if (ua_is_url(d->sources[i]))
+                file_event(d->h, "Database", file, UA_FILE_DOWNLOADING, "Downloading");
+            else
+                file_event(d->h, "Database", file, UA_FILE_BUSY, "Reading");
             if (database_load(&d->loaded[d->nloaded], d->sources[i], &err)) {
                 d->nerrors++;
                 out(d->h, "ERROR: database %s: %s", d->sources[i], err);
+                file_event(d->h, "Database", file, UA_FILE_FAILED, err);
                 free(err);
             } else {
                 d->nloaded++;
+                file_event(d->h, "Database", file, UA_FILE_DONE, "Loaded");
             }
         }
     }
@@ -1111,6 +1125,7 @@ typedef struct {
     FILE *out;
     ua_md5 md5;
     long long got;
+    long long size;     /* the database's size, for a server that announces none */
     int write_errno;
     int cancelled;
     const ua_hooks *h;
@@ -1126,7 +1141,7 @@ static int dl_sink(void *ctx, const void *data, size_t len, long long total)
     ua_md5_update(&s->md5, data, len);
     s->got += (long long)len;
     if (s->h->on_bytes)
-        s->h->on_bytes(s->h->ctx, s->got, total);
+        s->h->on_bytes(s->h->ctx, s->got, total >= 0 ? total : s->size);
     if (is_cancelled(s->h)) {
         s->cancelled = 1;
         return 1;
@@ -1155,20 +1170,27 @@ static int sleep_unless_cancelled(const ua_hooks *h, int ms)
 }
 
 /* download(); returns the number of bytes, or -1 with *reason set. */
-static long long download(const db_hit *hit, const char *dest, int need_zip, const ua_hooks *h,
-                          char **reason)
+static long long download(const db_hit *hit, const char *dest, int need_zip, const char *set,
+                          const char *name, const ua_hooks *h, char **reason)
 {
     char *tmp = fmt("%s.part", dest);
     char *why = xstrdup("no attempt made");
     long long result = -1;
     for (int attempt = 0; attempt < DOWNLOAD_ATTEMPTS; attempt++) {
-        if (attempt && sleep_unless_cancelled(h, 2000 * attempt)) {
-            free(why);
-            why = xstrdup("cancelled");
-            break;
+        if (attempt) {
+            char *retry = fmt("Retrying: %s", why);
+            file_event(h, set, name, UA_FILE_BUSY, retry);
+            free(retry);
+            if (sleep_unless_cancelled(h, 2000 * attempt)) {
+                free(why);
+                why = xstrdup("cancelled");
+                break;
+            }
+            file_event(h, set, name, UA_FILE_DOWNLOADING, "Downloading");
         }
         dl_state s = { 0 };
         s.h = h;
+        s.size = hit->has_size ? hit->size : -1;
         ua_md5_init(&s.md5);
         int stop = 0;
         char err[512] = "";
@@ -1258,6 +1280,9 @@ static int fetch_missing_zips(const ua_core *core, const char *zip_dir, strv *li
             strv_push(notes, fmt("would download %s from %s", zname, source));
             if (core->uf2)
                 strv_push(notes, uf2_note(zname, core->uf2_address, dry_run));
+            char *would = fmt("Would download from %s", source);
+            file_event(h, core->name, zname, UA_FILE_NOTE, would);
+            free(would);
             pending = 1;
             hit_free(&hit);
             free(source);
@@ -1270,20 +1295,26 @@ static int fetch_missing_zips(const ua_core *core, const char *zip_dir, strv *li
         }
         char *why = NULL;
         long long got = -1;
+        file_event(h, core->name, zname, UA_FILE_DOWNLOADING, "Downloading");
         if (ua_mkdirs(zip_dir)) {
             why = xstrdup(ua_last_error());
         } else {
             char *dest = path_join(zip_dir, zname);
-            got = download(&hit, dest, !core->url, h, &why);
+            got = download(&hit, dest, !core->url, core->name, zname, h, &why);
             free(dest);
         }
         if (got < 0) {
             strv_push(errors, fmt("download of %s from %s failed: %s", zname, source, why));
+            if (!strcmp(why, "cancelled"))
+                file_event(h, core->name, zname, UA_FILE_CANCELLED, "Cancelled");
+            else
+                file_event(h, core->name, zname, UA_FILE_FAILED, why);
             free(why);
         } else {
             strv_push(listing, xstrdup(zname));
             strv_push(notes, fmt("downloaded %s (%" PRId64 " KB) from %s", zname,
                                  (int64_t)((got + 1023) / 1024), source));
+            file_event(h, core->name, zname, UA_FILE_BUSY, "Downloaded");     /* the install can still fail */
         }
         hit_free(&hit);
         free(source);
@@ -1522,6 +1553,7 @@ static void open_archives(const ua_core *core, const char *path, const char *nam
             return;
         }
         if (core->uf2) {
+            file_event(h, core->name, name, UA_FILE_BUSY, "Converting to a UF2 image");
             a->plain = to_uf2((unsigned char *)data, len, core->uf2_address, core->uf2_family,
                               &a->plain_size, h);
             free(data);
@@ -1692,10 +1724,13 @@ static void install_core(const ua_core *core, const char *zip_dir, const strv *l
         return;
     }
 
+    const char *doing = dry_run ? "Checking" : "Installing";
     archive *arcs = NULL;
     int narcs = 0, acap = 0;
-    for (int i = 0; i < paths.n; i++)
+    for (int i = 0; i < paths.n; i++) {
+        file_event(h, core->name, res->used.v[i], UA_FILE_BUSY, doing);
         open_archives(core, paths.v[i], res->used.v[i], &arcs, &narcs, &acap, dry_run, res, h);
+    }
 
     zip_entry *entries = NULL;
     int nentries = 0, cap = 0;
@@ -1706,8 +1741,12 @@ static void install_core(const ua_core *core, const char *zip_dir, const strv *l
             join_parts(&core->files[i], &arcs, &narcs, &acap, entries, nentries, res);
     index_archives(arcs, opened, narcs, &entries, &nentries, &cap);
 
+    /* The bytes hook follows the set's files from here, on its last zip's row. */
+    file_event(h, core->name, res->used.v[res->used.n - 1], UA_FILE_BUSY, doing);
     char *dest = dest_dir(core, sd_root);
     for (int i = 0; i < core->nfiles && !is_cancelled(h); i++) {
+        if (h->on_bytes)
+            h->on_bytes(h->ctx, i, core->nfiles);
         const ua_file *f = &core->files[i];
         const char *wanted = base_name(f->name);
         char *target = file_target(dest, f->name);
@@ -1847,6 +1886,14 @@ static int run(const ua_core **cores, int ncores, int requested, int dry_run,
             skipped++;
             out(h, "%s: skipped, %s%s", core->name, res.skipped,
                 dbs->nloaded && !core->url ? ", and not in any database" : "");
+            /* A cancelled run did not look in the databases for it. */
+            if (!is_cancelled(h)) {
+                char *zips = strv_join(core->zips, core->nzips, " or ");
+                file_event(h, core->name, zips, UA_FILE_NOTE,
+                           dbs->nloaded && !core->url ? "Not found, and not in any database"
+                                                      : "Not found");
+                free(zips);
+            }
         } else {
             char *used = res.used.n ? strv_join(res.used.v, res.used.n, ", ")
                                     : strv_join(core->zips, core->nzips, ", ");
@@ -1885,6 +1932,21 @@ static int run(const ua_core **cores, int ncores, int requested, int dry_run,
                     complete++;
                 else
                     failed++;
+                /* res.errors, not errors: a good zip is not to blame for a
+                   download of another zip of the set that failed. */
+                char *absent = fmt("%d of %d files not in the zip", res.missing.n, core->nfiles);
+                for (int i = 0; i < res.used.n; i++) {
+                    if (res.errors.n)
+                        file_event(h, core->name, res.used.v[i], UA_FILE_FAILED, res.errors.v[0]);
+                    else if (res.missing.n)
+                        file_event(h, core->name, res.used.v[i], UA_FILE_FAILED, absent);
+                    else if (is_cancelled(h))
+                        file_event(h, core->name, res.used.v[i], UA_FILE_CANCELLED, "Cancelled");
+                    else
+                        file_event(h, core->name, res.used.v[i],
+                                   dry_run ? UA_FILE_NOTE : UA_FILE_DONE, *parts ? parts : "Done");
+                }
+                free(absent);
             }
         }
         strv_free(&notes);

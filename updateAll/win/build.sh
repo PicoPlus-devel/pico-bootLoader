@@ -43,6 +43,6 @@ for src in ua_core.c ua_win32.c ua_gui.c; do
 done
 "$CC" -municode -mwindows -static -s -Wl,--gc-sections -o build/updateAll.exe \
     build/ua_core.o build/ua_win32.o build/ua_gui.o build/miniz.o build/cJSON.o build/updateAll.res \
-    -lwinhttp -lcomctl32 -lole32 -lshell32 -luuid
+    -lwinhttp -lcomctl32 -luxtheme -lole32 -lshell32 -luuid
 
 echo "built $(pwd)/build/updateAll.exe ($VERSION, $(stat -c%s build/updateAll.exe) bytes)"

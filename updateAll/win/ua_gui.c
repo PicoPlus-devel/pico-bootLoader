@@ -1,7 +1,8 @@
 /*
  * updateAll.exe: the window around the updateAll core. The core runs on a
  * worker thread and reports through posted messages; the window only
- * collects the choices and shows the log the scripts would print.
+ * collects the choices, lists the files of the run with their progress, and
+ * keeps the log the scripts would print.
  */
 #define _WIN32_WINNT 0x0601
 #define WIN32_LEAN_AND_MEAN
@@ -11,6 +12,8 @@
 #include <dbt.h>
 #include <process.h>
 #include <shobjidl.h>
+#include <uxtheme.h>
+#include <vssym32.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,10 +32,12 @@
 #define UA_VERSION_W WIDEN(UA_VERSION)
 
 #define WM_APP_LOG      (WM_APP + 1)   /* lParam: malloc'd text */
-#define WM_APP_PROGRESS (WM_APP + 2)   /* lParam: 0..1000 */
+#define WM_APP_SET      (WM_APP + 2)   /* wParam: set, lParam: number of sets */
 #define WM_APP_STATUS   (WM_APP + 3)   /* wParam: row, lParam: files current, -1 for no card */
 #define WM_APP_DONE     (WM_APP + 4)   /* wParam: job kind, lParam: exit status */
 #define WM_APP_CONFIG   (WM_APP + 5)   /* lParam: malloc'd fetched */
+#define WM_APP_BYTES    (WM_APP + 6)   /* wParam: done, lParam: total, -1 when unknown */
+#define WM_APP_FILE     (WM_APP + 7)   /* lParam: malloc'd file_msg */
 #define TIMER_CHECK     1
 
 enum { JOB_NONE, JOB_CHECK, JOB_INSTALL, JOB_CONFIG };
@@ -42,7 +47,7 @@ typedef struct {
     char *sd, *zips;
     char **ids;              /* NULL-terminated, or NULL for every set */
     int no_download, dry_run;
-    int last_permille;
+    DWORD last_bytes;        /* when on_bytes last reached the window */
     char *config_url, *config_dir;
 } job;
 
@@ -53,6 +58,22 @@ typedef struct {
     char err[1024];
 } fetched;
 
+/* What the core says about a file of the run. */
+typedef struct {
+    int state;
+    wchar_t *set, *file, *detail;
+} file_msg;
+
+/* A row of the list of files. */
+typedef struct {
+    wchar_t *file;
+    int state;
+    int permille;            /* how far its bar is */
+    int counted;             /* the bar shows a known part of a total */
+} file_row;
+
+enum { COL_FILE, COL_SET, COL_PROGRESS, COL_STATUS };
+
 /* How each control follows the window when it is resized. */
 enum { MOVE_X = 1, MOVE_Y = 2, GROW_X = 4, GROW_Y = 8 };
 static const struct {
@@ -60,9 +81,14 @@ static const struct {
 } anchors[] = {
     { IDC_SD, GROW_X },          { IDC_SD_BROWSE, MOVE_X },  { IDC_ZIPS, GROW_X },
     { IDC_ZIPS_BROWSE, MOVE_X }, { IDC_SETS, GROW_X },       { IDC_LOG, GROW_X | GROW_Y },
+    { IDC_FILES, GROW_X | GROW_Y }, { IDC_SHOWLOG, MOVE_X }, { IDC_STATUS, MOVE_Y | GROW_X },
     { IDC_PROGRESS, MOVE_Y | GROW_X }, { IDOK, MOVE_X | MOVE_Y }, { IDCANCEL, MOVE_X | MOVE_Y },
 };
 #define NANCHORS ((int)(sizeof anchors / sizeof anchors[0]))
+
+/* What cannot be changed during a run, or without a configuration. */
+static const int inputs[] = { IDC_SD,         IDC_SD_BROWSE, IDC_ZIPS,     IDC_ZIPS_BROWSE,
+                              IDC_SELECT_ALL, IDC_SETS,      IDC_DOWNLOAD, IDC_DRYRUN };
 
 static struct {
     HWND dlg;
@@ -79,6 +105,14 @@ static struct {
     RECT rects[NANCHORS];
     SIZE client0;
     POINT min_track;
+    file_row *rows;          /* the list of files */
+    int nrows, rows_cap;
+    int set_first;           /* the first row of the set being processed */
+    int active;              /* the row that on_bytes reports on, or -1 */
+    int set_n, nsets;        /* the set being processed; nsets is 0 until there is one */
+    int overall;             /* where the bar at the bottom is */
+    wchar_t *last_line;      /* the last line the core reported */
+    HTHEME bar_theme;        /* NULL without visual styles */
 } app;
 
 /* ------------------------------------------------------------------------- */
@@ -135,19 +169,38 @@ static void hook_log(void *ctx, int to_stderr, const char *line)
 static void hook_set(void *ctx, int n, int nsets)
 {
     (void)ctx;
-    PostMessageW(app.dlg, WM_APP_PROGRESS, 0, nsets ? n * 1000 / nsets : 0);
+    PostMessageW(app.dlg, WM_APP_SET, n, nsets);
 }
 
 static void hook_bytes(void *ctx, long long done, long long total)
 {
     job *j = ctx;
-    if (total <= 0)
+    DWORD now = GetTickCount();
+    if (done != total && now - j->last_bytes < 100)
         return;
-    int permille = (int)(done * 1000 / total);
-    if (permille != j->last_permille) {
-        j->last_permille = permille;
-        PostMessageW(app.dlg, WM_APP_PROGRESS, 0, permille);
-    }
+    j->last_bytes = now;
+    PostMessageW(app.dlg, WM_APP_BYTES, (WPARAM)done, (LPARAM)total);
+}
+
+static void file_msg_free(file_msg *m)
+{
+    free(m->set);
+    free(m->file);
+    free(m->detail);
+    free(m);
+}
+
+static void hook_file(void *ctx, const char *set, const char *file, int state, const char *detail)
+{
+    job *j = ctx;
+    j->last_bytes = 0;       /* the next on_bytes is about this file */
+    file_msg *m = malloc(sizeof *m);
+    m->state = state;
+    m->set = ua_widen(set);
+    m->file = ua_widen(file);
+    m->detail = ua_widen(detail);
+    if (!PostMessageW(app.dlg, WM_APP_FILE, 0, (LPARAM)m))
+        file_msg_free(m);
 }
 
 static int hook_cancelled(void *ctx)
@@ -192,7 +245,8 @@ static unsigned __stdcall worker(void *arg)
             free(f);
         }
     } else {
-        ua_hooks hooks = { hook_log, hook_set, hook_bytes, hook_cancelled, j };
+        ua_hooks hooks = { .log = hook_log, .on_set = hook_set, .on_bytes = hook_bytes,
+                           .on_file = hook_file, .cancelled = hook_cancelled, .ctx = j };
         ua_options opt = { j->sd, j->zips, (const char **)j->ids, NULL, j->no_download,
                            j->dry_run };
         rc = ua_run(&app.cfg, &opt, &hooks);
@@ -206,7 +260,6 @@ static void start_job(job *j)
 {
     app.cancel = 0;
     app.job = j->kind;
-    j->last_permille = -1;
     HANDLE h = (HANDLE)_beginthreadex(NULL, 0, worker, j, 0, NULL);
     if (h) {
         CloseHandle(h);
@@ -232,6 +285,231 @@ static void log_text(const wchar_t *s)
     int len = GetWindowTextLengthW(e);
     SendMessageW(e, EM_SETSEL, len, len);
     SendMessageW(e, EM_REPLACESEL, FALSE, (LPARAM)s);
+}
+
+/* The status line says this at the end of a run: the core's last line is its
+   summary, "Cancelled", or the reason it could not start. */
+static void remember_line(const wchar_t *s)
+{
+    size_t n = wcslen(s);
+    while (n && (s[n - 1] == L'\r' || s[n - 1] == L'\n'))
+        n--;
+    if (!n)
+        return;
+    free(app.last_line);
+    app.last_line = malloc((n + 1) * sizeof *app.last_line);
+    wmemcpy(app.last_line, s, n);
+    app.last_line[n] = 0;
+}
+
+/* The list of files and the log share one place in the window. */
+static void show_view(int log)
+{
+    HWND show = item(log ? IDC_LOG : IDC_FILES), hide = item(log ? IDC_FILES : IDC_LOG);
+    ShowWindow(show, SW_SHOW);
+    if (GetFocus() == hide)
+        SetFocus(show);
+    ShowWindow(hide, SW_HIDE);
+    if (log)
+        SendMessageW(show, EM_SCROLLCARET, 0, 0);
+    SetDlgItemTextW(app.dlg, IDC_VIEW_LABEL, log ? L"&Log:" : L"&Files:");
+    CheckDlgButton(app.dlg, IDC_SHOWLOG, log ? BST_CHECKED : BST_UNCHECKED);
+}
+
+static int is_final(int state)
+{
+    return state != UA_FILE_DOWNLOADING && state != UA_FILE_BUSY;
+}
+
+static void redraw_bar(int row)
+{
+    HWND lv = item(IDC_FILES);
+    RECT r;
+    ListView_GetSubItemRect(lv, row, COL_PROGRESS, LVIR_BOUNDS, &r);
+    InvalidateRect(lv, &r, FALSE);
+}
+
+static void clear_files(void)
+{
+    ListView_DeleteAllItems(item(IDC_FILES));
+    for (int r = 0; r < app.nrows; r++)
+        free(app.rows[r].file);
+    app.nrows = app.set_first = app.set_n = app.nsets = app.overall = 0;
+    app.active = -1;
+}
+
+/* The bar at the bottom: each set has an equal share, and the file being worked
+   on moves it through that share. It never goes back, though a file's progress
+   does when it starts again or when the next stage of the file begins. */
+static void raise_overall(int permille)
+{
+    if (!app.nsets)
+        return;
+    int pos = (app.set_n * 1000 + permille * 9 / 10) / app.nsets;
+    if (pos > app.overall) {
+        app.overall = pos;
+        SendMessageW(item(IDC_PROGRESS), PBM_SETPOS, pos, 0);
+    }
+}
+
+static void set_started(int n, int nsets)
+{
+    if (app.cancel)              /* the core reports the set before it sees the cancel */
+        return;
+    app.set_first = app.nrows;
+    app.set_n = n;
+    app.nsets = nsets;
+    app.active = -1;
+    wchar_t text[64];
+    swprintf(text, 64, L"Set %d of %d", n + 1, nsets);
+    SetDlgItemTextW(app.dlg, IDC_STATUS, text);
+    raise_overall(0);
+}
+
+/* A file is one row while its set is processed; a later set that uses the same
+   zip gets a row of its own, since the core reports its result for that set. */
+static void file_changed(file_msg *m)
+{
+    HWND lv = item(IDC_FILES);
+    int row = app.set_first;
+    while (row < app.nrows && _wcsicmp(app.rows[row].file, m->file))
+        row++;
+    if (row == app.nrows) {
+        if (app.nrows == app.rows_cap) {
+            app.rows_cap = app.rows_cap ? app.rows_cap * 2 : 64;
+            app.rows = realloc(app.rows, (size_t)app.rows_cap * sizeof *app.rows);
+        }
+        app.rows[row] = (file_row){ .file = _wcsdup(m->file), .state = UA_FILE_BUSY };
+        app.nrows++;
+        LVITEMW it = { .mask = LVIF_TEXT, .iItem = row, .pszText = m->file };
+        ListView_InsertItem(lv, &it);
+        ListView_SetItemText(lv, row, COL_SET, m->set);
+        ListView_EnsureVisible(lv, row, FALSE);
+    }
+    file_row *f = &app.rows[row];
+    if (is_final(f->state))
+        return;
+    f->state = m->state;
+    f->counted = m->state == UA_FILE_DONE;
+    if (m->state == UA_FILE_DONE)
+        f->permille = 1000;
+    else if (m->state != UA_FILE_FAILED && m->state != UA_FILE_CANCELLED)
+        f->permille = 0;
+    if (!is_final(m->state))
+        app.active = row;
+    else if (app.active == row)
+        app.active = -1;
+    ListView_SetItemText(lv, row, COL_STATUS, m->detail);
+    redraw_bar(row);
+}
+
+static void size_text(wchar_t *out, size_t n, long long bytes)
+{
+    if (bytes < 1024 * 1024)
+        swprintf(out, n, L"%d KB", (int)((bytes + 1023) / 1024));
+    else
+        swprintf(out, n, L"%.1f MB", (double)bytes / (1024 * 1024));
+}
+
+static void bytes_changed(long long done, long long total)
+{
+    int permille = total > 0 ? (int)((done < total ? done : total) * 1000 / total) : 0;
+    raise_overall(permille);
+    if (app.active < 0)
+        return;
+    file_row *f = &app.rows[app.active];
+    if (f->state == UA_FILE_DOWNLOADING) {
+        wchar_t got[32], all[32], text[96];
+        size_text(got, 32, done);
+        if (total > 0) {
+            size_text(all, 32, total);
+            swprintf(text, 96, L"Downloading, %ls of %ls", got, all);
+        } else {
+            swprintf(text, 96, L"Downloading, %ls", got);
+        }
+        ListView_SetItemText(item(IDC_FILES), app.active, COL_STATUS, text);
+    }
+    if (permille != f->permille || f->counted != (total > 0)) {
+        f->permille = permille;
+        f->counted = total > 0;
+        redraw_bar(app.active);
+    }
+}
+
+/* The run is over, so nothing is under way any more, even if a message about a
+   file could not be posted. */
+static void files_done(int cancelled)
+{
+    for (int r = 0; r < app.nrows; r++) {
+        if (is_final(app.rows[r].state))
+            continue;
+        app.rows[r].state = cancelled ? UA_FILE_CANCELLED : UA_FILE_NOTE;
+        app.rows[r].counted = 0;
+        ListView_SetItemText(item(IDC_FILES), r, COL_STATUS, cancelled ? L"Cancelled" : L"See the log");
+        redraw_bar(r);
+    }
+    app.active = -1;
+}
+
+static void draw_bar(HWND lv, HDC dc, int row)
+{
+    const file_row *f = &app.rows[row];
+    RECT cell, bar, inner, fill;
+    /* Not the draw item's rectangle, which is not reliable for a subitem. */
+    ListView_GetSubItemRect(lv, row, COL_PROGRESS, LVIR_BOUNDS, &cell);
+    FillRect(dc, &cell, GetSysColorBrush(COLOR_WINDOW));
+    bar = cell;
+    InflateRect(&bar, -3, -2);
+    if (app.bar_theme) {
+        DrawThemeBackground(app.bar_theme, dc, PP_BAR, 0, &bar, NULL);
+        GetThemeBackgroundContentRect(app.bar_theme, dc, PP_BAR, 0, &bar, &inner);
+    } else {
+        FrameRect(dc, &bar, GetSysColorBrush(COLOR_BTNSHADOW));
+        inner = bar;
+        InflateRect(&inner, -1, -1);
+    }
+    int permille = f->state == UA_FILE_FAILED ? 1000 : f->permille;
+    fill = inner;
+    fill.right = inner.left + (inner.right - inner.left) * permille / 1000;
+    if (permille > 0 && app.bar_theme) {
+        int look = f->state == UA_FILE_FAILED      ? PBFS_ERROR
+                   : f->state == UA_FILE_CANCELLED ? PBFS_PAUSED
+                                                   : PBFS_NORMAL;
+        DrawThemeBackground(app.bar_theme, dc, PP_FILL, look, &fill, NULL);
+    } else if (permille > 0) {
+        FillRect(dc, &fill, GetSysColorBrush(COLOR_HIGHLIGHT));
+    }
+    if (f->counted) {
+        /* Light over the filled part of the bar, dark over the rest. */
+        wchar_t text[8];
+        swprintf(text, 8, L"%d%%", f->permille / 10);
+        for (int filled = 0; filled < 2; filled++) {
+            int saved = SaveDC(dc);
+            SetBkMode(dc, TRANSPARENT);
+            SetTextColor(dc, GetSysColor(filled ? COLOR_HIGHLIGHTTEXT : COLOR_WINDOWTEXT));
+            IntersectClipRect(dc, filled ? bar.left : fill.right, bar.top,
+                              filled ? fill.right : bar.right, bar.bottom);
+            DrawTextW(dc, text, -1, &bar, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            RestoreDC(dc, saved);
+        }
+    }
+}
+
+static LRESULT draw_files(NMLVCUSTOMDRAW *cd)
+{
+    switch (cd->nmcd.dwDrawStage) {
+    case CDDS_PREPAINT:
+        return CDRF_NOTIFYITEMDRAW;
+    case CDDS_ITEMPREPAINT:
+        return CDRF_NOTIFYSUBITEMDRAW;
+    case CDDS_ITEMPREPAINT | CDDS_SUBITEM:
+        if (cd->iSubItem == COL_PROGRESS && (int)cd->nmcd.dwItemSpec < app.nrows) {
+            draw_bar(cd->nmcd.hdr.hwndFrom, cd->nmcd.hdc, (int)cd->nmcd.dwItemSpec);
+            return CDRF_SKIPDEFAULT;
+        }
+        break;
+    }
+    return CDRF_DODEFAULT;
 }
 
 /* A path typed or pasted into a field, without surrounding blanks or the
@@ -359,17 +637,19 @@ static int may_download(void)
 
 static void update_buttons(void)
 {
+    int ticked = app.cfg_ok ? checked_sets() : 0;
     int ready = app.cfg_ok && !app.running && app.job != JOB_CONFIG &&
                 GetWindowTextLengthW(item(IDC_SD)) > 0 &&
-                checked_sets() > 0 &&
+                ticked > 0 &&
                 (GetWindowTextLengthW(item(IDC_ZIPS)) > 0 || may_download());
     EnableWindow(item(IDOK), ready);
+    CheckDlgButton(app.dlg, IDC_SELECT_ALL, !ticked                ? BST_UNCHECKED
+                                            : ticked < row_count() ? BST_INDETERMINATE
+                                                                   : BST_CHECKED);
 }
 
 static void set_running(int running)
 {
-    static const int inputs[] = { IDC_SD,   IDC_SD_BROWSE, IDC_ZIPS, IDC_ZIPS_BROWSE,
-                                  IDC_SETS, IDC_DOWNLOAD,  IDC_DRYRUN };
     app.running = running;
     for (size_t i = 0; i < sizeof inputs / sizeof inputs[0]; i++)
         EnableWindow(item(inputs[i]), !running && (inputs[i] != IDC_DOWNLOAD || can_download()));
@@ -444,6 +724,11 @@ static void install(void)
     }
 
     SetDlgItemTextW(app.dlg, IDC_LOG, L"");
+    SetDlgItemTextW(app.dlg, IDC_STATUS, L"");
+    free(app.last_line);
+    app.last_line = NULL;
+    clear_files();
+    show_view(0);
     SendMessageW(item(IDC_PROGRESS), PBM_SETSTATE, PBST_NORMAL, 0);
     SendMessageW(item(IDC_PROGRESS), PBM_SETPOS, 0, 0);
     set_running(1);
@@ -461,8 +746,13 @@ static void job_done(int kind, int rc)
     if (kind == JOB_CONFIG)
         update_buttons();
     if (kind == JOB_INSTALL) {
-        SendMessageW(item(IDC_PROGRESS), PBM_SETPOS, 1000, 0);
-        SendMessageW(item(IDC_PROGRESS), PBM_SETSTATE, rc ? PBST_ERROR : PBST_NORMAL, 0);
+        int cancelled = app.cancel != 0;
+        files_done(cancelled);
+        if (app.nsets && !cancelled)
+            SendMessageW(item(IDC_PROGRESS), PBM_SETPOS, 1000, 0);
+        SendMessageW(item(IDC_PROGRESS), PBM_SETSTATE,
+                     cancelled ? PBST_PAUSED : rc ? PBST_ERROR : PBST_NORMAL, 0);
+        SetDlgItemTextW(app.dlg, IDC_STATUS, app.last_line ? app.last_line : L"");
         MessageBeep(rc ? MB_ICONWARNING : MB_OK);
         if (app.closing) {
             EndDialog(app.dlg, 0);
@@ -490,6 +780,7 @@ static void close_or_cancel(void)
     if (app.queued) {              /* the install has not started yet */
         job_free(app.queued);
         app.queued = NULL;
+        SetDlgItemTextW(app.dlg, IDC_STATUS, L"Cancelled");
         set_running(0);
         return;
     }
@@ -590,6 +881,37 @@ static void init_sets(void)
         LVCOLUMNW col = { .mask = LVCF_TEXT | LVCF_WIDTH, .cx = 100, .pszText = (LPWSTR)titles[c] };
         ListView_InsertColumn(lv, c, &col);
     }
+}
+
+static void init_files(void)
+{
+    HWND lv = item(IDC_FILES);
+    ListView_SetExtendedListViewStyle(lv, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER |
+                                              LVS_EX_LABELTIP);
+    static const wchar_t *const titles[] = { L"File", L"Set", L"Progress", L"Status" };
+    for (int c = 0; c < 4; c++) {
+        LVCOLUMNW col = { .mask = LVCF_TEXT | LVCF_WIDTH, .cx = 100, .pszText = (LPWSTR)titles[c] };
+        ListView_InsertColumn(lv, c, &col);
+    }
+    app.bar_theme = OpenThemeData(lv, VSCLASS_PROGRESS);
+    app.active = -1;
+}
+
+/* Shares of the window's width, not of the client area, so that the columns stay
+   as they are when a scroll bar appears. */
+static void size_file_columns(void)
+{
+    static const int percent[] = { 26, 18, 16 };
+    HWND lv = item(IDC_FILES);
+    RECT r;
+    GetWindowRect(lv, &r);
+    int width = r.right - r.left - 2 * GetSystemMetrics(SM_CXEDGE) - GetSystemMetrics(SM_CXVSCROLL);
+    int used = 0;
+    for (int c = 0; c < 3; c++) {
+        ListView_SetColumnWidth(lv, c, width * percent[c] / 100);
+        used += width * percent[c] / 100;
+    }
+    ListView_SetColumnWidth(lv, COL_STATUS, width - used);
 }
 
 /* The texts of a row: the set's name, its zips and its folder; for the BIOS
@@ -766,6 +1088,7 @@ static void layout(void)
     if (dwp)
         EndDeferWindowPos(dwp);
     size_status_column();
+    size_file_columns();
 }
 
 static void init_dialog(HWND dlg)
@@ -794,6 +1117,9 @@ static void init_dialog(HWND dlg)
 
     SendMessageW(item(IDC_LOG), EM_SETLIMITTEXT, 0, 0);
     SendMessageW(item(IDC_PROGRESS), PBM_SETRANGE32, 0, 1000);
+    init_files();
+    size_file_columns();
+    show_view(1);
 
     log_text(L"updateAll installs arcade ROM sets, the BIOS files of the emulators, and the "
              L"shareware or demo data of the ported games, on the SD card. The ROM sets and BIOS "
@@ -818,8 +1144,6 @@ static void init_dialog(HWND dlg)
         log_config();
     }
     if (!app.cfg_ok) {
-        static const int inputs[] = { IDC_SD,   IDC_SD_BROWSE, IDC_ZIPS, IDC_ZIPS_BROWSE,
-                                      IDC_SETS, IDC_DOWNLOAD,  IDC_DRYRUN };
         for (size_t i = 0; i < sizeof inputs / sizeof inputs[0]; i++)
             EnableWindow(item(inputs[i]), FALSE);
     }
@@ -864,11 +1188,27 @@ static INT_PTR CALLBACK dlg_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         case IDC_DOWNLOAD:
             update_buttons();
             return TRUE;
+        case IDC_SELECT_ALL:
+            if (HIWORD(wp) == BN_CLICKED) {
+                int tick = checked_sets() < row_count();
+                for (int r = 0; r < row_count(); r++)
+                    ListView_SetCheckState(item(IDC_SETS), r, tick);
+            }
+            return TRUE;
+        case IDC_SHOWLOG:
+            show_view(IsDlgButtonChecked(dlg, IDC_SHOWLOG) == BST_CHECKED);
+            return TRUE;
         }
         break;
 
     case WM_NOTIFY: {
         const NMLISTVIEW *nm = (const NMLISTVIEW *)lp;
+        if (nm->hdr.idFrom == IDC_FILES && nm->hdr.code == NM_CUSTOMDRAW) {
+            /* A dialog procedure answers a notification through DWLP_MSGRESULT. */
+            LRESULT answer = draw_files((NMLVCUSTOMDRAW *)lp);
+            SetWindowLongPtrW(dlg, DWLP_MSGRESULT, answer);
+            return TRUE;
+        }
         if (nm->hdr.idFrom == IDC_SETS && nm->hdr.code == LVN_ITEMCHANGED &&
             (nm->uChanged & LVIF_STATE) && ((nm->uNewState ^ nm->uOldState) & LVIS_STATEIMAGEMASK))
             update_buttons();
@@ -892,12 +1232,28 @@ static INT_PTR CALLBACK dlg_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 
     case WM_APP_LOG:
         log_text((const wchar_t *)lp);
+        remember_line((const wchar_t *)lp);
         free((void *)lp);
         return TRUE;
 
-    case WM_APP_PROGRESS:
-        SendMessageW(item(IDC_PROGRESS), PBM_SETPOS, (WPARAM)lp, 0);
+    case WM_APP_SET:
+        set_started((int)wp, (int)lp);
         return TRUE;
+
+    case WM_APP_BYTES:
+        bytes_changed((long long)wp, (long long)lp);
+        return TRUE;
+
+    case WM_APP_FILE:
+        file_changed((file_msg *)lp);
+        file_msg_free((file_msg *)lp);
+        return TRUE;
+
+    case WM_THEMECHANGED:
+        if (app.bar_theme)
+            CloseThemeData(app.bar_theme);
+        app.bar_theme = OpenThemeData(item(IDC_FILES), VSCLASS_PROGRESS);
+        return FALSE;
 
     case WM_APP_STATUS:
         if (!app.running && app.job == JOB_CHECK && !app.cancel)

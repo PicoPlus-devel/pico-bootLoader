@@ -53,6 +53,10 @@ installs the BIOS files the emulators need.
   for Famicom Disk System games and Sega CD discs. The Windows program shows
   them as one entry, **BIOS**, that can be unticked. As with the ROM sets,
   holding the rights to them is your responsibility.
+- **The updateAll Windows program is easier to follow.** It lists each file with
+  its own progress bar, and the bar at the bottom now shows the whole run. A
+  **Select all** box ticks or unticks all sets, and the full report is still
+  there under **Show log**.
 
 ## v0.8
 

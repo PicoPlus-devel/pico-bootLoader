@@ -11,3 +11,8 @@
 #define IDC_DRYRUN          1007
 #define IDC_LOG             1008
 #define IDC_PROGRESS        1009
+#define IDC_FILES           1010
+#define IDC_SELECT_ALL      1011
+#define IDC_SHOWLOG         1012
+#define IDC_STATUS          1013
+#define IDC_VIEW_LABEL      1014

@@ -17,6 +17,37 @@ static void log_line(void *ctx, int to_stderr, const char *line)
     fputc('\n', f);
 }
 
+/* UA_EVENTS names a file for what the list of files of updateAll.exe would be
+   told, and UA_CANCEL_AFTER stops the run after that many calls of on_bytes;
+   compare.py uses them. Without them the hooks stay empty, which the core has
+   to cope with as well. */
+static FILE *events;
+static long bytes_calls, cancel_after;
+
+static void event_set(void *ctx, int n, int nsets)
+{
+    (void)ctx;
+    fprintf(events, "set\t%d\t%d\n", n, nsets);
+}
+
+static void event_file(void *ctx, const char *set, const char *file, int state, const char *detail)
+{
+    (void)ctx;
+    fprintf(events, "file\t%d\t%s\t%s\t%s\n", state, set, file, detail);
+}
+
+static void count_bytes(void *ctx, long long done, long long total)
+{
+    (void)ctx, (void)done, (void)total;
+    bytes_calls++;
+}
+
+static int cancel_now(void *ctx)
+{
+    (void)ctx;
+    return bytes_calls >= cancel_after;
+}
+
 /* Appends the comma-separated items of arg to list. */
 static void split(const char ***list, int *n, char *arg)
 {
@@ -90,7 +121,19 @@ int main(int argc, char **argv)
     } else {
         ua_hooks hooks = { 0 };
         hooks.log = log_line;
+        const char *trace = getenv("UA_EVENTS"), *after = getenv("UA_CANCEL_AFTER");
+        if (trace && (events = fopen(trace, "w"))) {
+            hooks.on_set = event_set;
+            hooks.on_file = event_file;
+        }
+        if (after) {
+            cancel_after = atol(after);
+            hooks.on_bytes = count_bytes;
+            hooks.cancelled = cancel_now;
+        }
         rc = ua_run(&cfg, &opt, &hooks);
+        if (events)
+            fclose(events);
     }
     ua_config_free(&cfg);
     free(cores);

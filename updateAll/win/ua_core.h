@@ -64,15 +64,25 @@ int ua_config_fetch(const char *url, const char *config_dir, ua_config *cfg, cha
 void ua_config_update(ua_config *cfg);
 void ua_config_free(ua_config *cfg);
 
+/* What is happening to a file of the run. DOWNLOADING and BUSY are under way,
+   and on_bytes reports on that file; the others are final. NOTE is final
+   without anything having been done: a dry run, or a set that was skipped. */
+enum { UA_FILE_DOWNLOADING, UA_FILE_BUSY, UA_FILE_DONE, UA_FILE_NOTE, UA_FILE_FAILED,
+       UA_FILE_CANCELLED };
+
 typedef struct {
     /* One line of output, without the newline. to_stderr marks the lines the
        Python script writes to stderr. */
     void (*log)(void *ctx, int to_stderr, const char *line);
     /* Progress of the run: set n of nsets is being processed. */
     void (*on_set)(void *ctx, int n, int nsets);
-    /* Progress of a download, or of converting game data into a UF2 image;
-       total is -1 when unknown. */
+    /* Progress of a download, of converting game data into a UF2 image, or of
+       a set's files on the card, counted in files instead of bytes; total is
+       -1 when unknown. */
     void (*on_bytes)(void *ctx, long long done, long long total);
+    /* A file of the run changes state, for a list of files; detail is the text
+       to show with it. The set's name does not identify it: names can repeat. */
+    void (*on_file)(void *ctx, const char *set, const char *file, int state, const char *detail);
     /* Non-zero to stop the run. */
     int (*cancelled)(void *ctx);
     void *ctx;
