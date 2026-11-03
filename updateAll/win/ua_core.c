@@ -20,6 +20,8 @@
 #define DOWNLOAD_ATTEMPTS 3
 #define TIMEOUT 60
 #define CONFIG_TIMEOUT 15
+#define RELEASE_MARKER "emu/release.txt"
+#define OWN_CONFIG "updateAll/updateAll.json"
 
 /* ------------------------------------------------------------------------- */
 /* Helpers                                                                   */
@@ -137,6 +139,21 @@ static int bad_name(const char *name)
 {
     return !name[0] || !strcmp(name, ".") || !strcmp(name, "..") ||
            strpbrk(name, "/\\:*?\"<>|") != NULL;
+}
+
+/* Whether a part of a path with "/" between its folders is a bad name. */
+static int bad_path(const char *name)
+{
+    int bad = 0;
+    for (const char *p = name;; p++) {
+        size_t n = strcspn(p, "/");
+        char *part = fmt("%.*s", (int)n, p);
+        bad |= bad_name(part);
+        free(part);
+        p += n;
+        if (!*p)
+            return bad;
+    }
 }
 
 int ua_is_url(const char *s)
@@ -414,7 +431,7 @@ static int parse_core(const cJSON *d, int kind, ua_core *c, strv *ids, const cha
                 "strings, 'zips' and 'files' lists", path, cid);
         return -1;
     }
-    if (ieq(cid, "bios")) {
+    if (ieq(cid, "bios") || ieq(cid, "sdcard")) {
         set_err(err, errlen, "%s: core '%s' has a reserved id", path, cid);
         return -1;
     }
@@ -540,18 +557,8 @@ static int parse_core(const cJSON *d, int kind, ua_core *c, strv *ids, const cha
         /* Game data may go into subfolders of its destination; ROM sets may
            not, as older copies of updateAll would reject that. */
         int bad = !fname || bad_name(fname);
-        if (fname && is_data) {
-            bad = 0;
-            for (const char *p = fname;; p++) {
-                size_t n = strcspn(p, "/");
-                char *part = fmt("%.*s", (int)n, p);
-                bad |= bad_name(part);
-                free(part);
-                p += n;
-                if (!*p)
-                    break;
-            }
-        }
+        if (fname && is_data)
+            bad = bad_path(fname);
         if (bad) {
             set_err(err, errlen, "%s: core '%s' has an invalid file name '%s'", path, cid,
                     fname ? fname : "");
@@ -689,6 +696,33 @@ int ua_config_parse(const char *text, size_t len, const char *path, const char *
         }
         cfg->config_url = xstrdup(url->valuestring);
     }
+
+    /* Where the SD-card archive is released; a key of its own, for the same
+       reason as "data". */
+    const cJSON *sdcard = cJSON_GetObjectItemCaseSensitive(root, "sdcard");
+    if (sdcard && !cJSON_IsNull(sdcard)) {
+        if (!cJSON_IsObject(sdcard)) {
+            set_err(err, errlen, "%s: 'sdcard' must be an object", path);
+            goto done;
+        }
+        const char *sd_name = str_field(sdcard, "name"), *sd_url = str_field(sdcard, "releases_url");
+        const char *sd_asset = str_field(sdcard, "asset");
+        if (!sd_name || !*sd_name) {
+            set_err(err, errlen, "%s: 'sdcard' needs a 'name'", path);
+            goto done;
+        }
+        if (!sd_url || !ua_is_url(sd_url)) {
+            set_err(err, errlen, "%s: 'sdcard' needs an http or https 'releases_url'", path);
+            goto done;
+        }
+        if (!sd_asset || bad_name(sd_asset) || !iends_with(sd_asset, ".zip")) {
+            set_err(err, errlen, "%s: 'sdcard' needs the name of a zip as 'asset'", path);
+            goto done;
+        }
+        cfg->sd_name = xstrdup(sd_name);
+        cfg->sd_url = xstrdup(sd_url);
+        cfg->sd_asset = xstrdup(sd_asset);
+    }
     cfg->config_dir = xstrdup(config_dir);
     cfg->source = xstrdup(path);
     rc = 0;
@@ -760,6 +794,9 @@ void ua_config_free(ua_config *cfg)
     free(cfg->config_dir);
     free(cfg->source);
     free(cfg->fetch_error);
+    free(cfg->sd_name);
+    free(cfg->sd_url);
+    free(cfg->sd_asset);
     memset(cfg, 0, sizeof *cfg);
 }
 
@@ -1270,6 +1307,11 @@ static int fetch_missing_zips(const ua_core *core, const char *zip_dir, strv *li
             if (!url_downloads)
                 continue;
             hit.url = xstrdup(core->url);
+            if (core->release) {
+                hit.has_size = 1;
+                hit.size = core->release->size;
+                hit.size_text = fmt("%lld", core->release->size);
+            }
             source = url_host(core->url);
         } else {
             if (!databases_find(dbs, zname, &hit))
@@ -1300,7 +1342,7 @@ static int fetch_missing_zips(const ua_core *core, const char *zip_dir, strv *li
             why = xstrdup(ua_last_error());
         } else {
             char *dest = path_join(zip_dir, zname);
-            got = download(&hit, dest, !core->url, core->name, zname, h, &why);
+            got = download(&hit, dest, !core->url || core->release, core->name, zname, h, &why);
             free(dest);
         }
         if (got < 0) {
@@ -1528,6 +1570,322 @@ static int write_file(const char *target, const void *data, size_t len, char **w
     return rc;
 }
 
+/* ------------------------------------------------------------------------- */
+/* The SD-card archive                                                       */
+/* ------------------------------------------------------------------------- */
+
+/* parse_tag(): three numbers to compare, or -1 for any other text. */
+static int parse_tag(const char *tag, unsigned key[3])
+{
+    key[0] = key[1] = key[2] = 0;
+    if (*tag++ != 'v')
+        return -1;
+    for (int n = 0;;) {
+        int digits = 0;
+        unsigned v = 0;
+        while (*tag >= '0' && *tag <= '9' && digits < 10)
+            v = v * 10 + (unsigned)(*tag++ - '0'), digits++;
+        if (!digits || digits > 9)
+            return -1;
+        key[n++] = v;
+        if (!*tag)
+            return n >= 2 ? 0 : -1;
+        if (*tag++ != '.' || n == 3)
+            return -1;
+    }
+}
+
+static int key_cmp(const unsigned a[3], const unsigned b[3])
+{
+    for (int i = 0; i < 3; i++)
+        if (a[i] != b[i])
+            return a[i] < b[i] ? -1 : 1;
+    return 0;
+}
+
+/* read_marker() */
+char *ua_card_release(const char *sd_root)
+{
+    char *path = file_target(sd_root, RELEASE_MARKER), *data = NULL, *why = NULL;
+    size_t len = 0;
+    int rc = read_file(path, &data, &len, &why);
+    free(path);
+    if (rc) {
+        free(why);
+        return NULL;
+    }
+    if (len > 256)
+        data[256] = 0;
+    data[strcspn(data, "\n")] = 0;
+    char *s = data;
+    while (*s && strchr(" \t\r\v\f", *s))
+        s++;
+    size_t n = strlen(s);
+    while (n && strchr(" \t\r\v\f", s[n - 1]))
+        s[--n] = 0;
+    unsigned key[3];
+    char *tag = parse_tag(s, key) ? NULL : xstrdup(s);
+    free(data);
+    return tag;
+}
+
+/* _release_asset(): the usable asset of this name in a release, or NULL. */
+static const cJSON *release_asset(const cJSON *release, const char *asset)
+{
+    const cJSON *assets = cJSON_GetObjectItemCaseSensitive(release, "assets"), *a;
+    if (!cJSON_IsArray(assets))
+        return NULL;
+    cJSON_ArrayForEach(a, assets) {
+        if (!cJSON_IsObject(a) || !str_field(a, "name") || strcmp(str_field(a, "name"), asset))
+            continue;
+        const cJSON *state = cJSON_GetObjectItemCaseSensitive(a, "state");
+        const cJSON *size = cJSON_GetObjectItemCaseSensitive(a, "size");
+        const char *url = str_field(a, "browser_download_url");
+        if ((!state || (cJSON_IsString(state) && !strcmp(state->valuestring, "uploaded"))) &&
+            url && ua_is_url(url) && cJSON_IsNumber(size) && size->valuedouble >= 0)
+            return a;
+    }
+    return NULL;
+}
+
+int ua_release_fetch(const ua_config *cfg, ua_release *rel, char *err, size_t errlen)
+{
+    memset(rel, 0, sizeof *rel);
+    membuf m = { 0 };
+    char why[512];
+    int status;
+    if (ua_http_get(cfg->sd_url, mem_sink, &m, &status, CONFIG_TIMEOUT, why, sizeof why)) {
+        free(m.buf);
+        set_err(err, errlen, "%s", why);
+        return -1;
+    }
+    char *json_err = NULL;
+    cJSON *root = parse_json(m.buf ? m.buf : "", m.len, &json_err);
+    free(json_err);
+    free(m.buf);
+    if (!cJSON_IsArray(root)) {
+        cJSON_Delete(root);
+        set_err(err, errlen, "the answer is not a list of releases");
+        return -1;
+    }
+    unsigned best[3] = { 0, 0, 0 };
+    const cJSON *r;
+    cJSON_ArrayForEach(r, root) {
+        /* The workflow does not mark a dry run such as v0.2.1-alpha as a
+           prerelease, so the form of the tag is what sets it apart. */
+        if (!cJSON_IsObject(r) || cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(r, "draft")) ||
+            cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(r, "prerelease")))
+            continue;
+        const char *tag = str_field(r, "tag_name"), *page = str_field(r, "html_url");
+        const cJSON *asset = release_asset(r, cfg->sd_asset);
+        unsigned key[3];
+        if (!tag || parse_tag(tag, key) || !asset || !page || !ua_is_url(page) ||
+            (rel->tag && key_cmp(key, best) <= 0))
+            continue;
+        ua_release_free(rel);
+        memcpy(best, key, sizeof best);
+        rel->tag = xstrdup(tag);
+        rel->page = xstrdup(page);
+        rel->url = xstrdup(str_field(asset, "browser_download_url"));
+        rel->size = (long long)cJSON_GetObjectItemCaseSensitive(asset, "size")->valuedouble;
+    }
+    cJSON_Delete(root);
+    if (!rel->tag) {
+        set_err(err, errlen, "no release holds %s", cfg->sd_asset);
+        return -1;
+    }
+    return 0;
+}
+
+void ua_release_compare(ua_release *rel, const char *card_tag)
+{
+    free(rel->card);
+    rel->card = card_tag ? xstrdup(card_tag) : NULL;
+    rel->newer = rel->firmware = 1;
+    unsigned tag[3], card[3];
+    if (rel->card && !parse_tag(rel->tag, tag) && !parse_tag(rel->card, card)) {
+        rel->newer = key_cmp(tag, card) > 0;
+        /* v0.N.M has the firmware of v0.N, so only the first two numbers count. */
+        rel->firmware = tag[0] != card[0] || tag[1] != card[1];
+    }
+}
+
+void ua_release_free(ua_release *rel)
+{
+    free(rel->tag);
+    free(rel->page);
+    free(rel->url);
+    free(rel->card);
+    memset(rel, 0, sizeof *rel);
+}
+
+int ua_card_has_emu(const char *sd_root)
+{
+    char *emu = path_join(sd_root, "emu");
+    int has = ua_is_dir(emu);
+    free(emu);
+    return has;
+}
+
+/* forget_stale_zip(): a release can be cut again, so a kept archive of the
+   wrong size is taken from the listing, which downloads it again. */
+static void forget_stale_zip(const ua_core *core, const char *zip_dir, strv *listing)
+{
+    for (int i = 0; i < listing->n; i++) {
+        if (!ieq(listing->v[i], core->zips[0]))
+            continue;
+        char *path = path_join(zip_dir, listing->v[i]);
+        long long size;
+        if (ua_file_size(path, &size) || size != core->release->size) {
+            free(listing->v[i]);
+            memmove(listing->v + i, listing->v + i + 1,
+                    (size_t)(listing->n - i) * sizeof *listing->v);
+            listing->n--;
+            i--;
+        }
+        free(path);
+    }
+}
+
+/* keeps_own_config(): whether the card's updateAll.json stays. */
+static int keeps_own_config(const char *sd_root)
+{
+    char *path = file_target(sd_root, OWN_CONFIG), *data = NULL, *why = NULL, *json_err = NULL;
+    long long size;
+    size_t len;
+    int keep = 0;
+    if (!ua_file_size(path, &size)) {
+        keep = 1;
+        if (read_file(path, &data, &len, &why)) {
+            free(why);
+        } else {
+            cJSON *root = parse_json(data, len, &json_err);
+            const char *url = cJSON_IsObject(root) ? str_field(root, "config_url") : NULL;
+            keep = !root || !url || !*url;
+            cJSON_Delete(root);
+            free(json_err);
+            free(data);
+        }
+    }
+    free(path);
+    return keep;
+}
+
+/* is_list_to_save(): a list in emu that a user may have edited. */
+static int is_list_to_save(const char *name)
+{
+    if (!(lower((unsigned char)name[0]) == 'e' && lower((unsigned char)name[1]) == 'm' &&
+          lower((unsigned char)name[2]) == 'u' && name[3] == '/'))
+        return 0;
+    const char *file = name + 4;
+    return !strchr(file, '/') && iends_with(file, ".txt") && !ieq(file, "versions.txt") &&
+           !ieq(file, "boot.example.txt") && !ieq(file, "release.txt");
+}
+
+static void free_files(ua_core *core)
+{
+    for (int i = 0; i < core->nfiles; i++)
+        free(core->files[i].name);
+    free(core->files);
+    core->files = NULL;
+    core->nfiles = 0;
+}
+
+/* fill_release_files(): one unsafe name means that nothing is installed. */
+static void fill_release_files(ua_core *core, const archive *a, const char *sd_root, result *res)
+{
+    int keep_config = keeps_own_config(sd_root);
+    mz_zip_archive *za = (mz_zip_archive *)&a->za;
+    mz_uint n = mz_zip_reader_get_num_files(za);
+    core->files = xmalloc((size_t)n * sizeof *core->files);
+    core->nfiles = 0;
+    for (mz_uint i = 0; i < n; i++) {
+        mz_zip_archive_file_stat st;
+        if (!mz_zip_reader_file_stat(za, i, &st))
+            continue;
+        const char *name = st.m_filename;
+        size_t len = strlen(name);
+        if (len && name[len - 1] == '/')
+            continue;
+        int bad = bad_path(name);
+        for (const char *p = name; *p; p++)
+            bad |= (unsigned char)*p > 127;
+        if (bad) {
+            strv_push(&res->errors, fmt("%s holds an unsafe file name, so nothing was "
+                                        "installed from it", a->label));
+            free_files(core);
+            return;
+        }
+        /* The marker is written last, by run(), once the install is complete. */
+        if (ieq(name, RELEASE_MARKER) || (ieq(name, OWN_CONFIG) && keep_config))
+            continue;
+        ua_file *uf = &core->files[core->nfiles++];
+        memset(uf, 0, sizeof *uf);
+        uf->name = xstrdup(name);
+        uf->size = (long long)st.m_uncomp_size;
+        uf->crc = st.m_crc32;
+        uf->backup = is_list_to_save(name);
+    }
+}
+
+/* backup_name(): malloc'd; NULL when there is nothing to save, or a backup
+   already holds the same. */
+static char *backup_name(const char *target)
+{
+    char *current, *why = NULL;
+    size_t len;
+    if (read_file(target, &current, &len, &why)) {
+        free(why);
+        return NULL;
+    }
+    char *bak = NULL;
+    for (int n = 1;; n++) {
+        bak = n == 1 ? fmt("%s.bak", target) : fmt("%s.bak%d", target, n);
+        char *other;
+        size_t olen;
+        if (read_file(bak, &other, &olen, &why)) {
+            free(why);
+            break;
+        }
+        int same = olen == len && !memcmp(other, current, len);
+        free(other);
+        free(bak);
+        bak = NULL;
+        if (same)
+            break;
+    }
+    free(current);
+    return bak;
+}
+
+/* Saves the card's copy of a file of the archive, before it is replaced. */
+static int save_backup(const ua_file *f, const char *target, result *res, char **why)
+{
+    char *bak = backup_name(target);
+    if (!bak)
+        return 0;
+    char *data;
+    size_t len;
+    int rc = read_file(target, &data, &len, why);
+    if (!rc) {
+        rc = write_file(bak, data, len, why);
+        free(data);
+    }
+    if (!rc)
+        strv_push(&res->notes, fmt("saved %s as %s%s", f->name, f->name, bak + strlen(target)));
+    free(bak);
+    return rc;
+}
+
+static int write_marker(const char *sd_root, const char *tag, char **why)
+{
+    char *path = file_target(sd_root, RELEASE_MARKER), *line = fmt("%s\n", tag);
+    int rc = write_file(path, line, strlen(line), why);
+    free(line);
+    free(path);
+    return rc;
+}
+
 /* open_archives(): the zip at path, or the file alone when game data is not a
    zip or is to become a UF2 image, plus the zips inside it that the core names
    in "archives". They are appended to *arcs; problems go to res->errors, and a
@@ -1543,7 +1901,7 @@ static void open_archives(const ua_core *core, const char *path, const char *nam
     archive *a = &(*arcs)[*narcs];
     memset(a, 0, sizeof *a);
     a->label = xstrdup(name);
-    if (core->url && (core->uf2 || core->sliced || !is_zip_file(path))) {
+    if (core->url && !core->release && (core->uf2 || core->sliced || !is_zip_file(path))) {
         char *data, *why;
         size_t len;
         if (read_file(path, &data, &len, &why)) {
@@ -1732,6 +2090,14 @@ static void install_core(const ua_core *core, const char *zip_dir, const strv *l
         open_archives(core, paths.v[i], res->used.v[i], &arcs, &narcs, &acap, dry_run, res, h);
     }
 
+    /* What the archive holds is known once it is open. */
+    ua_core with_files;
+    if (core->release && narcs) {
+        with_files = *core;
+        fill_release_files(&with_files, &arcs[0], sd_root, res);
+        core = &with_files;
+    }
+
     zip_entry *entries = NULL;
     int nentries = 0, cap = 0;
     index_archives(arcs, 0, narcs, &entries, &nentries, &cap);
@@ -1783,6 +2149,12 @@ static void install_core(const ua_core *core, const char *zip_dir, const strv *l
         char *source = fmt("%s:%s", a->label, best->name);
 
         if (dry_run) {
+            char *bak = f->backup ? backup_name(target) : NULL;
+            if (bak) {
+                strv_push(&res->notes, fmt("would save %s as %s%s", f->name, f->name,
+                                           bak + strlen(target)));
+                free(bak);
+            }
             res->written++;
         } else {
             size_t len = 0;
@@ -1801,7 +2173,8 @@ static void install_core(const ua_core *core, const char *zip_dir, const strv *l
             } else if ((long long)len != f->size ||
                        (uint32_t)mz_crc32(MZ_CRC32_INIT, data, len) != f->crc) {
                 strv_push(&res->errors, fmt("%s: contents do not match the size and CRC", source));
-            } else if (write_file(target, data, len, &why)) {
+            } else if ((f->backup && save_backup(f, target, res, &why)) ||
+                       write_file(target, data, len, &why)) {
                 strv_push(&res->errors, fmt("cannot write %s: %s", target, why));
             } else {
                 res->written++;
@@ -1814,6 +2187,8 @@ static void install_core(const ua_core *core, const char *zip_dir, const strv *l
         free(target);
     }
     free(dest);
+    if (core == &with_files)
+        free_files(&with_files);
 
     for (int k = 0; k < nentries; k++)
         free(entries[k].name);
@@ -1856,6 +2231,7 @@ static int run(const ua_core **cores, int ncores, int requested, int dry_run,
     }
 
     int complete = 0, skipped = 0, failed = 0, to_download = 0, cancelled = 0;
+    const ua_release *firmware = NULL;
     for (int c = 0; c < ncores; c++) {
         const ua_core *core = cores[c];
         if (h->on_set)
@@ -1864,20 +2240,40 @@ static int run(const ua_core **cores, int ncores, int requested, int dry_run,
             cancelled = 1;
             break;
         }
+        const ua_release *release = core->release;
+        if (release && !release->newer) {
+            complete++;
+            out(h, "%s: %s", core->name, core->dest_shown);
+            out(h, "  %s up to date", release->card);
+            continue;
+        }
         /* A set that is complete on the card needs no zip, so nothing is
-           opened or downloaded for it. */
-        if (ua_count_current(core, sd) == core->nfiles) {
+           opened or downloaded for it. What the archive holds is not known yet. */
+        if (!release && ua_count_current(core, sd) == core->nfiles) {
             complete++;
             out(h, "%s: %s", core->name, core->dest_shown);
             out(h, "  %d up to date", core->nfiles);
             continue;
         }
 
+        if (release)
+            forget_stale_zip(core, zip_dir, &listing);
         strv notes = { 0 }, errors = { 0 };
         int pending = fetch_missing_zips(core, zip_dir, &listing, dbs, dry_run, url_downloads,
                                          &notes, &errors, h);
         result res;
         install_core(core, zip_dir, &listing, sd, dry_run, &res, h);
+        int finished = !res.skipped && !res.missing.n && !res.errors.n && !is_cancelled(h);
+        if (release && finished && !dry_run) {
+            char *why = NULL;
+            if (write_marker(sd, release->tag, &why)) {
+                strv_push(&res.errors, fmt("cannot write %s: %s", RELEASE_MARKER, why));
+                free(why);
+                finished = 0;
+            }
+        }
+        if (release && release->firmware && (finished || pending))
+            firmware = release;
         for (int i = 0; i < res.errors.n; i++)
             strv_push(&errors, xstrdup(res.errors.v[i]));
         int dl_errors = errors.n - res.errors.n;
@@ -1956,6 +2352,15 @@ static int run(const ua_core **cores, int ncores, int requested, int dry_run,
     strv_free(&listing);
 
     out(h, "");
+    if (firmware) {
+        out(h, "Firmware:     flash the board with the bootloader of %s as well; "
+               "updateAll cannot do that: %s", firmware->tag, firmware->page);
+        char *file = fmt("Bootloader of %s", firmware->tag);
+        char *detail = fmt("Flash the board as well: %s", firmware->page);
+        file_event(h, "Firmware", file, UA_FILE_NOTE, detail);
+        free(detail);
+        free(file);
+    }
     char *summary = fmt("%d complete, %d incomplete, %d skipped", complete, failed, skipped);
     if (to_download)
         out(h, "%s, %d to download", summary, to_download);
@@ -1980,9 +2385,10 @@ int ua_run(const ua_config *cfg, const ua_options *opt, const ua_hooks *h)
     for (const char **d = opt->extra_dbs; d && *d; d++)
         strv_push(&sources, ua_is_url(*d) ? xstrdup(*d) : ua_abspath(*d));
 
-    const ua_core **cores = xmalloc((size_t)cfg->ncores * sizeof *cores);
+    const ua_core **cores = xmalloc((size_t)(cfg->ncores + 1) * sizeof *cores);
     int ncores = 0, rc = 1, requested = 0;
-    char *temp_dir = NULL;
+    char *temp_dir = NULL, *archive_zip = NULL;
+    ua_release release = { 0 };
 
     if (!opt->sd || !ua_is_dir(opt->sd)) {
         out_err(h, "ERROR: SD card root not found: %s", opt->sd ? opt->sd : "");
@@ -1993,7 +2399,7 @@ int ua_run(const ua_config *cfg, const ua_options *opt, const ua_hooks *h)
     int url_downloads = !opt->no_download, any_url = 0;
     for (int i = 0; i < cfg->ncores; i++)
         any_url |= cfg->cores[i].url != NULL;
-    int may_download = use_databases || (url_downloads && any_url);
+    int may_download = use_databases || (url_downloads && (any_url || cfg->sd_asset));
     const char *zips = opt->zips && *opt->zips ? opt->zips : NULL;
     if (!zips && !may_download) {
         out_err(h, "ERROR: nothing to install from: give a zip folder with --zips, "
@@ -2012,7 +2418,8 @@ int ua_run(const ua_config *cfg, const ua_options *opt, const ua_hooks *h)
             any_bios |= cfg->cores[i].bios;
         strv unknown = { 0 };
         for (const char **id = opt->core_ids; *id; id++) {
-            int known = any_bios && ieq(*id, "bios");      /* every BIOS file */
+            int known = (any_bios && ieq(*id, "bios")) ||  /* every BIOS file */
+                        (cfg->sd_asset && ieq(*id, "sdcard"));  /* the SD-card archive */
             for (int i = 0; i < cfg->ncores && !known; i++)
                 known = ieq(cfg->cores[i].id, *id);
             if (!known) {
@@ -2045,6 +2452,28 @@ int ua_run(const ua_config *cfg, const ua_options *opt, const ua_hooks *h)
             cores[ncores++] = &cfg->cores[i];
     }
 
+    /* The check is separate from installing: a newer archive is reported on a
+       card with an emu folder even when this run does not install it. */
+    int has_emu = ua_card_has_emu(opt->sd), asked = opt->sdcard > 0;
+    for (const char **id = opt->core_ids; id && *id; id++)
+        asked |= ieq(*id, "sdcard");
+    char release_error[1024] = "";
+    if (cfg->sd_asset && (has_emu || asked)) {
+        if (opt->release) {
+            release.tag = xstrdup(opt->release->tag);
+            release.page = xstrdup(opt->release->page);
+            release.url = xstrdup(opt->release->url);
+            release.size = opt->release->size;
+        } else if (ua_release_fetch(cfg, &release, release_error, sizeof release_error)) {
+            memset(&release, 0, sizeof release);
+        }
+        if (release.tag) {
+            char *card = ua_card_release(opt->sd);
+            ua_release_compare(&release, card);
+            free(card);
+        }
+    }
+
     if (cfg->config_url && cfg->fetch_error)
         out(h, "Sets from:    %s (%s)", cfg->source, cfg->fetch_error);
     else if (cfg->config_url)
@@ -2055,6 +2484,11 @@ int ua_run(const ua_config *cfg, const ua_options *opt, const ua_hooks *h)
     abs = ua_abspath(opt->sd);
     out(h, "SD card:      %s", abs);
     free(abs);
+    if (*release_error)
+        out(h, "New archive:  could not check: %s", release_error);
+    else if (release.tag && has_emu && release.newer)
+        out(h, "New archive:  %s %s is available (card: %s): %s", cfg->sd_asset, release.tag,
+            release.card ? release.card : "unknown", release.page);
     if (use_databases)
         out(h, "Databases:    %d, used for zips that are not in the zip folder", sources.n);
     if (opt->dry_run)
@@ -2066,6 +2500,28 @@ int ua_run(const ua_config *cfg, const ua_options *opt, const ua_hooks *h)
     if (!zips && !(temp_dir = ua_make_temp_dir())) {
         out_err(h, "ERROR: cannot create a temporary folder: %s", ua_last_error());
         goto done;
+    }
+    /* The archive as a set, first; the name of its zip holds the tag, as a
+       kept zip is otherwise never downloaded again. */
+    ua_core archive_core;
+    char *zip_list[2] = { NULL, NULL }, *no_parts[1] = { NULL };
+    if (release.tag && (asked || (!opt->sdcard && !requested && has_emu && !opt->no_download))) {
+        size_t stem = strlen(cfg->sd_asset) - 4;
+        archive_zip = fmt("%.*s-%s%s", (int)stem, cfg->sd_asset, release.tag, cfg->sd_asset + stem);
+        zip_list[0] = archive_zip;
+        memset(&archive_core, 0, sizeof archive_core);
+        archive_core.id = (char *)"sdcard";
+        archive_core.name = cfg->sd_name;
+        archive_core.zips = zip_list;
+        archive_core.nzips = 1;
+        archive_core.dest_parts = no_parts;
+        archive_core.dest_shown = (char *)"/";
+        archive_core.url = release.url;
+        archive_core.archives = no_parts;
+        archive_core.release = &release;
+        memmove(cores + 1, cores, (size_t)ncores * sizeof *cores);
+        cores[0] = &archive_core;
+        ncores++;
     }
     databases dbs = { 0 };
     dbs.sources = use_databases ? sources.v : NULL;
@@ -2080,6 +2536,8 @@ done:
         ua_remove_tree(temp_dir);
         free(temp_dir);
     }
+    free(archive_zip);
+    ua_release_free(&release);
     free(cores);
     strv_free(&sources);
     return rc;

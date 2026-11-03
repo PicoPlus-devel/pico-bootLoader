@@ -26,6 +26,14 @@ not to re-flash.
 Both forms are matched by the existing `push:` tag globs, and `v*.*-alpha` is
 available for dry runs.
 
+updateAll reports a newer archive and installs it on a card with an `emu` folder:
+it takes the newest release with a `vN.M` or `vN.M.P` tag that holds
+`pico-bootLoader_sdcard.zip`, and compares it with `/emu/release.txt` on the card.
+So once the archive is uploaded, every copy of updateAll from v0.9 on offers it. A
+release without the archive is passed over, and is not reported. `-alpha` tags are
+ignored, so a dry run is never offered. Upload a corrected archive under a new
+tag: a card already on a tag does not notice that its archive was replaced.
+
 A set added to `updateAll/updateAll.json` needs no release: every copy of
 updateAll from v0.7.2 on reads that file from `main` at start-up (its
 `config_url`), and falls back to the copy on the card only when it cannot. Keep
@@ -98,8 +106,8 @@ changes but the board does not need re-flashing.
 
 ```bash
 # 1. Build every emulator from its latest release tag and pack the archive.
-#    -j 3 keeps total load near nproc; -z requires -c all.
-./build_emulators.sh -c all -j 3 -z
+#    -j 3 keeps total load near nproc; -z requires -c all. -r is the tag of step 3.
+./build_emulators.sh -c all -j 3 -z -r v0.2.1
 ```
 
 Check the grand summary before going further. Every emulator should be `BUILT`
@@ -138,9 +146,9 @@ gh release upload v0.2.1 releases/pico-bootLoader_sdcard.zip
 
 ## Scenario C — both changed
 
-Run Scenario B's steps 1–2, fold the firmware notes into `CHANGELOG.md`, then
-publish with a **two-component** tag (`v0.3`, not `v0.3.0`) so users are told to
-re-flash, and upload the archive as in step 4.
+Run Scenario B's steps 1–2, with the new tag as `-r`, fold the firmware notes into
+`CHANGELOG.md`, then publish with a **two-component** tag (`v0.3`, not `v0.3.0`) so
+users are told to re-flash, and upload the archive as in step 4.
 
 ---
 
@@ -174,6 +182,9 @@ gh release view v0.2.1
   (`unzip -l releases/pico-bootLoader_sdcard.zip | grep updateAll/`), and its
   `ld2pico/` folder holds `ld2pico.exe` and its README
   (`unzip -l releases/pico-bootLoader_sdcard.zip | grep ld2pico/`).
+  `unzip -p releases/pico-bootLoader_sdcard.zip emu/release.txt` prints the tag
+  of this release. If it does not, updateAll still installs the archive, but a
+  card unpacked by hand downloads it once more.
 - **4 PCB gerber assets** — `pico_nesPCB_v2.6.zip`,
   `pico_nesPCB_v2.8_SNES_PORTS.zip`, `Gerber_PicoNES_Mini_PCB_v2.0.zip` and
   `Gerber_PicoNES_Micro_v1.2.zip`,

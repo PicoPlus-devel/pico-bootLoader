@@ -16,3 +16,4 @@
 #define IDC_SHOWLOG         1012
 #define IDC_STATUS          1013
 #define IDC_VIEW_LABEL      1014
+#define IDC_NOTICE          1015

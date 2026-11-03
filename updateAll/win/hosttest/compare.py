@@ -94,20 +94,202 @@ CASES += [(f"bad-config-{n}", f"--config bad_{n}.json --zips {{zips}} --sd {{car
                     "bios_type", "bios_reserved", "bios_reserved_data", "bios_dup_id",
                     "bios_offset", "bios_offset_type", "bios_offset_null", "bios_parts_type",
                     "bios_parts_empty", "bios_parts_name", "bios_parts_item",
-                    "bios_offset_parts", "bios_offset_uf2", "bios_parts_uf2", "bios_slash")]
+                    "bios_offset_parts", "bios_offset_uf2", "bios_parts_uf2", "bios_slash",
+                    "sdcard_type", "sdcard_name", "sdcard_url", "sdcard_asset",
+                    "sdcard_asset_zip", "sdcard_reserved", "sdcard_reserved_data")]
+
+
+def rel(scenario, card, args=""):
+    return (f"--config cfg_rel_{scenario}.json --zips {{zips}} --sd {{card}} {args}".strip(), card)
+
+
+# The SD-card archive. Each has an entry in EXPECT.
+REL_CASES = {
+    "rel-newer": rel("main", "card_rel_v09"),
+    "rel-patch": rel("patch", "card_rel_v010"),
+    "rel-current": rel("gone", "card_rel_v010"),
+    "rel-current-explicit": rel("gone", "card_rel_v010", "--core sdcard"),
+    "rel-nomarker": rel("main", "card_rel_nomarker", "--core sdcard"),
+    "rel-crlf": rel("main", "card_rel_crlf"),
+    "rel-garbage": rel("main", "card_rel_garbage"),
+    "rel-empty-marker": rel("main", "card_rel_empty_marker"),
+    "rel-future": rel("gone", "card_rel_future"),
+    "rel-dry-run": rel("main", "card_rel_v09", "--dry-run"),
+    "rel-dry-kept": rel("kept", "card_rel_v09", "--dry-run"),
+    "rel-core-other": rel("main", "card_rel_v09", "--core alpha"),
+    "rel-no-download": rel("main", "card_rel_v09", "--no-download"),
+    "rel-explicit-no-download": rel("main", "card_rel_v09", "--core sdcard --no-download"),
+    "rel-noemu": rel("check404", None),
+    "rel-noemu-explicit": rel("main", None, "--core sdcard"),
+    "rel-temp-folder": ("--config cfg_rel_main.json --sd {card} --core SDCARD", None),
+    "rel-with-set": rel("main", None, "--core alpha,sdcard"),
+    "rel-check-404": rel("check404", "card_rel_v09"),
+    "rel-check-broken": rel("broken", "card_rel_v09"),
+    "rel-check-notlist": rel("notlist", "card_rel_v09"),
+    "rel-check-noasset": rel("noasset", "card_rel_v09"),
+    "rel-check-explicit": rel("check404", "card_rel_v09", "--core sdcard"),
+    "rel-filter": rel("filter", "card_rel_v08"),
+    "rel-fwonly": rel("fwonly", "card_rel_v010"),
+    "rel-slip": rel("slip", "card_rel_v09"),
+    "rel-abs": rel("abs", "card_rel_v09"),
+    "rel-backslash": rel("back", "card_rel_v09"),
+    "rel-drive": rel("drive", "card_rel_v09"),
+    "rel-nonascii": rel("ascii", "card_rel_v09"),
+    "rel-dots": rel("dots", "card_rel_v09"),
+    "rel-badsize": rel("badsize", "card_rel_v09"),
+    "rel-notzip": rel("notzip", "card_rel_v09"),
+    "rel-assetgone": rel("assetgone", "card_rel_v09"),
+    "rel-damaged": rel("damaged", "card_rel_v09"),
+    "rel-kept": rel("kept", "card_rel_v09"),
+    "rel-kept-stale": rel("stale", "card_rel_v09"),
+    "rel-bak-exists": rel("main", "card_rel_bak"),
+    "rel-bak-same": rel("main", "card_rel_bak_same"),
+    "rel-keep-json": rel("main", "card_rel_json_own"),
+    "rel-keep-json-bad": rel("main", "card_rel_json_bad"),
+    "rel-replace-json": rel("main", "card_rel_json_online"),
+    "rel-fetch": ("--config cfg_rel_fetch.json --zips {zips} --sd {card}", "card_rel_v09"),
+    "rel-unconfigured": ("--config cfg_local.json --zips {zips} --sd {card} --core sdcard", None),
+}
+CASES += [(name, args, card) for name, (args, card) in REL_CASES.items()]
+
+NOTICE = "New archive:  pico-bootLoader_sdcard.zip v0.10 is available (card: {card}): {url}/rel/tag/v0.10"
+FLASH = "Firmware:     flash the board with the bootloader of v0.10 as well; " \
+        "updateAll cannot do that: {url}/rel/tag/v0.10"
+ANY_NOTICE, ANY_FLASH, ANY_SET = "New archive:", "Firmware:", "SD card files:"
+MARKER = "card/emu/release.txt"
+LIST = "card/emu/emulators.txt"
+NEW_LIST = b"piconesPlus;nes;NES\npicoNew;new;New\n"
+UNCHANGED = {MARKER: b"v0.9\n", LIST: b"edited list\n", "card/emu/8/new.uf2": None,
+             "card/emu/emulators.txt.bak": None, "card/boot.txt": b"GUI=1\n",
+             "card/emu/8/own.uf2": b"the user's own"}
+INSTALLED = {MARKER: b"v0.10\n", LIST: NEW_LIST, "card/emu/emulators.txt.bak": b"edited list\n",
+             "card/boot.txt": b"GUI=1\n", "card/emu/8/own.uf2": b"the user's own",
+             "card/emu/versions.txt.bak": None, "card/updateAll/updateAll.py": b"# new\n"}
+UNSAFE = {"has": ["holds an unsafe file name, so nothing was installed from it"],
+          "not": [ANY_FLASH], "rc": 1, "files": UNCHANGED}
+
+# What the output and the card must show, checked on the script's run: agreeing
+# with ua_host does not prove that the message appears, or the file is kept.
+# "rc" is the exit status, "has" and "not" are texts, and "files" gives the
+# contents of files below the run's folder, None for one that must not be there.
+EXPECT = {
+    "rel-newer": {"rc": 0, "has": [NOTICE.format(card="v0.9", url="{url}"), FLASH,
+                                   "saved emu/emulators.txt as emu/emulators.txt.bak",
+                                   "downloaded pico-bootLoader_sdcard-v0.10.zip",
+                                   "SD card files: pico-bootLoader_sdcard-v0.10.zip -> /",
+                                   "5 written, 1 up to date"],
+                  "files": dict(INSTALLED, **{"card/updateAll/updateAll.json":
+                                              b'{"config_url": "http://x/new.json", "cores": []}\n'})},
+    "rel-patch": {"rc": 0, "has": ["v0.10.1 is available (card: v0.10)"], "not": [ANY_FLASH],
+                  "files": {MARKER: b"v0.10.1\n"}},
+    "rel-current": {"rc": 0, "has": ["SD card files: /\n  v0.10 up to date"],
+                    "not": [ANY_NOTICE, ANY_FLASH, "ERROR", "downloaded pico"],
+                    "files": {MARKER: b"v0.10\n", LIST: b"edited list\n"}},
+    "rel-current-explicit": {"rc": 0, "has": ["  v0.10 up to date", "1 complete"],
+                             "not": [ANY_NOTICE, "Alpha:"]},
+    "rel-nomarker": {"rc": 0, "has": [NOTICE.format(card="unknown", url="{url}"), FLASH,
+                                      "6 up to date"],
+                     "not": ["written", "saved"],
+                     "files": {MARKER: b"v0.10\n", "card/emu/emulators.txt.bak": None}},
+    "rel-crlf": {"rc": 0, "has": ["(card: v0.9)"], "files": {MARKER: b"v0.10\n"}},
+    "rel-garbage": {"rc": 0, "has": ["(card: unknown)", FLASH], "files": {MARKER: b"v0.10\n"}},
+    "rel-empty-marker": {"rc": 0, "has": ["(card: unknown)"], "files": {MARKER: b"v0.10\n"}},
+    "rel-future": {"rc": 0, "has": ["  v0.99 up to date"], "not": [ANY_NOTICE, "ERROR"],
+                   "files": {MARKER: b"v0.99\n"}},
+    "rel-dry-run": {"rc": 0, "has": [ANY_NOTICE, FLASH, "Dry run:",
+                                     "would download pico-bootLoader_sdcard-v0.10.zip from 127.0.0.1",
+                                     "1 to download"],
+                    "files": UNCHANGED},
+    "rel-dry-kept": {"rc": 0, "has": [ANY_NOTICE, FLASH, "5 to write, 1 up to date",
+                                      "would save emu/emulators.txt as emu/emulators.txt.bak"],
+                     "not": ["would download kept"], "files": UNCHANGED},
+    "rel-core-other": {"rc": 0, "has": [NOTICE.format(card="v0.9", url="{url}")],
+                       "not": [ANY_SET, ANY_FLASH], "files": UNCHANGED},
+    "rel-no-download": {"rc": 0, "has": [NOTICE.format(card="v0.9", url="{url}")],
+                        "not": [ANY_SET, ANY_FLASH], "files": UNCHANGED},
+    "rel-explicit-no-download": {"rc": 1, "has": [ANY_NOTICE, "SD card files: skipped, "
+                                                  "pico-bootLoader_sdcard-v0.10.zip not found"],
+                                 "not": [ANY_FLASH], "files": UNCHANGED},
+    "rel-noemu": {"rc": 0, "not": [ANY_NOTICE, ANY_SET, ANY_FLASH, "could not check"],
+                  "files": {MARKER: None}},
+    "rel-noemu-explicit": {"rc": 0, "has": ["SD card files: pico", FLASH], "not": [ANY_NOTICE],
+                           "files": {MARKER: b"v0.10\n", LIST: NEW_LIST,
+                                     "card/emu/emulators.txt.bak": None}},
+    "rel-temp-folder": {"rc": 0, "has": ["Zips from:    downloads only", "1 complete"],
+                        "files": {MARKER: b"v0.10\n"}},
+    "rel-with-set": {"rc": 0, "has": ["SD card files: pico", "Alpha: "], "not": [ANY_NOTICE]},
+    "rel-check-404": {"rc": 0, "has": ["New archive:  could not check: HTTP 404"],
+                      "not": ["is available", ANY_SET], "files": UNCHANGED},
+    "rel-check-broken": {"rc": 0, "has": ["could not check: the answer is not a list of releases"],
+                         "files": UNCHANGED},
+    "rel-check-notlist": {"rc": 0, "has": ["could not check: the answer is not a list of releases"],
+                          "files": UNCHANGED},
+    "rel-check-noasset": {"rc": 0, "has": ["could not check: no release holds "
+                                           "pico-bootLoader_sdcard.zip"], "files": UNCHANGED},
+    "rel-check-explicit": {"rc": 1, "has": ["could not check"], "files": UNCHANGED},
+    "rel-filter": {"rc": 0, "has": ["sdcard.zip v0.10 is available (card: v0.8)"],
+                   "files": {MARKER: b"v0.10\n"}},
+    "rel-fwonly": {"rc": 0, "has": ["  v0.10 up to date"], "not": [ANY_NOTICE, ANY_FLASH]},
+    "rel-slip": UNSAFE, "rel-abs": UNSAFE, "rel-backslash": UNSAFE, "rel-drive": UNSAFE,
+    "rel-nonascii": UNSAFE, "rel-dots": UNSAFE,
+    "rel-badsize": {"rc": 1, "has": ["ERROR: download of pico-bootLoader_sdcard-v0.10.zip from "
+                                     "127.0.0.1 failed: received"], "not": [ANY_FLASH],
+                    "files": dict(UNCHANGED, **{"zips/pico-bootLoader_sdcard-v0.10.zip": None})},
+    "rel-notzip": {"rc": 1, "has": ["the file received is not a zip"], "not": [ANY_FLASH],
+                   "files": dict(UNCHANGED, **{"zips/pico-bootLoader_sdcard-v0.10.zip": None})},
+    "rel-assetgone": {"rc": 1, "has": ["failed: HTTP 404"], "not": [ANY_FLASH], "files": UNCHANGED},
+    "rel-damaged": {"rc": 1, "has": ["Bad CRC-32"], "not": [ANY_FLASH],
+                    "files": {MARKER: b"v0.9\n", LIST: NEW_LIST, "card/emu/8/new.uf2": None}},
+    "rel-kept": {"rc": 0, "has": ["kept_sdcard-v0.10.zip -> /"], "not": ["downloaded kept"],
+                 "files": INSTALLED},
+    "rel-kept-stale": {"rc": 0, "has": ["downloaded stale_sdcard-v0.10.zip"],
+                       "files": {MARKER: b"v0.10\n", "card/emu/8/old.uf2": None}},
+    "rel-bak-exists": {"rc": 0, "has": ["saved emu/emulators.txt as emu/emulators.txt.bak2"],
+                       "files": {"card/emu/emulators.txt.bak": b"edits saved earlier\n",
+                                 "card/emu/emulators.txt.bak2": b"edited list\n", LIST: NEW_LIST}},
+    "rel-bak-same": {"rc": 0, "not": ["saved emu"],
+                     "files": {"card/emu/emulators.txt.bak": b"edited list\n",
+                               "card/emu/emulators.txt.bak2": None, LIST: NEW_LIST}},
+    "rel-keep-json": {"rc": 0, "not": ["saved updateAll"],
+                      "files": {"card/updateAll/updateAll.json": b'{"databases": [], "cores": []}\n',
+                                "card/updateAll/updateAll.py": b"# new\n", MARKER: b"v0.10\n"}},
+    "rel-keep-json-bad": {"rc": 0, "files": {"card/updateAll/updateAll.json": b'{"edited": \n',
+                                             MARKER: b"v0.10\n"}},
+    "rel-replace-json": {"rc": 0, "files": {"card/updateAll/updateAll.json":
+                                            b'{"config_url": "http://x/new.json", "cores": []}\n'}},
+    "rel-fetch": {"rc": 0, "has": ["Sets from:", ANY_NOTICE, "SD card files: pico"],
+                  "files": {MARKER: b"v0.10\n"}},
+    "rel-unconfigured": {"rc": 1, "has": ["ERROR: unknown core: sdcard."]},
+}
+
+# ua_host only, with what the row of updateAll.exe passes: (name, UA_SDCARD,
+# arguments, card, EXPECT entry).
+ROW_CASES = [
+    ("row-tick-empty-card", "1", "--config cfg_rel_main.json --zips {zips} --sd {card}", None,
+     {"rc": 0, "has": ["SD card files: pico", "Alpha: "], "not": [ANY_NOTICE],
+      "files": {MARKER: b"v0.10\n"}}),
+    ("row-untick", "-1", "--config cfg_rel_main.json --zips {zips} --sd {card}", "card_rel_v09",
+     {"rc": 0, "has": [ANY_NOTICE, "Alpha: "], "not": [ANY_SET, ANY_FLASH], "files": UNCHANGED}),
+    ("row-only", "1", "--config cfg_rel_main.json --zips {zips} --sd {card} --core sdcard", "card_rel_v09",
+     {"rc": 0, "has": [ANY_NOTICE, "SD card files: pico"], "not": ["Alpha: "],
+      "files": {MARKER: b"v0.10\n"}}),
+]
 
 # ua_host only, stopped after this many calls of on_bytes: (name, arguments, calls,
 # the state the file it stopped on went through). Python has no way to cancel.
 CANCEL_CASES = [
     ("cancel-download", "--config cfg_db.json --zips {zips} --sd {card} --core theta", 1, "Downloading"),
     ("cancel-install", "--config cfg_local.json --zips {zips} --sd {card} --core alpha", 1, "Installing"),
+    ("cancel-rel-download", "--config cfg_rel_main.json --zips {zips} --sd {card} --core sdcard", 1, "Downloading"),
+    ("cancel-rel-install", "--config cfg_rel_kept.json --zips {zips} --sd {card} --core sdcard", 1, "Installing"),
 ]
 # Run without the hooks as well; they must not change anything.
-NO_HOOK_CASES = ("local", "db-http", "data-uf2-local", "bios-http")
+NO_HOOK_CASES = ("local", "db-http", "data-uf2-local", "bios-http", "rel-newer")
 
 # The states of ua_core.h.
 DOWNLOADING, BUSY, DONE, NOTE, FAILED, CANCELLED = range(6)
-REPORT_HEADERS = ("Sets from:", "Zips from:", "SD card:", "Databases:", "Dry run:", "ERROR:")
+REPORT_HEADERS = ("Sets from:", "Zips from:", "SD card:", "New archive:", "Databases:", "Dry run:",
+                  "Firmware:", "ERROR:")
 
 # Error texts that only the platform decides: a JSON parser's own wording.
 NORMALISE = [
@@ -208,6 +390,25 @@ def check_rows(rows, out):
     return problems
 
 
+def check_expected(want, res, url):
+    """What the run must have shown and left behind, against EXPECT."""
+    problems = []
+    text = res["out"] + res["err"]
+    if "rc" in want and res["rc"] != want["rc"]:
+        problems.append(f"exit {res['rc']}, expected {want['rc']}")
+    for s in want.get("has", ()):
+        if s.replace("{url}", url) not in text:
+            problems.append(f"does not say {s!r}")
+    for s in want.get("not", ()):
+        if s.replace("{url}", url) in text:
+            problems.append(f"says {s!r}")
+    for path, data in want.get("files", {}).items():
+        expected = None if data is None else hashlib.md5(data).hexdigest()
+        if res["tree"].get(path) != expected:
+            problems.append(f"{path} is not as expected: {data!r}")
+    return problems
+
+
 def free_port():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
@@ -291,6 +492,8 @@ def main():
             c = run_case([HOST], argline, card, {"UA_EVENTS": events})
             rows = read_rows(events)
             diffs = [f"rows: {p}" for p in check_rows(rows, py["out"])]
+            if name in REL_CASES:
+                diffs += [f"expected: {p}" for p in check_expected(EXPECT[name], py, url)]
             for key in ("rc", "out", "err", "tree"):
                 if py[key] != c[key]:
                     if isinstance(py[key], str):
@@ -323,6 +526,8 @@ def main():
                 problems.append(f"exit {c['rc']}, stdout {c['out']!r}, stderr {c['err']!r}")
             if not any(r["states"][-1] == CANCELLED and doing in r["details"] for r in rows):
                 problems.append("no row was cancelled while " + doing)
+            if MARKER in c["tree"]:
+                problems.append("a cancelled run wrote the marker")
             failures += bool(problems)
             print(f"{'FAIL' if problems else 'ok':4} {name:22} exit {c['rc']}")
             for p in problems:
@@ -330,6 +535,19 @@ def main():
             if args.v or problems:
                 for r in rows:
                     print(f"     {r['set']}/{r['file']}: {r['details']} {r['states']}")
+
+        for name, value, argline, card, want in ROW_CASES:
+            if args.k and args.k not in name:
+                continue
+            total += 1
+            c = run_case([HOST], argline, card, {"UA_EVENTS": events, "UA_SDCARD": value})
+            problems = check_expected(want, c, url) + unfinished(read_rows(events))
+            failures += bool(problems)
+            print(f"{'FAIL' if problems else 'ok':4} {name:22} exit {c['rc']}")
+            for p in problems:
+                print("     " + p)
+            if args.v or problems:
+                print("     " + (c["out"] + c["err"]).replace("\n", "\n     "))
 
         for name, argline, card in CASES:
             if name not in NO_HOOK_CASES or (args.k and args.k not in name):

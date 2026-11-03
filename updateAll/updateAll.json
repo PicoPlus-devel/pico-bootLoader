@@ -1,5 +1,10 @@
 {
   "config_url": "https://raw.githubusercontent.com/PicoPlus-devel/pico-bootLoader/main/updateAll/updateAll.json",
+  "sdcard": {
+    "name": "SD card files",
+    "asset": "pico-bootLoader_sdcard.zip",
+    "releases_url": "https://api.github.com/repos/PicoPlus-devel/pico-bootLoader/releases?per_page=10"
+  },
   "databases": ["https://raw.githubusercontent.com/zakk4223/ArcadeROMsDB_MiSTer/db/arcade_roms_db.json.zip"],
   "cores": [
     {

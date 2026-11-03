@@ -30,10 +30,11 @@ TAG_MODE=1
 BRANCH_MODE=0
 MAIN_MODE=0
 PACK_ZIP=0
+RELEASE_TAG=""
 HWCONFIG_ARG=""
 usage() {
     cat <<EOF
-Usage: $0 [-c N|all] [-j N] [-B|-m] [-z] [-h]
+Usage: $0 [-c N|all] [-j N] [-B|-m] [-z [-r TAG]] [-h]
   -c N   build for HW_CONFIG N non-interactively (skip the picker).
   -c all build for every supported HW_CONFIG, unattended. PIO-USB configs are
          skipped automatically when PICO_PIO_USB_PATH is unset/unusable.
@@ -51,13 +52,16 @@ Usage: $0 [-c N|all] [-j N] [-B|-m] [-z] [-h]
          needs mingw-w64, ld2pico.exe curl). Requires -c all (a zip built from
          one hwconfig would be missing every other board) and the default tag
          mode (a release bundle must be built from tags).
+  -r TAG with -z: the release this archive is for, such as v0.9 or v0.9.1. It is
+         recorded in the archive as emu/release.txt, so that updateAll does not
+         download the archive again on a card unpacked by hand.
   -h     this help
 
 Default (no -B/-m): each emulator repo's latest release tag, built against
 pico_shared main rather than the tag's own pin (see the note at the top).
 EOF
 }
-while getopts "c:j:Btmzh" opt; do
+while getopts "c:j:Btmzr:h" opt; do
     case "$opt" in
         c) HWCONFIG_ARG="$OPTARG" ;;
         j) JOBS="$OPTARG" ;;
@@ -65,6 +69,7 @@ while getopts "c:j:Btmzh" opt; do
         m) MAIN_MODE=1; TAG_MODE=0 ;;
         t) TAG_MODE=1 ;;   # accepted for compatibility: tag mode is now the default
         z) PACK_ZIP=1 ;;
+        r) RELEASE_TAG="$OPTARG" ;;
         h) usage; exit 0 ;;
         *) usage >&2; exit 1 ;;
     esac
@@ -74,6 +79,12 @@ done
 if (( PACK_ZIP )); then
     (( TAG_MODE )) || { echo "ERROR: -z requires the default tag mode (not -B/-m): a release bundle must be built from release tags" >&2; exit 1; }
     [ "$HWCONFIG_ARG" = "all" ] || { echo "ERROR: -z requires -c all: a zip built from a single hwconfig would be missing every other board" >&2; exit 1; }
+    [ -n "$RELEASE_TAG" ] || echo "WARN: no -r TAG: updateAll will download this archive again on a card unpacked by hand" >&2
+fi
+if [ -n "$RELEASE_TAG" ]; then
+    (( PACK_ZIP )) || { echo "ERROR: -r only applies with -z" >&2; exit 1; }
+    # The form updateAll accepts: a dry run such as v0.9-alpha is not a release to it.
+    [[ "$RELEASE_TAG" =~ ^v[0-9]{1,9}(\.[0-9]{1,9}){1,2}$ ]] || { echo "ERROR: -r needs a tag such as v0.9 or v0.9.1, not '$RELEASE_TAG'" >&2; exit 1; }
 fi
 
 cd "$(dirname "$0")"
@@ -1336,7 +1347,7 @@ if (( PACK_ZIP )); then
     ZIP_OUT="$LOADER_DIR/releases/pico-bootLoader_sdcard.zip"
     mkdir -p "$LOADER_DIR/releases"
     echo
-    if "$PACKER" "$LOADER_DIR" "$ZIP_OUT"; then
+    if "$PACKER" "$LOADER_DIR" "$ZIP_OUT" ${RELEASE_TAG:+"$RELEASE_TAG"}; then
         info "SD-card archive: $ZIP_OUT ($(human_size "$(stat -c%s "$ZIP_OUT")"))"
     else
         warn "packing the SD-card archive failed"

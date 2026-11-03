@@ -104,6 +104,9 @@ int main(int argc, char **argv)
     }
     opt.core_ids = cores;
     opt.extra_dbs = dbs;
+    /* UA_SDCARD is what the row of updateAll.exe passes, which --core cannot. */
+    if (getenv("UA_SDCARD"))
+        opt.sdcard = atoi(getenv("UA_SDCARD"));
 
     ua_config cfg;
     char err[1024];

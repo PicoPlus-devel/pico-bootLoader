@@ -75,7 +75,8 @@ they are **not** emulated.
    files are not part of this project, and holding the rights to them is the
    user's responsibility; [updateAll/README.md](updateAll/README.md)
    describes how to use only zips you already have. Running it again later
-   installs the sets added since.
+   installs the sets added since, and reports and installs a newer SD-card
+   archive; see [SD-card archive](updateAll/README.md#sd-card-archive).
 4. **Add your games.** The archive contains no games, ROMs or BIOS files. Each
    emulator's file browser opens in its own folder: `/roms/NES`, `/roms/SNES`,
    `/roms/MD` (Genesis / Mega Drive), `/roms/PCE`, `/roms/GB`, `/roms/SMS`
@@ -95,6 +96,9 @@ Release tags say which of the two changed:
 | --- | --- | --- |
 | `v0.N` | bootloader firmware | re-flash the board **and** refresh the SD card |
 | `v0.N.M` | emulator binaries only | replace `/emu` on the SD card; no re-flash needed |
+
+`updateAll` does the SD-card part: it reports a newer archive and installs it on
+the card. It does not flash the board, and says so when a release needs it.
 
 Every release lists the exact emulator versions its archive ships, and the same
 table is in `/emu/versions.txt` on the card.
@@ -782,6 +786,7 @@ project.
 /emu/categories.txt                        optional category list (see Categories)
 /emu/<category>.txt                        one index file per category, named by categories.txt
 /emu/versions.txt                          which version each application was built from (informational)
+/emu/release.txt                           the release the archive on the card comes from (read by updateAll)
 /emu/assets/themes/0/<image_key>.png|.jpg  default artwork theme, converted on first use
 /emu/assets/themes/0/Categories/*.png|.jpg category artwork (with categories.txt)
 /emu/assets/themes/1..9/                   optional extra themes (UP/DOWN to switch)
@@ -1266,7 +1271,9 @@ shipped emulator — and packs
 takes the `emu/` tree as its only source of truth and refuses to build an archive
 containing an empty `.uf2`, so a half-finished build cannot ship. It requires
 `-c all`, since an archive built from one board would be missing the others.
-Besides `emu/`, the archive holds `updateAll/`, with `updateAll.exe` built by
+`-r <tag>` records the release in the archive as `emu/release.txt`, which is what
+`updateAll` compares with the newest release. Besides `emu/`, the archive holds
+`updateAll/`, with `updateAll.exe` built by
 `-z` (mingw-w64), and `ld2pico/`, with the `ld2pico.exe` that `-z` downloads
 with `curl` from the pico-dragonslair release it bundled. Doom's WAD data image
 is not packed, although `build_emulators.sh` still installs it in
@@ -1283,7 +1290,7 @@ The full maintainer checklist — per-scenario steps, dry runs, verification and
 rollback — is in [`RELEASING.md`](RELEASING.md). The short version:
 
 ```bash
-./build_emulators.sh -c all -j 3 -z            # emulators + archive (local)
+./build_emulators.sh -c all -j 3 -z -r v0.2.1  # emulators + archive (local)
 git add emu/versions.txt && git commit -m "Refresh emulator bundle" && git push
 gh workflow run BuildAndRelease.yml -f tag=v0.2.1   # builds loader, creates tag, publishes
 gh release upload v0.2.1 releases/pico-bootLoader_sdcard.zip

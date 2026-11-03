@@ -30,6 +30,7 @@ BEGIN
     LTEXT           "&Zip folder:", -1, 7, 27, 52, 8
     EDITTEXT        IDC_ZIPS, 62, 25, 288, 13, ES_AUTOHSCROLL
     PUSHBUTTON      "B&rowse...", IDC_ZIPS_BROWSE, 356, 24, 57, 14
+    LTEXT           "", IDC_NOTICE, 155, 45, 258, 8, SS_ENDELLIPSIS | SS_NOPREFIX
     /* Before the label below, whose mnemonic goes to the control after it. */
     CONTROL         "Select &all", IDC_SELECT_ALL, "Button", BS_3STATE | WS_TABSTOP, 70, 44, 80, 10
     LTEXT           "Se&ts to install:", -1, 7, 45, 60, 8

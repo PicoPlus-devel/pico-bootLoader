@@ -38,6 +38,8 @@
 #define WM_APP_CONFIG   (WM_APP + 5)   /* lParam: malloc'd fetched */
 #define WM_APP_BYTES    (WM_APP + 6)   /* wParam: done, lParam: total, -1 when unknown */
 #define WM_APP_FILE     (WM_APP + 7)   /* lParam: malloc'd file_msg */
+#define WM_APP_RELEASE  (WM_APP + 8)   /* lParam: malloc'd release_msg */
+#define WM_APP_CARD     (WM_APP + 9)   /* lParam: malloc'd card_msg */
 #define TIMER_CHECK     1
 
 enum { JOB_NONE, JOB_CHECK, JOB_INSTALL, JOB_CONFIG };
@@ -47,6 +49,8 @@ typedef struct {
     char *sd, *zips;
     char **ids;              /* NULL-terminated, or NULL for every set */
     int no_download, dry_run;
+    int sdcard;              /* ua_options.sdcard */
+    const ua_release *release;   /* the release if already read; stays valid */
     DWORD last_bytes;        /* when on_bytes last reached the window */
     char *config_url, *config_dir;
 } job;
@@ -57,6 +61,19 @@ typedef struct {
     ua_config cfg;
     char err[1024];
 } fetched;
+
+/* What the release check found. */
+typedef struct {
+    int ok;
+    ua_release rel;
+    char err[1024];
+} release_msg;
+
+/* What a JOB_CHECK found out about the card, apart from its sets. */
+typedef struct {
+    int has_emu;
+    char *tag;               /* the release it holds, or NULL when not known */
+} card_msg;
 
 /* What the core says about a file of the run. */
 typedef struct {
@@ -83,6 +100,7 @@ static const struct {
     { IDC_ZIPS_BROWSE, MOVE_X }, { IDC_SETS, GROW_X },       { IDC_LOG, GROW_X | GROW_Y },
     { IDC_FILES, GROW_X | GROW_Y }, { IDC_SHOWLOG, MOVE_X }, { IDC_STATUS, MOVE_Y | GROW_X },
     { IDC_PROGRESS, MOVE_Y | GROW_X }, { IDOK, MOVE_X | MOVE_Y }, { IDCANCEL, MOVE_X | MOVE_Y },
+    { IDC_NOTICE, GROW_X },
 };
 #define NANCHORS ((int)(sizeof anchors / sizeof anchors[0]))
 
@@ -113,6 +131,14 @@ static struct {
     int overall;             /* where the bar at the bottom is */
     wchar_t *last_line;      /* the last line the core reported */
     HTHEME bar_theme;        /* NULL without visual styles */
+    ua_release *release;     /* the newest release; set once, never replaced */
+    int release_failed;      /* it could not be read */
+    wchar_t card_path[MAX_PATH * 2];   /* the card that the next three are about */
+    int card_known;          /* a check of that card has reported */
+    int card_emu;            /* it has an emu folder */
+    char *card_tag;          /* the release it holds, or NULL when not known */
+    int archive_touched;     /* the user set the archive's tick for this card */
+    int setting_tick;        /* the program sets ticks, not the user */
 } app;
 
 /* ------------------------------------------------------------------------- */
@@ -120,7 +146,19 @@ static struct {
 /* ------------------------------------------------------------------------- */
 
 /* The list has a row for each set, except that the BIOS files, which come
-   last in the configuration, share one: the row of the set "bios". */
+   last in the configuration, share one: the row of the set "bios". The SD-card
+   archive, when configured, has the first row; it stands for no set of the
+   configuration. */
+static int archive_rows(void)
+{
+    return app.cfg.sd_asset != NULL;
+}
+
+static int is_archive_row(int row)
+{
+    return row == 0 && archive_rows();
+}
+
 static int bios_first(void)
 {
     int i = app.cfg.ncores;
@@ -132,13 +170,18 @@ static int bios_first(void)
 static int row_count(void)
 {
     int b = bios_first();
-    return b + (b < app.cfg.ncores);
+    return archive_rows() + b + (b < app.cfg.ncores);
 }
 
 /* The sets a row stands for: cores first .. first + n - 1. */
 static void row_sets(int row, int *first, int *n)
 {
     int b = bios_first();
+    if (is_archive_row(row)) {
+        *first = *n = 0;
+        return;
+    }
+    row -= archive_rows();
     *first = row < b ? row : b;
     *n = row < b ? 1 : app.cfg.ncores - b;
 }
@@ -146,6 +189,9 @@ static void row_sets(int row, int *first, int *n)
 /* The id the row is selected by, as with --core. */
 static const char *row_id(int row)
 {
+    if (is_archive_row(row))
+        return "sdcard";
+    row -= archive_rows();
     return row < bios_first() ? app.cfg.cores[row].id : "bios";
 }
 
@@ -230,7 +276,14 @@ static unsigned __stdcall worker(void *arg)
     int rc = 0;
     if (j->kind == JOB_CHECK) {
         int card = ua_is_dir(j->sd);
-        for (int r = 0, rows = row_count(); r < rows && !app.cancel; r++) {
+        card_msg *c = calloc(1, sizeof *c);
+        c->has_emu = card && ua_card_has_emu(j->sd);
+        c->tag = card ? ua_card_release(j->sd) : NULL;
+        if (!PostMessageW(app.dlg, WM_APP_CARD, 0, (LPARAM)c)) {
+            free(c->tag);
+            free(c);
+        }
+        for (int r = archive_rows(), rows = row_count(); r < rows && !app.cancel; r++) {
             int first, n, current = 0;
             row_sets(r, &first, &n);
             for (int i = first; i < first + n && card && !app.cancel; i++)
@@ -248,11 +301,25 @@ static unsigned __stdcall worker(void *arg)
         ua_hooks hooks = { .log = hook_log, .on_set = hook_set, .on_bytes = hook_bytes,
                            .on_file = hook_file, .cancelled = hook_cancelled, .ctx = j };
         ua_options opt = { j->sd, j->zips, (const char **)j->ids, NULL, j->no_download,
-                           j->dry_run };
+                           j->dry_run, j->sdcard, j->release };
         rc = ua_run(&app.cfg, &opt, &hooks);
     }
     PostMessageW(app.dlg, WM_APP_DONE, j->kind, rc);
     job_free(j);
+    return 0;
+}
+
+/* Asks GitHub for the newest release, once the configuration is final. On its
+   own thread: a job would hold up an install for as long as the answer takes. */
+static unsigned __stdcall release_worker(void *arg)
+{
+    (void)arg;
+    release_msg *m = calloc(1, sizeof *m);
+    m->ok = !ua_release_fetch(&app.cfg, &m->rel, m->err, sizeof m->err);
+    if (!PostMessageW(app.dlg, WM_APP_RELEASE, 0, (LPARAM)m)) {
+        ua_release_free(&m->rel);
+        free(m);
+    }
     return 0;
 }
 
@@ -620,14 +687,40 @@ static int checked_sets(void)
     return n;
 }
 
+/* Select all leaves the archive alone on a card that does not hold one. */
+static int in_select_all(int row)
+{
+    return !is_archive_row(row) || app.card_emu;
+}
+
+static void select_all_counts(int *ticked, int *all)
+{
+    *ticked = *all = 0;
+    for (int r = 0; r < row_count(); r++) {
+        if (in_select_all(r)) {
+            (*all)++;
+            *ticked += ListView_GetCheckState(item(IDC_SETS), r) != 0;
+        }
+    }
+}
+
+static void set_archive_tick(int tick)
+{
+    if (!archive_rows())
+        return;
+    app.setting_tick = 1;
+    ListView_SetCheckState(item(IDC_SETS), 0, tick);
+    app.setting_tick = 0;
+}
+
 /* There is something to download from: a database for the ROM sets, or game
-   data, which has a URL of its own. */
+   data or the SD-card archive, which have a URL of their own. */
 static int can_download(void)
 {
     int any_url = 0;
     for (int i = 0; i < app.cfg.ncores; i++)
         any_url |= app.cfg.cores[i].url != NULL;
-    return app.cfg.ndatabases > 0 || any_url;
+    return app.cfg.ndatabases > 0 || any_url || archive_rows();
 }
 
 static int may_download(void)
@@ -643,9 +736,12 @@ static void update_buttons(void)
                 ticked > 0 &&
                 (GetWindowTextLengthW(item(IDC_ZIPS)) > 0 || may_download());
     EnableWindow(item(IDOK), ready);
-    CheckDlgButton(app.dlg, IDC_SELECT_ALL, !ticked                ? BST_UNCHECKED
-                                            : ticked < row_count() ? BST_INDETERMINATE
-                                                                   : BST_CHECKED);
+    int selected = 0, all = 0;
+    if (app.cfg_ok)
+        select_all_counts(&selected, &all);
+    CheckDlgButton(app.dlg, IDC_SELECT_ALL, !selected        ? BST_UNCHECKED
+                                            : selected < all ? BST_INDETERMINATE
+                                                             : BST_CHECKED);
 }
 
 static void set_running(int running)
@@ -660,10 +756,87 @@ static void set_running(int running)
         SetFocus(item(IDCANCEL));
 }
 
+/* The notice above the list and the archive's status follow what is known about
+   the release and the card; they are worked out afresh when either changes. */
+static void update_notice(void)
+{
+    wchar_t notice[128] = L"", status[64] = L"";
+    ua_release *rel = app.release;
+    if (rel && app.card_known) {
+        ua_release_compare(rel, app.card_tag);
+        wchar_t *tag = ua_widen(rel->tag), *card = ua_widen(rel->card ? rel->card : "unknown");
+        if (rel->newer) {
+            swprintf(status, 64, L"%ls available", tag);
+            if (app.card_emu)
+                swprintf(notice, 128, L"New SD card archive: %ls (card: %ls).%ls", tag, card,
+                         rel->firmware ? L" Flash the board too." : L"");
+        } else {
+            swprintf(status, 64, L"Up to date (%ls)", card);
+        }
+        free(tag);
+        free(card);
+    } else if (app.release_failed) {
+        wcscpy(status, L"Not checked");
+    }
+    SetDlgItemTextW(app.dlg, IDC_NOTICE, notice);
+    if (archive_rows())
+        ListView_SetItemText(item(IDC_SETS), 0, 3, status);
+}
+
+static void release_read(release_msg *m)
+{
+    if (m->ok) {
+        app.release = malloc(sizeof *app.release);
+        *app.release = m->rel;
+    } else {
+        app.release_failed = 1;
+        /* A run reports this itself, as it asks again. */
+        if (!app.running) {
+            wchar_t *why = ua_widen(m->err);
+            log_text(L"New archive:  could not check: ");
+            log_text(why);
+            log_text(L"\r\n");
+            free(why);
+        }
+    }
+    free(m);
+    update_notice();
+}
+
+/* A check of the card reports. The archive is ticked on a card that has an emu
+   folder, unless the user chose otherwise for this card. */
+static void card_checked(card_msg *c)
+{
+    free(app.card_tag);
+    app.card_tag = c->tag;
+    app.card_emu = c->has_emu;
+    app.card_known = 1;
+    free(c);
+    if (!app.archive_touched)
+        set_archive_tick(app.card_emu);
+    update_notice();
+    update_buttons();
+}
+
+static void check_release(void)
+{
+    if (!app.cfg_ok || !archive_rows())
+        return;
+    HANDLE h = (HANDLE)_beginthreadex(NULL, 0, release_worker, NULL, 0, NULL);
+    if (h) {
+        CloseHandle(h);
+    } else {
+        app.release_failed = 1;
+        update_notice();
+    }
+}
+
 static void set_status(int row, int current)
 {
     wchar_t text[64] = L"";
     int first, n, total = 0;
+    if (is_archive_row(row))
+        return;
     row_sets(row, &first, &n);
     for (int i = first; i < first + n; i++)
         total += app.cfg.cores[i].nfiles;
@@ -681,6 +854,19 @@ static void check_card(void)
 {
     if (!app.cfg_ok || app.running)
         return;
+    wchar_t sd[MAX_PATH * 2];
+    sd_path(sd, MAX_PATH * 2);
+    if (wcscmp(sd, app.card_path)) {
+        /* Nothing is known about this card yet, and a check of a card that is
+           slow to read can take a while: no notice about the last one meanwhile. */
+        wcscpy(app.card_path, sd);
+        app.card_known = app.card_emu = app.archive_touched = 0;
+        free(app.card_tag);
+        app.card_tag = NULL;
+        set_archive_tick(0);
+        update_notice();
+        update_buttons();
+    }
     if (app.job == JOB_CONFIG) {
         app.check_again = 1;     /* once the sets are known */
         return;
@@ -690,8 +876,6 @@ static void check_card(void)
         app.check_again = 1;
         return;
     }
-    wchar_t sd[MAX_PATH * 2];
-    sd_path(sd, MAX_PATH * 2);
     if (!*sd) {
         for (int r = 0; r < row_count(); r++)
             set_status(r, -1);
@@ -715,12 +899,21 @@ static void install(void)
     j->zips = *zips ? ua_narrow(zips) : NULL;
     j->no_download = !may_download();
     j->dry_run = IsDlgButtonChecked(app.dlg, IDC_DRYRUN) == BST_CHECKED;
-    /* Unticked sets work like --core with the ticked ones. */
-    if (checked_sets() < row_count()) {
+    /* Unticked sets work like --core with the ticked ones. The archive's row
+       goes apart: a set that is skipped is no failure just because the archive
+       was unticked. */
+    int archive = archive_rows() && ListView_GetCheckState(item(IDC_SETS), 0);
+    if (archive_rows())
+        j->sdcard = !archive ? -1 : may_download() ? 1 : 0;
+    j->release = app.release;
+    if (checked_sets() - archive < row_count() - archive_rows()) {
         j->ids = calloc((size_t)row_count() + 1, sizeof *j->ids);
-        for (int r = 0, n = 0; r < row_count(); r++)
+        for (int r = archive_rows(), n = 0; r < row_count(); r++)
             if (ListView_GetCheckState(item(IDC_SETS), r))
                 j->ids[n++] = _strdup(row_id(r));
+        /* Only the archive is ticked: no set at all, rather than every set. */
+        if (!j->ids[0] && archive)
+            j->ids[0] = _strdup("sdcard");
     }
 
     SetDlgItemTextW(app.dlg, IDC_LOG, L"");
@@ -743,8 +936,10 @@ static void install(void)
 static void job_done(int kind, int rc)
 {
     app.job = JOB_NONE;
-    if (kind == JOB_CONFIG)
+    if (kind == JOB_CONFIG) {
         update_buttons();
+        check_release();
+    }
     if (kind == JOB_INSTALL) {
         int cancelled = app.cancel != 0;
         files_done(cancelled);
@@ -919,6 +1114,12 @@ static void size_file_columns(void)
 static void row_texts(int row, char **name, char **zips, char **dest)
 {
     int first, n;
+    if (is_archive_row(row)) {
+        *name = _strdup(app.cfg.sd_name);
+        *zips = _strdup(app.cfg.sd_asset);
+        *dest = _strdup("/");
+        return;
+    }
     row_sets(row, &first, &n);
     const ua_core *c = &app.cfg.cores[first];
     if (!c->bios) {
@@ -962,6 +1163,7 @@ static void row_texts(int row, char **name, char **zips, char **dest)
 static void fill_sets(char **unticked)
 {
     HWND lv = item(IDC_SETS);
+    app.setting_tick = 1;
     ListView_DeleteAllItems(lv);
     for (int r = 0; r < row_count(); r++) {
         char *name, *zips, *dest;
@@ -974,6 +1176,8 @@ static void fill_sets(char **unticked)
         int tick = 1;
         for (char **u = unticked; u && *u && tick; u++)
             tick = _stricmp(*u, row_id(r)) != 0;
+        if (is_archive_row(r) && !app.archive_touched)
+            tick = app.card_emu;
         ListView_SetCheckState(lv, r, tick);
         free(name);
         free(zips);
@@ -982,6 +1186,7 @@ static void fill_sets(char **unticked)
         free(wzips);
         free(wdest);
     }
+    app.setting_tick = 0;
     for (int c = 0; c < 3; c++)
         ListView_SetColumnWidth(lv, c, LVSCW_AUTOSIZE_USEHEADER);
 }
@@ -1024,8 +1229,9 @@ static void log_config(void)
     wchar_t *why = c->fetch_error ? ua_widen(c->fetch_error) : NULL;
     size_t n = wcslen(from) + (why ? wcslen(why) : 0) + 160;
     wchar_t *line = malloc(n * sizeof *line);
+    int sets = row_count() - archive_rows();
     swprintf(line, n, L"Configuration: %ls, %d set%ls, %d download database%ls%ls%ls%ls\r\n", from,
-             row_count(), row_count() == 1 ? L"" : L"s", c->ndatabases, c->ndatabases == 1 ? L"" : L"s",
+             sets, sets == 1 ? L"" : L"s", c->ndatabases, c->ndatabases == 1 ? L"" : L"s",
              why ? L" (" : L"", why ? why : L"", why ? L")" : L"");
     log_text(line);
     log_text(can_download()
@@ -1053,6 +1259,7 @@ static void config_fetched(fetched *f)
         fill_sets(unticked);
         size_status_column();
         show_databases(had);
+        update_notice();
         for (char **u = unticked; *u; u++)
             free(*u);
         free(unticked);
@@ -1142,6 +1349,7 @@ static void init_dialog(HWND dlg)
         start_job(j);
     } else if (app.cfg_ok) {
         log_config();
+        check_release();
     }
     if (!app.cfg_ok) {
         for (size_t i = 0; i < sizeof inputs / sizeof inputs[0]; i++)
@@ -1190,9 +1398,11 @@ static INT_PTR CALLBACK dlg_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
             return TRUE;
         case IDC_SELECT_ALL:
             if (HIWORD(wp) == BN_CLICKED) {
-                int tick = checked_sets() < row_count();
+                int selected, all;
+                select_all_counts(&selected, &all);
                 for (int r = 0; r < row_count(); r++)
-                    ListView_SetCheckState(item(IDC_SETS), r, tick);
+                    if (in_select_all(r))
+                        ListView_SetCheckState(item(IDC_SETS), r, selected < all);
             }
             return TRUE;
         case IDC_SHOWLOG:
@@ -1210,8 +1420,11 @@ static INT_PTR CALLBACK dlg_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
             return TRUE;
         }
         if (nm->hdr.idFrom == IDC_SETS && nm->hdr.code == LVN_ITEMCHANGED &&
-            (nm->uChanged & LVIF_STATE) && ((nm->uNewState ^ nm->uOldState) & LVIS_STATEIMAGEMASK))
+            (nm->uChanged & LVIF_STATE) && ((nm->uNewState ^ nm->uOldState) & LVIS_STATEIMAGEMASK)) {
+            if (is_archive_row(nm->iItem) && !app.setting_tick)
+                app.archive_touched = 1;
             update_buttons();
+        }
         break;
     }
 
@@ -1264,6 +1477,19 @@ static INT_PTR CALLBACK dlg_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         config_fetched((fetched *)lp);
         return TRUE;
 
+    case WM_APP_RELEASE:
+        release_read((release_msg *)lp);
+        return TRUE;
+
+    case WM_APP_CARD:
+        if (!app.running && app.job == JOB_CHECK && !app.cancel) {
+            card_checked((card_msg *)lp);
+        } else {
+            free(((card_msg *)lp)->tag);
+            free((void *)lp);
+        }
+        return TRUE;
+
     case WM_APP_DONE:
         job_done((int)wp, (int)lp);
         return TRUE;
@@ -1296,6 +1522,13 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     (void)prev, (void)cmd, (void)show;
     /* No "insert a disk" boxes for card readers without a card. */
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX);
+    /* What is left of the copy of this program that an update replaced. */
+    wchar_t old[MAX_PATH + 8];
+    DWORD len = GetModuleFileNameW(NULL, old, MAX_PATH);
+    if (len && len < MAX_PATH) {
+        wcscpy(old + len, L".old");
+        DeleteFileW(old);
+    }
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
     INITCOMMONCONTROLSEX icc = { sizeof icc, ICC_LISTVIEW_CLASSES | ICC_PROGRESS_CLASS |
                                                  ICC_STANDARD_CLASSES };

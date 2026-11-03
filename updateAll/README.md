@@ -1,6 +1,6 @@
 # updateAll
 
-`updateAll` installs arcade ROM sets on the SD card of a pico-bootLoader console or of a standalone arcade application. It takes MAME ROM zips from a folder, downloads the zips that are not in it from the configured databases, and extracts each set into the folder on the SD card where its application looks for it. It also installs the freely distributed shareware and demo data of the ported games *Doom*, *Duke Nukem 3D*, *Quake II* and *Diablo*, and the assets of the DevilutionX engine that *Diablo* runs on, see [Game data](#game-data), and the BIOS files that the emulators need, see [BIOS files](#bios-files).
+`updateAll` installs arcade ROM sets on the SD card of a pico-bootLoader console or of a standalone arcade application. It takes MAME ROM zips from a folder, downloads the zips that are not in it from the configured databases, and extracts each set into the folder on the SD card where its application looks for it. It also installs the freely distributed shareware and demo data of the ported games *Doom*, *Duke Nukem 3D*, *Quake II* and *Diablo*, and the assets of the DevilutionX engine that *Diablo* runs on, see [Game data](#game-data), and the BIOS files that the emulators need, see [BIOS files](#bios-files). On a pico-bootLoader card it also reports a newer SD-card archive and installs it, see [SD-card archive](#sd-card-archive).
 
 The ROM sets are copyright of their manufacturers and are not included. The shipped `updateAll.json` configures one download database, [ArcadeROMsDB_MiSTer](https://github.com/zakk4223/ArcadeROMsDB_MiSTer), a third-party database that is not part of this project, so zips that are not in the zip folder are downloaded from it by default. The user is responsible for holding the rights to the ROM sets, whether they are supplied as zips or downloaded. The same holds for the BIOS files, which are copyright of their manufacturers as well and are downloaded from the third-party sources listed under [BIOS files](#bios-files); to leave them out, untick **BIOS** in the Windows program, or name the sets to install with `--core` (Python) or `-Core` (PowerShell). To use only zips you supply, untick **Download missing files** in the Windows program, pass `--no-download` (Python) or `-NoDownload` (PowerShell), or set `"databases": []` in `updateAll.json` and remove its `config_url`; see [Download databases](#download-databases).
 
@@ -116,10 +116,10 @@ The files are installed under the names the applications look for. The Videopac,
 1. Start `updateAll.exe`. The SD card is selected for you: the card the program was started from, or else the first removable drive that holds a pico-bootLoader card (an `emu` folder), or else the first removable drive.
 2. Under **SD card**, choose another card if needed. Any existing folder can be chosen instead.
 3. Under **Zip folder**, choose the folder with the MAME zips you already have, if any. When **Download missing files** is ticked, which it is by default, zips that are not in the folder are downloaded from the configured databases, and game data from its own address; without a zip folder they are downloaded into a temporary folder that is removed afterwards.
-4. Untick the sets that are not wanted. **Select all** ticks or unticks all sets at once, and shows a mixed state when only some are ticked. The BIOS files of all emulators are one row, **BIOS**. The **Status** column shows which sets are already complete on the card.
+4. Untick the sets that are not wanted. **Select all** ticks or unticks all sets at once, and shows a mixed state when only some are ticked. The BIOS files of all emulators are one row, **BIOS**. The first row, **SD card files**, is the SD-card archive. The **Status** column shows which sets are already complete on the card. A line above the list reports a newer SD-card archive, see [SD-card archive](#sd-card-archive).
 5. Select **Install**. The list of files shows each file that is downloaded or installed, with its own progress bar and its result; a set that is already complete on the card is not listed. The bar at the bottom shows the progress of the whole run. Each set has an equal share of it, so a large download moves it slowly. **Show log** switches between the list and the log, which holds the same report as the scripts. **Dry run** reports what would be downloaded and written without doing it. **Cancel** stops a run: a download in progress is abandoned, and files already written stay on the card.
 
-The program reads the latest configuration from this repository when it starts; until it has, **Install** is unavailable. When it cannot be read, the program uses an `updateAll.json` that is next to it, and its built-in copy otherwise. The line `Configuration:` in the log shows which one is used. Apart from the sets on the card, downloaded files in the zip folder and its temporary folder, it writes nothing: no settings, no registry entries.
+The program reads the latest configuration from this repository when it starts; until it has, **Install** is unavailable. When it cannot be read, the program uses an `updateAll.json` that is next to it, and its built-in copy otherwise. The line `Configuration:` in the log shows which one is used. Apart from the sets and the SD-card archive on the card, downloaded files in the zip folder and its temporary folder, it writes nothing: no settings, no registry entries.
 
 The program is not signed, so Windows may show "Windows protected your PC" the first time it is started. Select **More info**, then **Run anyway**.
 
@@ -147,7 +147,7 @@ If Windows refuses to run the script because it is not signed, start it with `po
 | --- | --- | --- |
 | `--sd DIR` | `-Sd DIR` | Root of the SD card. Required. |
 | `--zips DIR` | `-Zips DIR` | Folder with MAME zips you already have. Downloaded zips and game data are kept here as well; it is created if necessary. Without it, they are downloaded into a temporary folder that is removed after the run. Required when nothing is to be downloaded. |
-| `--core ID[,ID]` | `-Core ID[,ID]` | Install only these sets; `bios` stands for all BIOS files. Default: all configured sets. |
+| `--core ID[,ID]` | `-Core ID[,ID]` | Install only these sets; `bios` stands for all BIOS files, and `sdcard` for the SD-card archive. Default: all configured sets, and the archive on a card with an `emu` folder. |
 | `--db SRC[,SRC]` | `-Database SRC[,SRC]` | Download databases to use in addition to those in the configuration: URLs or files. |
 | `--no-download` | `-NoDownload` | Use only the files already in the zip folder. |
 | `--dry-run` | `-DryRun` | Report what would be downloaded and written without doing it. |
@@ -159,13 +159,13 @@ If Windows refuses to run the script because it is not signed, start it with `po
 - The card is checked first. A set that is already complete on the card needs no zip, so nothing is read or downloaded for it.
 - Zips are looked up by name in the zip folder, ignoring case. A zip that is not there is downloaded from the first database that lists it. A set whose zip is neither in the folder nor in a database is skipped.
 - Game data is looked up in the zip folder under the last part of its address, for example `3dduke13.zip`, and downloaded from that address when it is not there.
-- Databases are only read when a zip is needed and missing, so a run on an up-to-date card, or with every zip at hand, needs no network access beyond reading the configuration (see [Latest sets](#latest-sets)). A zip that is already in the zip folder is never downloaded again.
+- Databases are only read when a zip is needed and missing, so a run on an up-to-date card, or with every zip at hand, needs no network access beyond reading the configuration (see [Latest sets](#latest-sets)) and the list of releases (see [SD-card archive](#sd-card-archive)). A zip that is already in the zip folder is never downloaded again.
 - A download is written to a `.part` file and kept only when its size and MD5 match the database and it is a valid zip. Game data has no database entry and need not be a zip; its files are checked against the configuration when they are installed. Failed downloads are retried twice, except after an HTTP 4xx response.
 - Only the files listed in the configuration are extracted. They are identified by size and CRC32, as the applications identify them, so merged, split and non-merged sets are all accepted, as are sets whose files carry other names. In a merged set, the files at the root of the zip take precedence over the clone subfolders.
 - Game data that is a single file rather than a zip is installed as it is, or, when its entry has `uf2`, as a UF2 image of it. The report then names the conversion, for example `converted doom1.whx to a UF2 image at 0x10200000`, and an image that does not match the configuration is reported as not the expected file. The zips that an entry names under `archives`, such as the self-extracting archive inside the Duke Nukem 3D shareware zip, are searched as well.
 - A BIOS file with `offset` or `parts` is built from its download first: a part of a download that is one file, or entries of a zip joined. It is then checked like any other file, and one that does not match the configuration is reported as not the expected file. A part that is not in the zip is reported by name.
 - Files are written under the names listed in the configuration. pico-outrun opens its files by name, so for OutRun this is required.
-- A file that is already on the card with the correct size and CRC32 is left as it is. Other files on the card are never modified or deleted.
+- A file that is already on the card with the correct size and CRC32 is left as it is. Other files on the card are never deleted, and are modified only when they are part of the SD-card archive, see [SD-card archive](#sd-card-archive).
 - Every file is verified before it is written. A damaged entry, or a file of the expected name with other contents, is reported and not written.
 - The exit status is 0 when every set that was found is complete on the card, and 1 when a set is incomplete, a download or extraction failed, a database could not be read, no set was found at all, or a set requested with `--core` was not found. A dry run counts the sets it would download as found. A configuration that cannot be read from `config_url` does not change the exit status.
 
@@ -180,6 +180,53 @@ The shipped `updateAll.json` names its own copy in this repository under `config
 At every start, updateAll reads the configuration from that address. It replaces the local configuration in full, the sets as well as the databases; its own `config_url` is not followed. The first line of the output, `Sets from:`, shows the address. When the configuration cannot be read there, for example without network access, the local `updateAll.json` is used, or the built-in copy of the Windows program, and `Sets from:` gives the reason.
 
 To use the local configuration only, for example after editing it, remove `config_url` from it or set it to `""`.
+
+## SD-card archive
+
+The `sdcard` key of `updateAll.json` names the SD-card archive of pico-bootLoader:
+
+```json
+"sdcard": {
+  "name": "SD card files",
+  "asset": "pico-bootLoader_sdcard.zip",
+  "releases_url": "https://api.github.com/repos/PicoPlus-devel/pico-bootLoader/releases?per_page=10"
+}
+```
+
+At every start, updateAll reads that list of releases and takes the newest one that holds the archive. Tags of the form `v0.N` and `v0.N.M` count; drafts, prereleases and other tags such as `v0.N-alpha` do not. It compares that release with `/emu/release.txt` on the card. A card without that file counts as older than any release.
+
+| Situation | Message | Archive installed |
+| --- | --- | --- |
+| Card with an `emu` folder, newer archive | Yes | Yes |
+| The same, with the row unticked, `--core` naming other sets, or `--no-download` | Yes | No |
+| The same, with **Dry run** or `--dry-run` | Yes | No; the report names what would be done |
+| Card already up to date | No | No |
+| Card without an `emu` folder | No | Only when its row is ticked, or with `--core sdcard` |
+| The list of releases cannot be read | The reason, in the log | No; the exit status does not change |
+
+The Windows program shows the message above the list of sets, the scripts as a line of their report:
+
+```text
+New archive:  pico-bootLoader_sdcard.zip v0.10 is available (card: v0.9): https://github.com/PicoPlus-devel/pico-bootLoader/releases/tag/v0.10
+```
+
+The archive is installed before the sets, and as a set: it is downloaded to the zip folder, or the temporary folder, under a name that holds the tag, for example `pico-bootLoader_sdcard-v0.10.zip`, and its size is checked. Older archives stay in the zip folder until they are removed by hand. Files with the correct size and CRC32 are left as they are. `/boot.txt` is not part of the archive, and files that are not part of it are not changed.
+
+- An archive that holds a file name that could lead outside the card is rejected as a whole.
+- A list in `/emu` that changes, such as `emulators.txt`, is first saved next to it as `emulators.txt.bak`, or `.bak2` and so on if that name is taken by other contents. Edits to these lists must be repeated after an update, as new applications appear in the menu only through the new lists. `versions.txt` and `boot.example.txt` are not saved. Custom artwork under a name that the archive also holds is replaced without a copy.
+- `updateAll/updateAll.json` is not replaced when it has no `config_url`, or cannot be read: that is how a card is set to use its own configuration. Other copies are replaced.
+- `updateAll.exe` can replace itself when it runs from the card. The copy that was running stays next to it as `updateAll.exe.old` until the next start, and continues the current run.
+- `/emu/release.txt` is written last, and only when the whole archive was installed. A run that was cancelled or failed is repeated in full by the next one, which leaves the files that were already written as they are.
+
+updateAll does not flash the board. When an archive of another `v0.N` is installed, or the release on the card is not known, the report ends with a reminder, and the Windows program also says so above the list of sets:
+
+```text
+Firmware:     flash the board with the bootloader of v0.10 as well; updateAll cannot do that: https://github.com/PicoPlus-devel/pico-bootLoader/releases/tag/v0.10
+```
+
+GitHub allows 60 such requests per hour from one address. A release that is published again under the same tag is not noticed by a card that already has that tag.
+
+To turn this off, remove the `sdcard` key from `updateAll.json`, together with its `config_url`, see [Latest sets](#latest-sets). A custom `BASEDIR` in `/boot.txt` is not followed: the archive unpacks into `/emu`.
 
 ## Download databases
 

@@ -31,6 +31,12 @@ When updateAll.json has a "config_url", the configuration is first read from
 there, so that sets added since this copy was made are installed too. If it
 cannot be read, the local file is used.
 
+The "sdcard" key of updateAll.json names the SD-card archive of pico-bootLoader
+on GitHub. On a card with an emu folder, a release newer than the one that
+emu/release.txt records is reported, and its archive is installed like a set;
+--core sdcard selects it on any other card. The files of the archive are found
+in the archive itself. A list in emu that changes is first saved as .bak.
+
 Only the files listed for a set are extracted. They are found by size and
 CRC32 rather than by name, as the applications themselves do, so merged, split
 and non-merged sets all work, and they are written under the names from the
@@ -70,6 +76,9 @@ USER_AGENT = "updateAll (pico-bootLoader)"
 DOWNLOAD_ATTEMPTS = 3
 TIMEOUT = 60
 CONFIG_TIMEOUT = 15
+RELEASE_MARKER = "emu/release.txt"
+OWN_CONFIG = "updateAll/updateAll.json"
+TAG_PATTERN = re.compile(r"v[0-9]{1,9}(\.[0-9]{1,9}){1,2}")
 
 
 class ConfigError(Exception):
@@ -97,9 +106,27 @@ def _hex32(text):
     return n
 
 
+def _parse_sdcard(cfg, path):
+    """The "sdcard" key: where the SD-card archive is released, or None. It is
+    a key of its own, as older copies of updateAll read this file too."""
+    sdcard = cfg.get("sdcard")
+    if sdcard is None:
+        return None
+    if not isinstance(sdcard, dict):
+        raise ConfigError(f"{path}: 'sdcard' must be an object")
+    name, url, asset = sdcard.get("name"), sdcard.get("releases_url"), sdcard.get("asset")
+    if not isinstance(name, str) or not name:
+        raise ConfigError(f"{path}: 'sdcard' needs a 'name'")
+    if not isinstance(url, str) or not _is_url(url):
+        raise ConfigError(f"{path}: 'sdcard' needs an http or https 'releases_url'")
+    if not isinstance(asset, str) or _bad_name(asset) or not asset.lower().endswith(".zip"):
+        raise ConfigError(f"{path}: 'sdcard' needs the name of a zip as 'asset'")
+    return {"name": name, "releases_url": url, "asset": asset}
+
+
 def load_config(path):
-    """Returns (cores, databases, config_url); relative database paths are
-    made relative to the configuration file."""
+    """Returns (cores, databases, config_url, sdcard); relative database paths
+    are made relative to the configuration file."""
     try:
         with open(path, "r", encoding="utf-8") as f:
             text = f.read()
@@ -139,13 +166,14 @@ def parse_config(text, path, config_dir):
         for key in ("id", "name", "url" if is_data else "zips", "destination", "files"):
             if key not in core:
                 raise ConfigError(f"{path}: core '{cid}' has no '{key}'")
-        if cid.lower() == "bios":
+        if cid.lower() in ("bios", "sdcard"):
             raise ConfigError(f"{path}: core '{cid}' has a reserved id")
         if cid.lower() in ids:
             raise ConfigError(f"{path}: core '{cid}' is defined twice")
         ids.add(cid.lower())
 
         core["_bios"] = kind == "bios"
+        core["_release"] = None
         core["_url"] = None
         core["_archives"] = []
         core["_uf2"] = None
@@ -203,6 +231,7 @@ def parse_config(text, path, config_dir):
             # entries of a zip joined; older copies do not know either.
             f["_offset"] = None
             f["_join"] = []
+            f["_backup"] = False
             if kind == "bios" and "offset" in f:
                 try:
                     f["_offset"] = _hex32(f["offset"])
@@ -232,7 +261,7 @@ def parse_config(text, path, config_dir):
         config_url = None
     elif not (isinstance(config_url, str) and _is_url(config_url)):
         raise ConfigError(f"{path}: 'config_url' must be an http or https URL")
-    return cores + data + bios, databases, config_url
+    return cores + data + bios, databases, config_url, _parse_sdcard(cfg, path)
 
 
 def fetch_config(url, config_dir):
@@ -243,8 +272,8 @@ def fetch_config(url, config_dir):
             text = r.read().decode("utf-8")
     except (OSError, ValueError, http.client.HTTPException) as e:
         raise ConfigError(f"cannot read {url}: {_describe(e)}")
-    cores, databases, _ = parse_config(text, url, config_dir)
-    return cores, databases, url
+    cores, databases, _, sdcard = parse_config(text, url, config_dir)
+    return cores, databases, url, sdcard
 
 
 # ---------------------------------------------------------------------------
@@ -377,7 +406,7 @@ def fetch_missing_zips(core, zip_dir, zip_listing, databases, dry_run, url_downl
         if core["_url"]:
             if not url_downloads:
                 continue
-            url, size, md5 = core["_url"], None, None
+            url, size, md5 = core["_url"], core["_release"] and core["_release"]["size"], None
             source = urllib.parse.urlsplit(url).hostname or url
         else:
             hit = databases.find(zname)
@@ -394,13 +423,181 @@ def fetch_missing_zips(core, zip_dir, zip_listing, databases, dry_run, url_downl
         try:
             os.makedirs(zip_dir, exist_ok=True)
             got = download(url, os.path.join(zip_dir, zname), size, md5,
-                           need_zip=not core["_url"])
+                           need_zip=not core["_url"] or bool(core["_release"]))
         except (DownloadError, OSError) as e:
             errors.append(f"download of {zname} from {source} failed: {e}")
             continue
         zip_listing.append(zname)
         notes.append(f"downloaded {zname} ({(got + 1023) // 1024} KB) from {source}")
     return notes, errors, pending
+
+
+# ---------------------------------------------------------------------------
+# The SD-card archive
+# ---------------------------------------------------------------------------
+
+def parse_tag(tag):
+    """A release tag as three numbers to compare, or None for any other text."""
+    if not isinstance(tag, str) or not TAG_PATTERN.fullmatch(tag):
+        return None
+    numbers = [int(n) for n in tag[1:].split(".")]
+    return tuple(numbers + [0] * (3 - len(numbers)))
+
+
+def read_marker(sd_root):
+    """The release the card holds according to its marker, or None."""
+    try:
+        with open(os.path.join(sd_root, *RELEASE_MARKER.split("/")), "rb") as f:
+            line = f.read(256).split(b"\n")[0].strip().decode("latin-1")
+    except OSError:
+        return None
+    return line if parse_tag(line) else None
+
+
+def _release_asset(release, asset):
+    """The usable asset of this name in a release, or None."""
+    assets = release.get("assets")
+    for a in assets if isinstance(assets, list) else []:
+        if (isinstance(a, dict) and a.get("name") == asset and
+                a.get("state", "uploaded") == "uploaded"):
+            url, size = a.get("browser_download_url"), a.get("size")
+            if (isinstance(url, str) and _is_url(url) and
+                    isinstance(size, int) and not isinstance(size, bool) and size >= 0):
+                return a
+    return None
+
+
+def fetch_release(sdcard, sd_root):
+    """The newest release that holds the archive, compared with the card."""
+    try:
+        with _open_url(sdcard["releases_url"], CONFIG_TIMEOUT) as r:
+            text = r.read()
+    except (OSError, ValueError, http.client.HTTPException) as e:
+        raise DownloadError(_describe(e))
+    try:
+        releases = json.loads(text.decode("utf-8"))
+    except ValueError:
+        releases = None
+    if not isinstance(releases, list):
+        raise DownloadError("the answer is not a list of releases")
+
+    best, best_key = None, None
+    for r in releases:
+        # The workflow does not mark a dry run such as v0.2.1-alpha as a
+        # prerelease, so the form of the tag is what sets it apart.
+        if not isinstance(r, dict) or r.get("draft") is True or r.get("prerelease") is True:
+            continue
+        key = parse_tag(r.get("tag_name"))
+        page = r.get("html_url")
+        asset = _release_asset(r, sdcard["asset"])
+        if key and asset and isinstance(page, str) and _is_url(page) and (not best or key > best_key):
+            best_key = key
+            best = {"tag": r["tag_name"], "page": page, "size": asset["size"],
+                    "url": asset["browser_download_url"]}
+    if not best:
+        raise DownloadError(f"no release holds {sdcard['asset']}")
+    best["card"] = read_marker(sd_root)
+    best["newer"] = best["card"] is None or best_key > parse_tag(best["card"])
+    # v0.N.M has the firmware of v0.N, so only the first two numbers count.
+    best["firmware"] = best["card"] is None or best_key[:2] != parse_tag(best["card"])[:2]
+    return best
+
+
+def release_core(sdcard, release):
+    """The archive as a set. Its files are not known before it is downloaded;
+    the name holds the tag, as a kept zip is otherwise never downloaded again."""
+    asset = sdcard["asset"]
+    return {"id": "sdcard", "name": sdcard["name"], "zips": [f"{asset[:-4]}-{release['tag']}{asset[-4:]}"],
+            "files": [], "_bios": False, "_release": release, "_url": release["url"],
+            "_archives": [], "_uf2": None, "_sliced": False, "_dest_parts": [], "_dest_shown": "/"}
+
+
+def forget_stale_zip(core, zip_dir, zip_listing):
+    """A release can be cut again, so a kept archive of the wrong size is
+    taken from the listing, which downloads it again."""
+    for entry in list(zip_listing):
+        if entry.lower() == core["zips"][0].lower():
+            try:
+                if os.path.getsize(os.path.join(zip_dir, entry)) != core["_release"]["size"]:
+                    zip_listing.remove(entry)
+            except OSError:
+                zip_listing.remove(entry)
+
+
+def keeps_own_config(sd_root):
+    """Whether the card's updateAll.json stays: removing its config_url is how
+    a user chooses to use that file only. One that has it does nothing online,
+    and replacing it lets a release point config_url at another file."""
+    try:
+        with open(os.path.join(sd_root, *OWN_CONFIG.split("/")), "rb") as f:
+            cfg = json.loads(f.read().decode("utf-8-sig"))
+    except FileNotFoundError:
+        return False
+    except (OSError, ValueError):
+        return True
+    url = cfg.get("config_url") if isinstance(cfg, dict) else None
+    return not (isinstance(url, str) and url)
+
+
+def is_list_to_save(parts):
+    """A list in emu that a user may have edited. versions.txt is not edited,
+    and changes with every release."""
+    return (len(parts) == 2 and parts[0].lower() == "emu" and parts[1].lower().endswith(".txt") and
+            parts[1].lower() not in ("versions.txt", "boot.example.txt", "release.txt"))
+
+
+def fill_release_files(core, archive, sd_root, res):
+    """Makes the files of the archive the files of its set. One unsafe name
+    means that nothing is installed: it could write outside the card."""
+    keep_config = keeps_own_config(sd_root)
+    files = []
+    for info in archive.infolist():
+        name = info.filename
+        if name.endswith("/"):
+            continue
+        parts = name.split("/")
+        if any(ord(ch) > 127 for ch in name) or any(_bad_name(part) for part in parts):
+            res.errors.append(f"{archive.label} holds an unsafe file name, "
+                              "so nothing was installed from it")
+            return
+        # The marker is written last, by run(), once the install is complete.
+        if (name.lower() == RELEASE_MARKER.lower() or
+                (name.lower() == OWN_CONFIG.lower() and keep_config)):
+            continue
+        files.append({"name": name, "_parts": parts, "_size": info.file_size, "_crc": info.CRC,
+                      "_offset": None, "_join": [], "_backup": is_list_to_save(parts)})
+    core["files"] = files
+
+
+def backup_name(target):
+    """Where to save the card's copy of target before it is replaced: the first
+    free one of .bak, .bak2 and so on, so that a later update cannot destroy
+    edits saved by an earlier one. None when there is nothing to save, or a
+    backup already holds the same."""
+    try:
+        with open(target, "rb") as f:
+            current = f.read()
+    except OSError:
+        return None
+    n = 1
+    while True:
+        bak = target + (".bak" if n == 1 else f".bak{n}")
+        try:
+            with open(bak, "rb") as f:
+                if f.read() == current:
+                    return None
+        except OSError:
+            return bak
+        n += 1
+
+
+def write_marker(sd_root, tag):
+    path = os.path.join(sd_root, *RELEASE_MARKER.split("/"))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "wb") as f:
+        f.write(tag.encode("ascii") + b"\n")
+    os.replace(tmp, path)
 
 
 # ---------------------------------------------------------------------------
@@ -520,7 +717,8 @@ def open_archives(core, path, res, dry_run):
     the zips inside it that the core names in "archives". Problems are added
     to res.errors, and a conversion to res.notes."""
     name = os.path.basename(path)
-    if core["_url"] and (core["_uf2"] or core["_sliced"] or not zipfile.is_zipfile(path)):
+    if core["_url"] and not core["_release"] and (core["_uf2"] or core["_sliced"] or
+                                                  not zipfile.is_zipfile(path)):
         try:
             plain = PlainFile(path, core["_uf2"], core["files"])
         except OSError as e:
@@ -585,6 +783,8 @@ def install_core(core, zip_dir, zip_listing, sd_root, dry_run):
         for p in zip_paths:
             archives += open_archives(core, p, res, dry_run)
         opened = list(archives)
+        if core["_release"] and opened:
+            fill_release_files(core, opened[0], sd_root, res)
         for f in core["files"]:
             if f["_join"] and opened:
                 joined = join_parts(f, opened, res)
@@ -625,6 +825,11 @@ def install_core(core, zip_dir, zip_listing, sd_root, dry_run):
             source = f"{zf.label}:{info.filename}"
 
             if dry_run:
+                if f["_backup"]:
+                    bak = backup_name(target)
+                    if bak:
+                        res.notes.append(f"would save {f['name']} as "
+                                         f"{f['name']}{bak[len(target):]}")
                 res.written += 1
                 continue
             try:
@@ -637,6 +842,11 @@ def install_core(core, zip_dir, zip_listing, sd_root, dry_run):
                 continue
             try:
                 os.makedirs(os.path.dirname(target), exist_ok=True)
+                if f["_backup"]:
+                    bak = backup_name(target)
+                    if bak:
+                        shutil.copyfile(target, bak)
+                        res.notes.append(f"saved {f['name']} as {f['name']}{bak[len(target):]}")
                 tmp = target + ".tmp"
                 with open(tmp, "wb") as out:
                     out.write(data)
@@ -652,11 +862,13 @@ def install_core(core, zip_dir, zip_listing, sd_root, dry_run):
     return res, [os.path.basename(p) for p in zip_paths]
 
 
-def list_cores(cores, databases, sets_from):
+def list_cores(cores, databases, sets_from, sdcard):
     print(f"{'ID':<12} {'Name':<14} {'Zip':<14} {'SD card folder':<26} Set")
     for c in cores:
         print(f"{c['id']:<12} {c['name']:<14} {', '.join(c['zips']):<14} "
               f"{c['_dest_shown']:<26} {c.get('set', '')}, {len(c['files'])} files")
+    if sdcard:
+        print(f"{'sdcard':<12} {sdcard['name']:<14} {sdcard['asset']:<14} {'/':<26} newest release")
     print()
     if sets_from:
         print(f"Sets from:    {sets_from}")
@@ -683,8 +895,9 @@ def main(argv=None):
                          "any existing folder will do")
     ap.add_argument("--core", metavar="ID", action="append",
                     help="install only this core; repeat or separate with commas; "
-                         "bios selects every BIOS file (default: every core in the "
-                         "configuration)")
+                         "bios selects every BIOS file and sdcard the SD-card archive "
+                         "(default: every core in the configuration, and the archive "
+                         "on a card with an emu folder)")
     ap.add_argument("--db", metavar="URL|FILE", action="append", default=[],
                     help="download database to use in addition to those in the "
                          "configuration; repeat or separate with commas")
@@ -701,7 +914,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     try:
-        cores, db_sources, config_url = load_config(args.config)
+        cores, db_sources, config_url, sdcard = load_config(args.config)
     except ConfigError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
@@ -710,7 +923,7 @@ def main(argv=None):
     sets_from = None
     if config_url:
         try:
-            cores, db_sources, sets_from = fetch_config(
+            cores, db_sources, sets_from, sdcard = fetch_config(
                 config_url, os.path.dirname(os.path.abspath(args.config)))
         except ConfigError as e:
             sets_from = f"{os.path.abspath(args.config)} ({e})"
@@ -718,7 +931,7 @@ def main(argv=None):
     db_sources += [d if _is_url(d) else os.path.abspath(os.path.expanduser(d)) for d in extra]
 
     if args.list:
-        list_cores(cores, db_sources, sets_from)
+        list_cores(cores, db_sources, sets_from, sdcard)
         return 0
 
     if not args.sd:
@@ -729,7 +942,7 @@ def main(argv=None):
     # Game data has its own URL, so it can be downloaded without a database.
     use_databases = bool(db_sources) and not args.no_download
     url_downloads = not args.no_download
-    may_download = use_databases or (url_downloads and any(c["_url"] for c in cores))
+    may_download = use_databases or (url_downloads and (sdcard or any(c["_url"] for c in cores)))
     if not args.zips and not may_download:
         print("ERROR: nothing to install from: give a zip folder with --zips, "
               "or configure a database to download from", file=sys.stderr)
@@ -744,6 +957,8 @@ def main(argv=None):
         known = {c["id"].lower() for c in cores}
         if any(c["_bios"] for c in cores):
             known.add("bios")       # every BIOS file
+        if sdcard:
+            known.add("sdcard")     # the SD-card archive
         unknown = [cid for cid in requested if cid not in known]
         if unknown:
             print(f"ERROR: unknown core: {', '.join(unknown)}. Configured: "
@@ -752,10 +967,25 @@ def main(argv=None):
         cores = [c for c in cores
                  if c["id"].lower() in requested or (c["_bios"] and "bios" in requested)]
 
+    # The check is separate from installing: a newer archive is reported on a
+    # card with an emu folder even when this run does not install it.
+    has_emu = os.path.isdir(os.path.join(args.sd, "emu"))
+    release = release_error = None
+    if sdcard and (has_emu or "sdcard" in requested):
+        try:
+            release = fetch_release(sdcard, args.sd)
+        except DownloadError as e:
+            release_error = str(e)
+
     if sets_from:
         print(f"Sets from:    {sets_from}")
     print(f"Zips from:    {os.path.abspath(args.zips) if args.zips else 'downloads only'}")
     print(f"SD card:      {os.path.abspath(args.sd)}")
+    if release_error:
+        print(f"New archive:  could not check: {release_error}")
+    elif release and has_emu and release["newer"]:
+        print(f"New archive:  {sdcard['asset']} {release['tag']} is available "
+              f"(card: {release['card'] or 'unknown'}): {release['page']}")
     if use_databases:
         print(f"Databases:    {len(db_sources)}, used for zips that are not in the zip folder")
     if args.dry_run:
@@ -764,6 +994,8 @@ def main(argv=None):
 
     # Without --zips, downloads go to a temporary folder that is removed again.
     temp_dir = None if args.zips else tempfile.mkdtemp(prefix="updateAll-")
+    if release and ("sdcard" in requested or (not requested and has_emu and not args.no_download)):
+        cores = [release_core(sdcard, release)] + cores
     try:
         return run(args, cores, requested, args.zips or temp_dir,
                    Databases(db_sources if use_databases else []), url_downloads)
@@ -784,19 +1016,35 @@ def run(args, cores, requested, zip_dir, databases, url_downloads):
         zip_listing = [e for e in os.listdir(zip_dir) if os.path.isfile(os.path.join(zip_dir, e))]
 
     complete = skipped = failed = to_download = 0
+    firmware = None
     for core in cores:
+        release = core["_release"]
+        if release and not release["newer"]:
+            complete += 1
+            print(f"{core['name']}: {core['_dest_shown']}")
+            print(f"  {release['card']} up to date")
+            continue
         # A set that is complete on the card needs no zip, so nothing is
-        # opened or downloaded for it.
-        if not files_to_install(core, args.sd):
+        # opened or downloaded for it. What the archive holds is not known yet.
+        if not release and not files_to_install(core, args.sd):
             complete += 1
             print(f"{core['name']}: {core['_dest_shown']}")
             print(f"  {len(core['files'])} up to date")
             continue
 
+        if release:
+            forget_stale_zip(core, zip_dir, zip_listing)
         notes, dl_errors, pending = fetch_missing_zips(core, zip_dir, zip_listing, databases,
                                                        args.dry_run, url_downloads)
         res, used = install_core(core, zip_dir, zip_listing, args.sd, args.dry_run)
         res.errors[:0] = dl_errors
+        if release and res.complete and not args.dry_run:
+            try:
+                write_marker(args.sd, release["tag"])
+            except OSError as e:
+                res.errors.append(f"cannot write {RELEASE_MARKER}: {e}")
+        if release and release["firmware"] and (res.complete or pending):
+            firmware = release
 
         if res.skipped and not pending and not dl_errors:
             skipped += 1
@@ -834,6 +1082,9 @@ def run(args, cores, requested, zip_dir, databases, url_downloads):
             failed += 1
 
     print()
+    if firmware:
+        print(f"Firmware:     flash the board with the bootloader of {firmware['tag']} as well; "
+              f"updateAll cannot do that: {firmware['page']}")
     summary = f"{complete} complete, {failed} incomplete, {skipped} skipped"
     if to_download:
         summary += f", {to_download} to download"

@@ -491,3 +491,129 @@ bad("bios_offset_uf2", {"cores": [good], "bios": [dict(bios_file(offset="0"),
 bad("bios_parts_uf2", {"cores": [good], "bios": [dict(bios_file(parts=["a"]),
                                                      uf2={"address": "0", "family": "0"})]})
 bad("bios_slash", {"cores": [good], "bios": [bios_file(name="sub/../b.bin")]})
+bad("sdcard_type", {"cores": [good], "sdcard": "http://x"})
+bad("sdcard_name", {"cores": [good], "sdcard": {"releases_url": "http://x", "asset": "a.zip"}})
+bad("sdcard_url", {"cores": [good], "sdcard": {"name": "A", "releases_url": "ftp://x", "asset": "a.zip"}})
+bad("sdcard_asset", {"cores": [good], "sdcard": {"name": "A", "releases_url": "http://x", "asset": "a/b.zip"}})
+bad("sdcard_asset_zip", {"cores": [good], "sdcard": {"name": "A", "releases_url": "http://x", "asset": "a.tar"}})
+bad("sdcard_reserved", {"cores": [dict(good, id="SDCard")]})
+bad("sdcard_reserved_data", {"cores": [good], "data": [dict(good_data, id="sdcard")]})
+
+
+# ---------------------------------------------------------------------------
+# The SD-card archive
+# ---------------------------------------------------------------------------
+
+ASSET = "pico-bootLoader_sdcard.zip"
+REL_SAME = blob(900)        # on most cards as it is in the archive
+REL_NEW = blob(1200)
+REL_LIST = b"piconesPlus;nes;NES\npicoNew;new;New\n"
+REL_VERSIONS = b"piconesPlus;pico-infonesPlus;v0.55;abc\n"
+REL_JSON = b'{"config_url": "http://x/new.json", "cores": []}\n'
+REL_FILES = [("emu/8/new.uf2", REL_NEW), ("emu/8/same.uf2", REL_SAME),
+             ("emu/emulators.txt", REL_LIST), ("emu/versions.txt", REL_VERSIONS),
+             ("updateAll/updateAll.json", REL_JSON), ("updateAll/updateAll.py", b"# new\n")]
+# Folder entries, as zip -r writes them, and a marker that must not be installed.
+REL_ZIP = zip_bytes([("emu/", b""), ("emu/8/", b""), ("updateAll/", b""),
+                     ("emu/release.txt", b"v0.0\n")] + REL_FILES)
+
+
+def release(scenario, tag, data=REL_ZIP, name=ASSET, url=None, size=None, **extra):
+    """One release as the GitHub API lists it, with its archive on the server."""
+    if url is None:
+        url = serve(f"rel/{scenario}/{tag}/{name}", data)
+    asset = {"name": name, "state": "uploaded", "size": len(data) if size is None else size,
+             "browser_download_url": url}
+    other = {"name": "board.uf2", "size": 1, "browser_download_url": f"{URL}/rel/board.uf2"}
+    return dict({"tag_name": tag, "draft": False, "prerelease": False,
+                 "html_url": f"{URL}/rel/tag/{tag}", "assets": [other, asset]}, **extra)
+
+
+def rel_cfg(scenario, releases, asset=ASSET, url=None):
+    """cfg_rel_<scenario>.json, with one more set, and its answer on the server.
+    The server ignores the query, as it must for GitHub's per_page."""
+    if url is None:
+        text = releases if isinstance(releases, str) else json.dumps(releases)
+        url = serve(f"api/{scenario}.json", text.encode()) + "?per_page=10"
+    write(f"cfg_rel_{scenario}.json", json.dumps({
+        "cores": local[:1], "databases": [],
+        "sdcard": {"name": "SD card files", "releases_url": url, "asset": asset}}).encode())
+
+
+def rel_card(name, marker=b"v0.9\n", files=(), edited=b"edited list\n"):
+    if marker is not None:
+        write(f"{name}/emu/release.txt", marker)
+    write(f"{name}/emu/emulators.txt", edited)
+    write(f"{name}/emu/8/same.uf2", REL_SAME)
+    write(f"{name}/emu/8/own.uf2", b"the user's own")
+    write(f"{name}/boot.txt", b"GUI=1\n")
+    for path, data in files:
+        write(f"{name}/{path}", data)
+
+
+rel_cfg("main", [release("main", "v0.9"), release("main", "v0.10"),
+                 release("main", "v0.11-alpha")])
+rel_cfg("patch", [release("patch", "v0.10"), release("patch", "v0.10.1")])
+rel_cfg("gone", [release("gone", "v0.10", url=f"{URL}/rel/gone/nothing-here.zip")])
+rel_cfg("filter", [
+    release("filter", "v0.20", draft=True), release("filter", "v0.19", prerelease=True),
+    5, "not a release", {"tag_name": "v0.30"}, release("filter", "v1"), release("filter", "0.18"),
+    release("filter", "v0.17-alpha"), release("filter", "v0.16.1.2"), release("filter", "V0.15"),
+    release("filter", "v0.14", size="big"), release("filter", "v0.13", url="ftp://x/a.zip"),
+    release("filter", "v0.12", html_url=None),
+    dict(release("filter", "v0.11"), assets=[{"name": ASSET, "state": "new", "size": 5,
+                                              "browser_download_url": f"{URL}/x.zip"}]),
+    release("filter", "v0.9"), release("filter", "v0.10"), release("filter", "v0.8")])
+rel_cfg("fwonly", [dict(release("fwonly", "v0.12"), assets=[]), release("fwonly", "v0.10")])
+rel_cfg("check404", None, url=f"{URL}/api/no-such-answer.json")
+rel_cfg("broken", "{not json")
+rel_cfg("notlist", '{"message": "API rate limit exceeded"}')
+rel_cfg("noasset", [dict(release("noasset", "v0.10"), assets=[])])
+
+for scenario, name in (("slip", "../evil.txt"), ("abs", "/abs.txt"), ("back", "emu\\evil.txt"),
+                       ("drive", "c:evil.txt"), ("ascii", "emu/café.txt"), ("dots", "emu/./x")):
+    rel_cfg(scenario, [release(scenario, "v0.10", zip_bytes(REL_FILES + [(name, b"evil")]))])
+
+rel_cfg("badsize", [release("badsize", "v0.10", size=len(REL_ZIP) + 1)])
+rel_cfg("notzip", [release("notzip", "v0.10", b"this is no zip at all")])
+rel_cfg("assetgone", [release("assetgone", "v0.10", url=f"{URL}/rel/nothing-here.zip")])
+
+# A damaged entry: the others are installed, and the marker must not be.
+rel_damaged = make_zip("rel_damaged.zip", REL_FILES, zipfile.ZIP_STORED)
+corrupt_entry(rel_damaged, "emu/8/new.uf2")
+with open(rel_damaged, "rb") as f:
+    rel_cfg("damaged", [release("damaged", "v0.10", f.read())])
+
+# Kept in the zip folder: nothing to download, so the URL need not work. And one
+# of the wrong size, from a release that was cut again, which is downloaded again.
+make_zip("zips/kept_sdcard-v0.10.zip", REL_FILES)
+with open(os.path.join(OUT, "zips/kept_sdcard-v0.10.zip"), "rb") as f:
+    rel_cfg("kept", [release("kept", "v0.10", f.read(), name="kept_sdcard.zip",
+                             url=f"{URL}/rel/nothing-here.zip")], asset="kept_sdcard.zip")
+make_zip("zips/stale_sdcard-v0.10.zip", [("emu/8/old.uf2", b"from the first cut")])
+rel_cfg("stale", [release("stale", "v0.10", name="stale_sdcard.zip")], asset="stale_sdcard.zip")
+
+# The key arrives with the configuration at config_url.
+rel_remote = serve("cfg_rel_remote.json", json.dumps({
+    "cores": local[:1], "databases": [],
+    "sdcard": {"name": "SD card files", "asset": ASSET,
+               "releases_url": serve("api/remote.json", json.dumps(
+                   [release("remote", "v0.10")]).encode())}}).encode())
+write("cfg_rel_fetch.json", json.dumps({"config_url": rel_remote, "cores": local[:1]}).encode())
+
+rel_card("card_rel_v09")
+rel_card("card_rel_v08", b"v0.8\n")
+rel_card("card_rel_v010", b"v0.10\n")
+rel_card("card_rel_crlf", b"  v0.9 \r\nanything else\n")
+rel_card("card_rel_garbage", b"not a tag\n")
+rel_card("card_rel_future", b"v0.99\n")
+rel_card("card_rel_empty_marker", b"")
+# Everything the archive holds is on it already, but nothing says so.
+rel_card("card_rel_nomarker", None, REL_FILES, REL_LIST)
+rel_card("card_rel_bak", files=[("emu/emulators.txt.bak", b"edits saved earlier\n")])
+rel_card("card_rel_bak_same", files=[("emu/emulators.txt.bak", b"edited list\n")])
+# updateAll.json without a config_url is the user's own choice.
+rel_card("card_rel_json_own", files=[("updateAll/updateAll.json", b'{"databases": [], "cores": []}\n')])
+rel_card("card_rel_json_bad", files=[("updateAll/updateAll.json", b'{"edited": \n')])
+rel_card("card_rel_json_online", files=[("updateAll/updateAll.json",
+                                         b'{"config_url": "http://x/old.json", "cores": []}\n')])

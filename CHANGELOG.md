@@ -53,6 +53,11 @@ installs the BIOS files the emulators need.
   for Famicom Disk System games and Sega CD discs. The Windows program shows
   them as one entry, **BIOS**, that can be unticked. As with the ROM sets,
   holding the rights to them is your responsibility.
+- **updateAll tells you when a new SD-card archive is available**, and installs
+  it on the card. Only files that changed are written, and a menu list you edited
+  is first saved as `.bak`. updateAll cannot flash the board, but tells you when
+  a release needs it. On a card without an `/emu` folder, it does this only if
+  you ask for it.
 - **The updateAll Windows program is easier to follow.** It lists each file with
   its own progress bar, and the bar at the bottom now shows the whole run. A
   **Select all** box ticks or unticks all sets, and the full report is still

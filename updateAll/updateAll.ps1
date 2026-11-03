@@ -34,6 +34,13 @@
     from there, so that sets added since this copy was made are installed too.
     If it cannot be read, the local file is used.
 
+    The "sdcard" key of updateAll.json names the SD-card archive of
+    pico-bootLoader on GitHub. On a card with an emu folder, a release newer
+    than the one that emu/release.txt records is reported, and its archive is
+    installed like a set; -Core sdcard selects it on any other card. The files
+    of the archive are found in the archive itself. A list in emu that changes
+    is first saved as .bak.
+
     Only the files listed for a set are extracted. They are found by size and
     CRC32 rather than by name, as the applications themselves do, so merged,
     split and non-merged sets all work, and they are written under the names
@@ -53,7 +60,8 @@
 
 .PARAMETER Core
     Install only these cores, by the IDs that -List shows; bios selects every
-    BIOS file. Default: every core in the configuration.
+    BIOS file and sdcard the SD-card archive. Default: every core in the
+    configuration, and the archive on a card with an emu folder.
 
 .PARAMETER Database
     Download databases to use in addition to those in the configuration: URLs
@@ -206,10 +214,16 @@ $script:UserAgent = 'updateAll (pico-bootLoader)'
 $script:DownloadAttempts = 3
 $script:TimeoutSec = 60
 $script:ConfigTimeoutSec = 15
+$script:ReleaseMarker = 'emu/release.txt'
+$script:OwnConfig = 'updateAll/updateAll.json'
 
 # PowerShell 7 takes the CRC from the zip directory. Windows PowerShell 5.1
 # (.NET Framework) does not expose it, so there the entries are read instead.
 $script:HasEntryCrc = $null -ne [System.IO.Compression.ZipArchiveEntry].GetProperty('Crc32')
+# The SD-card archive has no list of CRCs to compare with, so there it is taken
+# from this private field of .NET Framework, to notice a damaged entry.
+$script:EntryCrcField = [System.IO.Compression.ZipArchiveEntry].GetField(
+    '_crc32', [Reflection.BindingFlags]'NonPublic,Instance')
 
 function Test-BadName([string] $Name) {
     return (-not $Name) -or $Name -eq '.' -or $Name -eq '..' -or
@@ -255,7 +269,7 @@ function ConvertFrom-Core($d, [string] $Kind, [string] $Path, [hashtable] $Ids) 
     foreach ($key in 'id', 'name', $(if ($IsData) { 'url' } else { 'zips' }), 'destination', 'files') {
         if ($null -eq (Get-Field $d $key)) { throw "${Path}: core '$id' has no '$key'" }
     }
-    if ($id -eq 'bios') { throw "${Path}: core '$id' has a reserved id" }
+    if ($id -eq 'bios' -or $id -eq 'sdcard') { throw "${Path}: core '$id' has a reserved id" }
     if ($Ids.ContainsKey($id)) { throw "${Path}: core '$id' is defined twice" }
     $Ids[$id] = $true
 
@@ -344,7 +358,9 @@ function ConvertFrom-Core($d, [string] $Kind, [string] $Path, [hashtable] $Ids) 
                 throw "${Path}: core '$id', file '$name' has an invalid 'parts' list"
             }
         }
-        [pscustomobject]@{ Name = $name; Size = [long]$size; Crc = $crc; Offset = $offset; Parts = @($join) }
+        [pscustomobject]@{
+            Name = $name; Size = [long]$size; Crc = $crc; Offset = $offset; Parts = @($join); Backup = $false
+        }
     }
     $sliced = @($files | Where-Object { $null -ne $_.Offset }).Count -gt 0
     $joined = @($files | Where-Object { $_.Parts.Count -gt 0 }).Count -gt 0
@@ -365,6 +381,7 @@ function ConvertFrom-Core($d, [string] $Kind, [string] $Path, [hashtable] $Ids) 
         Uf2       = $uf2
         Bios      = $Kind -eq 'bios'
         Sliced    = $sliced
+        Release   = $null
     }
 }
 
@@ -420,7 +437,27 @@ function ConvertFrom-Config([string] $Text, [string] $Path, [string] $ConfigDir)
         throw "${Path}: 'config_url' must be an http or https URL"
     }
 
-    return [pscustomobject]@{ Cores = @($defs); Databases = $sources; ConfigUrl = $configUrl }
+    # Where the SD-card archive is released; a key of its own, for the same
+    # reason as "data".
+    $sdcard = $null
+    $p = $cfg.PSObject.Properties['sdcard']
+    if ($p -and $null -ne $p.Value) {
+        $sd = $p.Value
+        if ($sd -isnot [System.Management.Automation.PSCustomObject]) { throw "${Path}: 'sdcard' must be an object" }
+        $sdName = Get-Field $sd 'name'
+        $sdUrl = Get-Field $sd 'releases_url'
+        $sdAsset = Get-Field $sd 'asset'
+        if ($sdName -isnot [string] -or -not $sdName) { throw "${Path}: 'sdcard' needs a 'name'" }
+        if ($sdUrl -isnot [string] -or -not (Test-Url $sdUrl)) {
+            throw "${Path}: 'sdcard' needs an http or https 'releases_url'"
+        }
+        if ($sdAsset -isnot [string] -or (Test-BadName $sdAsset) -or $sdAsset -notlike '*.zip') {
+            throw "${Path}: 'sdcard' needs the name of a zip as 'asset'"
+        }
+        $sdcard = [pscustomobject]@{ Name = $sdName; ReleasesUrl = $sdUrl; Asset = $sdAsset }
+    }
+
+    return [pscustomobject]@{ Cores = @($defs); Databases = $sources; ConfigUrl = $configUrl; Sdcard = $sdcard }
 }
 
 # The configuration at Url, as Read-Config returns it. Its own config_url is
@@ -627,7 +664,8 @@ function Get-MissingZips($Def, [string] $ZipDir, [System.Collections.ArrayList] 
         if (@($ZipListing | Where-Object { $_ -eq $zipName }).Count -gt 0) { continue }
         if ($Def.Url) {
             if (-not $UrlDownloads) { continue }
-            $hit = [pscustomobject]@{ Url = $Def.Url; Size = $null; Md5 = '' }
+            $size = if ($Def.Release) { $Def.Release.Size } else { $null }
+            $hit = [pscustomobject]@{ Url = $Def.Url; Size = $size; Md5 = '' }
             $source = ([Uri]$Def.Url).Host.ToLowerInvariant()
         } else {
             $hit = Find-InDatabases $zipName
@@ -642,7 +680,8 @@ function Get-MissingZips($Def, [string] $ZipDir, [System.Collections.ArrayList] 
         }
         try {
             [void][System.IO.Directory]::CreateDirectory($ZipDir)
-            $got = Invoke-Download $hit.Url (Join-Path $ZipDir $zipName) $hit.Size $hit.Md5 (-not $Def.Url)
+            $got = Invoke-Download $hit.Url (Join-Path $ZipDir $zipName) $hit.Size $hit.Md5 (
+                (-not $Def.Url) -or ($null -ne $Def.Release))
         } catch {
             $out.Errors += "download of $zipName from $source failed: $($_.Exception.Message)"
             continue
@@ -651,6 +690,216 @@ function Get-MissingZips($Def, [string] $ZipDir, [System.Collections.ArrayList] 
         $out.Notes += "downloaded $zipName ($([math]::Floor(($got + 1023) / 1024)) KB) from $source"
     }
     return $out
+}
+
+# ---------------------------------------------------------------------------
+# The SD-card archive
+# ---------------------------------------------------------------------------
+
+# A release tag as three numbers to compare, or nothing for any other text.
+function ConvertFrom-Tag($Tag) {
+    if ($Tag -isnot [string] -or $Tag -cnotmatch '\Av[0-9]{1,9}(\.[0-9]{1,9}){1,2}\z') { return $null }
+    $numbers = @($Tag.Substring(1).Split('.') | ForEach-Object { [long]$_ })
+    if ($numbers.Count -lt 3) { $numbers += 0 }
+    return , $numbers
+}
+
+function Compare-Tag($A, $B) {
+    for ($i = 0; $i -lt 3; $i++) {
+        if ($A[$i] -ne $B[$i]) { if ($A[$i] -lt $B[$i]) { return -1 } else { return 1 } }
+    }
+    return 0
+}
+
+# The release the card holds according to its marker, or nothing.
+function Read-Marker([string] $SdRoot) {
+    try {
+        $bytes = [System.IO.File]::ReadAllBytes((Get-TargetPath $SdRoot $script:ReleaseMarker))
+    } catch {
+        return $null
+    }
+    $text = [System.Text.Encoding]::GetEncoding(28591).GetString($bytes, 0, [Math]::Min($bytes.Length, 256))
+    $line = $text.Split("`n")[0].Trim([char[]]" `t`r`n`v`f")
+    if (ConvertFrom-Tag $line) { return $line }
+    return $null
+}
+
+# The usable asset of this name in a release, or nothing.
+function Get-ReleaseAsset($Release, [string] $Asset) {
+    # Not Get-Field: returning a list of one unrolls it into its item.
+    $p = $Release.PSObject.Properties['assets']
+    if (-not $p -or $p.Value -isnot [array]) { return $null }
+    foreach ($a in $p.Value) {
+        if ((Get-Field $a 'name') -cne $Asset) { continue }
+        $state = $a.PSObject.Properties['state']
+        if ($state -and $state.Value -cne 'uploaded') { continue }
+        $url = Get-Field $a 'browser_download_url'
+        $size = Get-Field $a 'size'
+        if ($url -is [string] -and (Test-Url $url) -and ($size -is [int] -or $size -is [long]) -and $size -ge 0) {
+            return $a
+        }
+    }
+    return $null
+}
+
+# The newest release that holds the archive, compared with the card.
+function Read-Release($Sdcard, [string] $SdRoot) {
+    $tmp = [System.IO.Path]::GetTempFileName()
+    try {
+        try {
+            Save-Url $Sdcard.ReleasesUrl $tmp $script:ConfigTimeoutSec
+        } catch {
+            $status = Get-HttpStatus $_
+            if ($status) { throw "HTTP $status" }
+            throw
+        }
+        $text = [System.IO.File]::ReadAllText($tmp, [System.Text.Encoding]::UTF8)
+    } finally {
+        Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+    }
+    $notList = 'the answer is not a list of releases'
+    if (-not $text.TrimStart().StartsWith('[')) { throw $notList }
+    try {
+        $releases = $text | ConvertFrom-Json
+    } catch {
+        throw $notList
+    }
+
+    $best = $null
+    $bestKey = $null
+    # In parentheses: Windows PowerShell 5.1 writes a list as one object.
+    foreach ($r in ($releases)) {
+        # The workflow does not mark a dry run such as v0.2.1-alpha as a
+        # prerelease, so the form of the tag is what sets it apart.
+        if ((Get-Field $r 'draft') -is [bool] -and (Get-Field $r 'draft')) { continue }
+        if ((Get-Field $r 'prerelease') -is [bool] -and (Get-Field $r 'prerelease')) { continue }
+        $tag = Get-Field $r 'tag_name'
+        $key = ConvertFrom-Tag $tag
+        $page = Get-Field $r 'html_url'
+        if (-not $key -or $page -isnot [string] -or -not (Test-Url $page)) { continue }
+        $asset = Get-ReleaseAsset $r $Sdcard.Asset
+        if ($asset -and (-not $best -or (Compare-Tag $key $bestKey) -gt 0)) {
+            $bestKey = $key
+            $best = [pscustomobject]@{
+                Tag = $tag; Page = $page; Url = (Get-Field $asset 'browser_download_url')
+                Size = [long](Get-Field $asset 'size'); Card = $null; Newer = $true; Firmware = $true
+            }
+        }
+    }
+    if (-not $best) { throw "no release holds $($Sdcard.Asset)" }
+    $best.Card = Read-Marker $SdRoot
+    if ($best.Card) {
+        $card = ConvertFrom-Tag $best.Card
+        $best.Newer = (Compare-Tag $bestKey $card) -gt 0
+        # v0.N.M has the firmware of v0.N, so only the first two numbers count.
+        $best.Firmware = $bestKey[0] -ne $card[0] -or $bestKey[1] -ne $card[1]
+    }
+    return $best
+}
+
+# The archive as a set. Its files are not known before it is downloaded; the
+# name holds the tag, as a kept zip is otherwise never downloaded again.
+function New-ReleaseCore($Sdcard, $Release) {
+    $stem = $Sdcard.Asset.Substring(0, $Sdcard.Asset.Length - 4)
+    $extension = $Sdcard.Asset.Substring($Sdcard.Asset.Length - 4)
+    return [pscustomobject]@{
+        Id = 'sdcard'; Name = $Sdcard.Name; Set = ''; Zips = @("$stem-$($Release.Tag)$extension")
+        DestParts = @(); DestShown = '/'; Files = @(); Url = $Release.Url; Archives = @(); Uf2 = $null
+        Bios = $false; Sliced = $false; Release = $Release
+    }
+}
+
+# A release can be cut again, so a kept archive of the wrong size is taken from
+# the listing, which downloads it again.
+function Remove-StaleZip($Def, [string] $ZipDir, [System.Collections.ArrayList] $ZipListing) {
+    foreach ($entry in @($ZipListing)) {
+        if ($entry -ne $Def.Zips[0]) { continue }
+        $path = Join-Path $ZipDir $entry
+        if (-not [System.IO.File]::Exists($path) -or (Get-Item -LiteralPath $path).Length -ne $Def.Release.Size) {
+            $ZipListing.Remove($entry)
+        }
+    }
+}
+
+# Whether the card's updateAll.json stays: removing its config_url is how a user
+# chooses to use that file only. One that has it does nothing online, and
+# replacing it lets a release point config_url at another file.
+function Test-KeepOwnConfig([string] $SdRoot) {
+    $path = Get-TargetPath $SdRoot $script:OwnConfig
+    if (-not [System.IO.File]::Exists($path)) { return $false }
+    try {
+        $cfg = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8) | ConvertFrom-Json
+    } catch {
+        return $true
+    }
+    if ($null -eq $cfg) { return $true }
+    $url = Get-Field $cfg 'config_url'
+    return -not ($url -is [string] -and $url)
+}
+
+# A list in emu that a user may have edited. versions.txt is not edited, and
+# changes with every release.
+function Test-ListToSave([string[]] $Parts) {
+    return $Parts.Count -eq 2 -and $Parts[0] -eq 'emu' -and $Parts[1] -like '*.txt' -and
+        @('versions.txt', 'boot.example.txt', 'release.txt') -notcontains $Parts[1]
+}
+
+function Get-ArchiveEntryCrc($Entry) {
+    if ($script:HasEntryCrc) { return [uint32]$Entry.Crc32 }
+    if ($script:EntryCrcField) { return [uint32]$script:EntryCrcField.GetValue($Entry) }
+    return [UpdateAll.Crc32]::Compute((Get-EntryBytes $Entry))
+}
+
+# Makes the files of the archive the files of its set. One unsafe name means
+# that nothing is installed: it could write outside the card.
+function Add-ReleaseFiles($Def, $Archive, [string] $SdRoot, $Res) {
+    $keepConfig = Test-KeepOwnConfig $SdRoot
+    $files = New-Object System.Collections.ArrayList
+    foreach ($entry in $Archive.Entries) {
+        $name = $entry.FullName
+        if ($name.EndsWith('/')) { continue }
+        $parts = $name.Split('/')
+        if ($name -cmatch '[^\x00-\x7F]' -or @($parts | Where-Object { Test-BadName $_ }).Count -gt 0) {
+            $Res.Errors += "$($Archive.Label) holds an unsafe file name, so nothing was installed from it"
+            return
+        }
+        # The marker is written last, by the main loop, once the install is complete.
+        if ($name -eq $script:ReleaseMarker -or ($name -eq $script:OwnConfig -and $keepConfig)) { continue }
+        [void]$files.Add([pscustomobject]@{
+            Name = $name; Size = [long]$entry.Length; Crc = (Get-ArchiveEntryCrc $entry)
+            Offset = $null; Parts = @(); Backup = (Test-ListToSave $parts)
+        })
+    }
+    $Def.Files = @($files)
+}
+
+# Where to save the card's copy of Target before it is replaced: the first free
+# one of .bak, .bak2 and so on, so that a later update cannot destroy edits saved
+# by an earlier one. Nothing when there is nothing to save, or a backup already
+# holds the same.
+function Get-BackupName([string] $Target) {
+    try {
+        $current = [Convert]::ToBase64String([System.IO.File]::ReadAllBytes($Target))
+    } catch {
+        return $null
+    }
+    for ($n = 1; ; $n++) {
+        $bak = if ($n -eq 1) { "$Target.bak" } else { "$Target.bak$n" }
+        try {
+            if ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($bak)) -ceq $current) { return $null }
+        } catch {
+            return $bak
+        }
+    }
+}
+
+function Write-Marker([string] $SdRoot, [string] $Tag) {
+    $path = Get-TargetPath $SdRoot $script:ReleaseMarker
+    [void][System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($path))
+    $tmp = "$path.tmp"
+    [System.IO.File]::WriteAllBytes($tmp, [System.Text.Encoding]::ASCII.GetBytes("$Tag`n"))
+    if ([System.IO.File]::Exists($path)) { [System.IO.File]::Delete($path) }
+    [System.IO.File]::Move($tmp, $path)
 }
 
 # ---------------------------------------------------------------------------
@@ -702,7 +951,7 @@ function New-PlainEntry([string] $Name, [byte[]] $Bytes) {
 # a conversion to Res.Notes.
 function Open-Archives($Def, [string] $Path, $Res, [System.Collections.ArrayList] $Opened, [bool] $Preview) {
     $leaf = Split-Path -Leaf $Path
-    if ($Def.Url -and ($Def.Uf2 -or $Def.Sliced -or -not (Test-Zip $Path))) {
+    if ($Def.Url -and -not $Def.Release -and ($Def.Uf2 -or $Def.Sliced -or -not (Test-Zip $Path))) {
         try {
             $bytes = [System.IO.File]::ReadAllBytes($Path)
         } catch {
@@ -797,11 +1046,6 @@ function Install-Core($Def, [string] $ZipDir, $ZipListing, [string] $SdRoot, [bo
     }
     $res.Used = @($paths | ForEach-Object { Split-Path -Leaf $_ })
 
-    # Only entries of a size the set needs are looked at, which keeps reading
-    # them cheap where the CRC is not in the zip directory.
-    $wantedSizes = @{}
-    foreach ($f in $Def.Files) { $wantedSizes[[long]$f.Size] = $true }
-
     $archives = New-Object System.Collections.ArrayList
     try {
         $index = @{}
@@ -810,6 +1054,13 @@ function Install-Core($Def, [string] $ZipDir, $ZipListing, [string] $SdRoot, [bo
         $firstLabel = $null
         $arcs = @(foreach ($p in $paths) { Open-Archives $Def $p $res $archives $Preview })
         $opened = $arcs
+        if ($Def.Release -and $opened.Count -gt 0) { Add-ReleaseFiles $Def $opened[0] $SdRoot $res }
+
+        # Only entries of a size the set needs are looked at, which keeps reading
+        # them cheap where the CRC is not in the zip directory.
+        $wantedSizes = @{}
+        foreach ($f in $Def.Files) { $wantedSizes[[long]$f.Size] = $true }
+
         foreach ($f in $Def.Files) {
             if ($f.Parts.Count -gt 0 -and $opened.Count -gt 0) {
                 $joined = Join-Parts $f $opened $res
@@ -877,6 +1128,10 @@ function Install-Core($Def, [string] $ZipDir, $ZipListing, [string] $SdRoot, [bo
             $source = "$($best.Zip):$($best.Entry.FullName)"
 
             if ($Preview) {
+                if ($f.Backup) {
+                    $bak = Get-BackupName $target
+                    if ($bak) { $res.Notes += "would save $($f.Name) as $($f.Name)$($bak.Substring($target.Length))" }
+                }
                 $res.Written++
                 continue
             }
@@ -892,6 +1147,13 @@ function Install-Core($Def, [string] $ZipDir, $ZipListing, [string] $SdRoot, [bo
             }
             try {
                 [void][System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($target))
+                if ($f.Backup) {
+                    $bak = Get-BackupName $target
+                    if ($bak) {
+                        [System.IO.File]::Copy($target, $bak)
+                        $res.Notes += "saved $($f.Name) as $($f.Name)$($bak.Substring($target.Length))"
+                    }
+                }
                 $tmp = "$target.tmp"
                 [System.IO.File]::WriteAllBytes($tmp, $data)
                 if ([System.IO.File]::Exists($target)) { [System.IO.File]::Delete($target) }
@@ -955,6 +1217,10 @@ try {
             Write-Host ('{0,-12} {1,-14} {2,-14} {3,-26} {4}, {5} files' -f
                 $d.Id, $d.Name, ($d.Zips -join ', '), $d.DestShown, $d.Set, $d.Files.Count)
         }
+        if ($cfg.Sdcard) {
+            Write-Host ('{0,-12} {1,-14} {2,-14} {3,-26} {4}' -f
+                'sdcard', $cfg.Sdcard.Name, $cfg.Sdcard.Asset, '/', 'newest release')
+        }
         Write-Host ''
         if ($setsFrom) { Write-Host "Sets from:    $setsFrom" }
         if ($script:DbSources.Count -gt 0) {
@@ -970,7 +1236,8 @@ try {
     # Game data has its own URL, so it can be downloaded without a database.
     $useDatabases = $script:DbSources.Count -gt 0 -and -not $NoDownload
     $urlDownloads = -not $NoDownload
-    $mayDownload = $useDatabases -or ($urlDownloads -and @($defs | Where-Object { $_.Url }).Count -gt 0)
+    $mayDownload = $useDatabases -or ($urlDownloads -and
+        ($null -ne $cfg.Sdcard -or @($defs | Where-Object { $_.Url }).Count -gt 0))
     if (-not $Zips -and -not $mayDownload) {
         throw 'nothing to install from: give a zip folder with -Zips, or configure a database to download from'
     }
@@ -988,16 +1255,38 @@ try {
             Where-Object { $_ })
         $known = @($defs | ForEach-Object { $_.Id })
         $anyBios = @($defs | Where-Object { $_.Bios }).Count -gt 0
-        $unknown = @($requested | Where-Object { $known -notcontains $_ -and -not ($anyBios -and $_ -eq 'bios') })
+        $unknown = @($requested | Where-Object {
+            $known -notcontains $_ -and -not ($anyBios -and $_ -eq 'bios') -and
+            -not ($null -ne $cfg.Sdcard -and $_ -eq 'sdcard')
+        })
         if ($unknown.Count -gt 0) {
             throw "unknown core: $($unknown -join ', '). Configured: $($known -join ', ')"
         }
         $defs = @($defs | Where-Object { $requested -contains $_.Id -or ($_.Bios -and $requested -contains 'bios') })
     }
 
+    # The check is separate from installing: a newer archive is reported on a
+    # card with an emu folder even when this run does not install it.
+    $hasEmu = [System.IO.Directory]::Exists((Join-Path $sdRoot 'emu'))
+    $release = $null
+    $releaseError = $null
+    if ($cfg.Sdcard -and ($hasEmu -or $requested -contains 'sdcard')) {
+        try {
+            $release = Read-Release $cfg.Sdcard $sdRoot
+        } catch {
+            $releaseError = $_.Exception.Message
+        }
+    }
+
     if ($setsFrom) { Write-Host "Sets from:    $setsFrom" }
     if ($Zips) { Write-Host "Zips from:    $zipDir" } else { Write-Host 'Zips from:    downloads only' }
     Write-Host "SD card:      $sdRoot"
+    if ($releaseError) {
+        Write-Host "New archive:  could not check: $releaseError"
+    } elseif ($release -and $hasEmu -and $release.Newer) {
+        $cardShown = if ($release.Card) { $release.Card } else { 'unknown' }
+        Write-Host "New archive:  $($cfg.Sdcard.Asset) $($release.Tag) is available (card: $cardShown): $($release.Page)"
+    }
     if ($useDatabases) {
         Write-Host "Databases:    $($script:DbSources.Count), used for zips that are not in the zip folder"
     }
@@ -1010,6 +1299,9 @@ try {
         [void][System.IO.Directory]::CreateDirectory($tempDir)
         $zipDir = $tempDir
     }
+    if ($release -and ($requested -contains 'sdcard' -or ($requested.Count -eq 0 -and $hasEmu -and -not $NoDownload))) {
+        $defs = @(New-ReleaseCore $cfg.Sdcard $release) + $defs
+    }
 
     $zipListing = New-Object System.Collections.ArrayList
     if ([System.IO.Directory]::Exists($zipDir)) {
@@ -1021,19 +1313,37 @@ try {
     $script:WantedZips = @($defs | ForEach-Object { $_.Zips })
 
     $complete = 0; $failed = 0; $skipped = 0; $toDownload = 0
+    $firmware = $null
     foreach ($d in $defs) {
+        if ($d.Release -and -not $d.Release.Newer) {
+            $complete++
+            Write-Host "$($d.Name): $($d.DestShown)"
+            Write-Host "  $($d.Release.Card) up to date"
+            continue
+        }
         # A set that is complete on the card needs no zip, so nothing is
-        # opened or downloaded for it.
-        if ((Get-FilesToInstall $d $sdRoot) -eq 0) {
+        # opened or downloaded for it. What the archive holds is not known yet.
+        if (-not $d.Release -and (Get-FilesToInstall $d $sdRoot) -eq 0) {
             $complete++
             Write-Host "$($d.Name): $($d.DestShown)"
             Write-Host "  $($d.Files.Count) up to date"
             continue
         }
 
+        if ($d.Release) { Remove-StaleZip $d $zipDir $zipListing }
         $fetch = Get-MissingZips $d $zipDir $zipListing $DryRun.IsPresent $urlDownloads
         $res = Install-Core $d $zipDir $zipListing $sdRoot $DryRun.IsPresent
         $res.Errors = @($fetch.Errors) + @($res.Errors)
+        $finished = -not $res.Skipped -and $res.Missing.Count -eq 0 -and $res.Errors.Count -eq 0
+        if ($d.Release -and $finished -and -not $DryRun) {
+            try {
+                Write-Marker $sdRoot $d.Release.Tag
+            } catch {
+                $res.Errors += "cannot write $($script:ReleaseMarker): $(Get-InnerMessage $_.Exception)"
+                $finished = $false
+            }
+        }
+        if ($d.Release -and $d.Release.Firmware -and ($finished -or $fetch.Pending)) { $firmware = $d.Release }
 
         if ($res.Skipped -and -not $fetch.Pending -and $fetch.Errors.Count -eq 0) {
             $skipped++
@@ -1068,6 +1378,10 @@ try {
     }
 
     Write-Host ''
+    if ($firmware) {
+        Write-Host ("Firmware:     flash the board with the bootloader of $($firmware.Tag) as well; " +
+            "updateAll cannot do that: $($firmware.Page)")
+    }
     $summary = "$complete complete, $failed incomplete, $skipped skipped"
     if ($toDownload) { $summary += ", $toDownload to download" }
     Write-Host $summary
