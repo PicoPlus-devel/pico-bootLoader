@@ -149,6 +149,9 @@ REL_CASES = {
     "rel-replace-json": rel("main", "card_rel_json_online"),
     "rel-fetch": ("--config cfg_rel_fetch.json --zips {zips} --sd {card}", "card_rel_v09"),
     "rel-unconfigured": ("--config cfg_local.json --zips {zips} --sd {card} --core sdcard", None),
+    # The key of the Windows program must not change what anything prints.
+    "rel-program-key": rel("prog_key", "card_rel_v09"),
+    "rel-program-bad": rel("prog_badname", "card_rel_v09"),
 }
 CASES += [(name, args, card) for name, (args, card) in REL_CASES.items()]
 
@@ -260,7 +263,70 @@ EXPECT = {
     "rel-fetch": {"rc": 0, "has": ["Sets from:", ANY_NOTICE, "SD card files: pico"],
                   "files": {MARKER: b"v0.10\n"}},
     "rel-unconfigured": {"rc": 1, "has": ["ERROR: unknown core: sdcard."]},
+    "rel-program-key": {"rc": 0, "has": [NOTICE.format(card="v0.9", url="{url}")],
+                        "not": ["updateAll-"], "files": {MARKER: b"v0.10\n"}},
+    "rel-program-bad": {"rc": 0, "has": [NOTICE.format(card="v0.9", url="{url}")],
+                        "files": {MARKER: b"v0.10\n"}},
 }
+
+# ua_host only: how updateAll.exe compares its version with the newest one found.
+VERSION_CASES = [
+    ("v0.9", "v0.10", "older"), ("v0.10", "v0.9", "not older"), ("v0.9", "v0.9", "not older"),
+    ("v0.9", "v0.9.1", "older"), ("v0.9.1", "v0.9", "not older"), ("v0.9.1", "v0.9.2", "older"),
+    ("v0.9.0", "v0.9", "not older"), ("v1.0", "v1.1", "older"), ("v1.9", "v2.0", "older"),
+    ("v1.10", "v1.9", "not older"),
+    # Only the two forms of a version count, as anything else cannot be compared.
+    ("dev", "v0.10", "not older"), ("d8a6932", "v0.10", "not older"),
+    ("d8a6932-dirty", "v0.10", "not older"), ("v0.8-7-gd8a6932-dirty", "v0.10", "not older"),
+    ("v0.9-3-gabc1234", "v0.10", "not older"), ("v0.9-dirty", "v0.10", "not older"),
+    ("v0.9-alpha", "v0.10", "not older"), ("v1", "v0.10", "not older"), ("", "v0.10", "not older"),
+    ("v0.9", "v0.10-alpha", "not older"), ("v0.9", "garbage", "not older"), ("v0.9", "", "not older"),
+]
+
+
+def prog(scenario, to=True):
+    return (f"--program --config cfg_rel_{scenario}.json" + (" --to {run}/new.exe" if to else ""))
+
+
+FAKE_EXE = "new.exe"
+NOTHING_LEFT = {FAKE_EXE: None, FAKE_EXE + ".part": None}
+
+# ua_host only: (name, arguments, what it must show). "same" names a fixture that
+# the downloaded file must equal, and "under" a time limit in seconds.
+PROGRAM_CASES = [
+    ("prog-older", prog("prog_older", False), {"rc": 0, "has": ["archive: v0.10", "program: v0.9 "]}),
+    ("prog-alone", prog("prog_alone", False), {"rc": 0, "has": [
+        "archive: no release holds pico-bootLoader_sdcard.zip", "program: v0.10 "]}),
+    ("prog-filter", prog("prog_filter", False), {"rc": 0, "has": ["program: v0.12 "]}),
+    ("prog-none", prog("prog_none", False), {"rc": 0, "has": ["archive: v0.10", "program: none"]}),
+    ("prog-nokey", prog("prog_nokey", False), {"rc": 0, "has": ["program: none"]}),
+    ("prog-badname", prog("prog_badname", False), {"rc": 0, "has": ["archive: v0.10", "program: none"]}),
+    ("prog-notexe", prog("prog_notexe", False), {"rc": 0, "has": ["program: none"]}),
+    ("prog-nostar", prog("prog_nostar", False), {"rc": 0, "has": ["program: none"]}),
+    ("prog-twostars", prog("prog_twostars", False), {"rc": 0, "has": ["program: none"]}),
+    ("prog-separate", prog("prog_separate", False), {"rc": 0, "has": ["archive: v0.10", "program: v1.5 "]}),
+    ("prog-highest", prog("prog_highest", False), {"rc": 0, "has": ["program: v1.2 "]}),
+    ("prog-oldname", prog("prog_oldname", False), {"rc": 0, "has": ["program: none"]}),
+    ("prog-badversion", prog("prog_badversion", False), {"rc": 0, "has": ["program: none"]}),
+    ("prog-badtype", prog("prog_badtype", False), {"rc": 0, "has": ["program: none"]}),
+    ("prog-list-404", prog("prog_404", False), {"rc": 0, "has": ["archive: HTTP 404", "program: none"]}),
+    ("prog-no-sdcard", "--program --config cfg_local.json", {"rc": 0, "has": [
+        "archive: not configured", "program: none"]}),
+    ("prog-download", prog("prog_ok"), {"rc": 0, "has": ["downloaded"], "same": "fake_exe_v0.10.bin",
+                                        "files": {FAKE_EXE + ".part": None}}),
+    ("prog-separate-download", prog("prog_sep_ok"), {"rc": 0, "has": ["downloaded"], "same": "fake_exe_v1.5.bin",
+                                                     "files": {FAKE_EXE + ".part": None}}),
+    ("prog-separate-title", prog("prog_sep_title"), {"rc": 1, "has": ["failed: the file received is not updateAll v1.5"],
+                                                     "files": NOTHING_LEFT}),
+    ("prog-size", prog("prog_size"), {"rc": 1, "has": ["failed: received", "the release says"],
+                                      "files": NOTHING_LEFT}),
+    ("prog-mz", prog("prog_mz"), {"rc": 1, "has": ["failed: the file received is not a program"],
+                                  "files": NOTHING_LEFT}),
+    ("prog-title", prog("prog_title"), {"rc": 1, "has": ["failed: the file received is not updateAll v0.10"],
+                                        "files": NOTHING_LEFT}),
+    ("prog-longer-tag", prog("prog_longer"), {"rc": 1, "has": ["is not updateAll v0.10"], "files": NOTHING_LEFT}),
+    ("prog-gone", prog("prog_gone"), {"rc": 1, "has": ["failed: HTTP 404"], "files": NOTHING_LEFT, "under": 1.5}),
+]
 
 # ua_host only, with what the row of updateAll.exe passes: (name, UA_SDCARD,
 # arguments, card, EXPECT entry).
@@ -283,6 +349,9 @@ CANCEL_CASES = [
     ("cancel-rel-download", "--config cfg_rel_main.json --zips {zips} --sd {card} --core sdcard", 1, "Downloading"),
     ("cancel-rel-install", "--config cfg_rel_kept.json --zips {zips} --sd {card} --core sdcard", 1, "Installing"),
 ]
+# The Windows program's download of itself, which has no report of sets: the same
+# call count, and nothing may be left of the file.
+PROGRAM_CANCEL_CASE = ("cancel-program", "--program --config cfg_rel_prog_ok.json --to {run}/new.exe", 1)
 # Run without the hooks as well; they must not change anything.
 NO_HOOK_CASES = ("local", "db-http", "data-uf2-local", "bios-http", "rel-newer")
 
@@ -535,6 +604,51 @@ def main():
             if args.v or problems:
                 for r in rows:
                     print(f"     {r['set']}/{r['file']}: {r['details']} {r['states']}")
+
+        if not args.k or args.k in "version-older":
+            total += 1
+            wrong = []
+            for running, tag, expected in VERSION_CASES:
+                p = subprocess.run([HOST, "--version-older", running, tag], capture_output=True, text=True)
+                if p.stdout.strip() != expected:
+                    wrong.append(f"{running!r} against {tag!r}: {p.stdout.strip()!r}, expected {expected!r}")
+            failures += bool(wrong)
+            print(f"{'FAIL' if wrong else 'ok':4} {'version-older':22} {len(VERSION_CASES)} comparisons")
+            for w in wrong:
+                print("     " + w)
+
+        for name, argline, want in PROGRAM_CASES:
+            if args.k and args.k not in name:
+                continue
+            total += 1
+            c = run_case([HOST], argline, None, {"UA_EVENTS": events})
+            problems = check_expected(want, c, url) + unfinished(read_rows(events))
+            if "same" in want:
+                with open(os.path.join(fx, want["same"]), "rb") as f:
+                    if c["tree"].get(FAKE_EXE) != hashlib.md5(f.read()).hexdigest():
+                        problems.append(f"{FAKE_EXE} is not {want['same']}")
+            if "under" in want and c["time"] >= want["under"]:
+                problems.append(f"took {c['time']:.1f} s, so it was retried")
+            failures += bool(problems)
+            print(f"{'FAIL' if problems else 'ok':4} {name:22} exit {c['rc']}")
+            for p in problems:
+                print("     " + p)
+            if args.v or problems:
+                print("     " + (c["out"] + c["err"]).replace("\n", "\n     "))
+
+        name, argline, calls = PROGRAM_CANCEL_CASE
+        if not args.k or args.k in name:
+            total += 1
+            c = run_case([HOST], argline, None, {"UA_EVENTS": events, "UA_CANCEL_AFTER": str(calls)})
+            rows = read_rows(events)
+            problems = unfinished(rows) + check_expected(
+                {"rc": 1, "has": ["failed: cancelled"], "files": NOTHING_LEFT}, c, url)
+            if not any(r["states"][-1] == CANCELLED for r in rows):
+                problems.append("no row was cancelled")
+            failures += bool(problems)
+            print(f"{'FAIL' if problems else 'ok':4} {name:22} exit {c['rc']}")
+            for p in problems:
+                print("     " + p)
 
         for name, value, argline, card, want in ROW_CASES:
             if args.k and args.k not in name:

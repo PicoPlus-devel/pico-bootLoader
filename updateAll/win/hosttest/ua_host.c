@@ -69,8 +69,8 @@ int main(int argc, char **argv)
 {
     ua_options opt = { 0 };
     const char *config = "updateAll.json";
-    const char **cores = NULL, **dbs = NULL;
-    int ncores = 0, ndbs = 0;
+    const char **cores = NULL, **dbs = NULL, *program_to = NULL;
+    int ncores = 0, ndbs = 0, program = 0;
 
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
@@ -83,6 +83,15 @@ int main(int argc, char **argv)
             ua_md5_hex(&m, hex);
             puts(hex);
             return 0;
+        } else if (!strcmp(a, "--version-older") && v && i + 2 < argc) {
+            /* What the Windows program compares itself with: running, newest. */
+            puts(ua_version_older(v, argv[i + 2]) ? "older" : "not older");
+            return 0;
+        } else if (!strcmp(a, "--program")) {
+            /* What the Windows program finds about itself, and downloads with --to. */
+            program = 1;
+        } else if (!strcmp(a, "--to") && v) {
+            program_to = argv[++i];
         } else if (!strcmp(a, "--zips") && v) {
             opt.zips = argv[++i];
         } else if (!strcmp(a, "--sd") && v) {
@@ -118,7 +127,38 @@ int main(int argc, char **argv)
     }
     ua_config_update(&cfg);
     int rc;
-    if (!opt.sd) {
+    if (program) {
+        ua_hooks hooks = { 0 };
+        hooks.log = log_line;
+        const char *trace = getenv("UA_EVENTS"), *after = getenv("UA_CANCEL_AFTER");
+        if (trace && (events = fopen(trace, "w")))
+            hooks.on_file = event_file;
+        if (after) {
+            cancel_after = atol(after);
+            hooks.on_bytes = count_bytes;
+            hooks.cancelled = cancel_now;
+        }
+        ua_release rel, prog = { 0 };
+        rc = cfg.sd_asset && ua_release_fetch(&cfg, &rel, &prog, err, sizeof err);
+        printf("archive: %s\n", !cfg.sd_asset ? "not configured" : rc ? err : rel.tag);
+        rc = 0;
+        if (prog.tag) {
+            printf("program: %s %s %lld\n", prog.tag, prog.url, prog.size);
+            char *why = NULL;
+            if (program_to && ua_program_download(&prog, "updateAll.exe", program_to, &hooks, &why))
+                printf("failed: %s\n", why), rc = 1;
+            else if (program_to)
+                puts("downloaded");
+            free(why);
+        } else {
+            puts("program: none");
+        }
+        if (cfg.sd_asset)
+            ua_release_free(&rel);
+        ua_release_free(&prog);
+        if (events)
+            fclose(events);
+    } else if (!opt.sd) {
         fprintf(stderr, "error: --sd is required (or use --list)\n");
         rc = 2;
     } else {

@@ -59,6 +59,9 @@ installs the BIOS files the emulators need.
   is first saved as `.bak`. updateAll cannot flash the board, but tells you when
   a release needs it. On a card without an `/emu` folder, it does this only if
   you ask for it.
+- **The updateAll Windows program can update itself.** When a newer version
+  exists, it asks you, and with **Yes** it downloads the new version and restarts.
+  It now has its own version number, shown in its title bar.
 - **The updateAll Windows program is easier to follow.** It lists each file with
   its own progress bar, and the bar at the bottom now shows the whole run. A
   **Select all** box ticks or unticks all sets, and the full report is still
@@ -454,9 +457,10 @@ For board-by-board wiring, supported display modes and more refer to the [pico-i
    BOOTSEL, connect the board over USB, and copy the `.uf2` onto the
    `RP2350` drive. See [Supported hardware](https://github.com/PicoPlus-devel/pico-bootLoader#supported-hardware) in the README.
 2. **Prepare the SD card.** Download `pico-bootLoader_sdcard.zip` from the same
-   Releases page and unpack it onto a FAT32- or exFAT-formatted card. The
-   archive contains the emulators, the native ports, the menu artwork, a
-   sample configuration file and the `updateAll` tool for the arcade ROMs.
+   Releases page and unpack it onto a FAT32-formatted card (exFAT also works,
+   but is not advised). The archive contains the emulators, the native ports,
+   the menu artwork, a sample configuration file and the `updateAll` tool for
+   the arcade ROMs.
 3. **Add your games.** The archive contains no games, ROMs or BIOS files. Each
    emulator opens in its own folder: `/roms/NES`, `/roms/SNES`, `/roms/MD`
    (Genesis), `/roms/PCE`, `/roms/GB`, `/roms/SMS` (Master System and Game

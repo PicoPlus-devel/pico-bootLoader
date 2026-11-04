@@ -20,7 +20,8 @@ typedef struct {
     int backup;         /* SD-card archive: save the card's copy before replacing it */
 } ua_file;
 
-/* The newest release that holds the SD-card archive. */
+/* The newest release that holds the SD-card archive, or, from ua_release_fetch(),
+   the highest version of the program: its tag is then that version. */
 typedef struct {
     char *tag;          /* "v0.10" */
     char *page;         /* the release's web page */
@@ -64,6 +65,8 @@ typedef struct {
     char *sd_name;      /* "sdcard": the name of the SD-card archive's set, */
     char *sd_url;       /* where its releases are listed, and */
     char *sd_asset;     /* the name of the zip; all NULL when not configured */
+    char *sd_program;   /* the program's name among the assets, with * for its
+                           version as in "updateAll-*.exe", or NULL */
 } ua_config;
 
 /* Parses a configuration. path names it in messages; relative database paths
@@ -121,8 +124,11 @@ typedef struct {
 int ua_run(const ua_config *cfg, const ua_options *opt, const ua_hooks *hooks);
 
 /* fetch_release() of updateAll.py, without comparing it with a card: 0, or -1
-   with err set. */
-int ua_release_fetch(const ua_config *cfg, ua_release *rel, char *err, size_t errlen);
+   with err set. The Windows program asks about itself in the same request: with
+   program set, that gets the highest version of the program that a release
+   holds, whether or not one holds the archive; it stays empty when there is none. */
+int ua_release_fetch(const ua_config *cfg, ua_release *rel, ua_release *program, char *err,
+                     size_t errlen);
 /* The release the card at sd_root holds according to its marker, malloc'd, or
    NULL when not known. */
 char *ua_card_release(const char *sd_root);
@@ -131,6 +137,16 @@ void ua_release_compare(ua_release *rel, const char *card);
 void ua_release_free(ua_release *rel);
 /* Whether the card has an emu folder, as a pico-bootLoader card does. */
 int ua_card_has_emu(const char *sd_root);
+
+/* Whether a program of version running, as build.sh gives it, is older than
+   version. A test build with anything but vN.M or vN.M.P as its version is not
+   older than anything. */
+int ua_version_older(const char *running, const char *version);
+/* Downloads the program that ua_release_fetch() found to dest, shown as name in
+   on_file, and checks that it is that version: 0, or -1 with *why set, which
+   the caller frees, and no file left at dest. A cancelled download is "cancelled". */
+int ua_program_download(const ua_release *rel, const char *name, const char *dest,
+                        const ua_hooks *h, char **why);
 
 /* Number of a set's files that are on the card with the right contents. */
 int ua_count_current(const ua_core *core, const char *sd_root);

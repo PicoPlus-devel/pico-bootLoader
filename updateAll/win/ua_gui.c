@@ -2,7 +2,8 @@
  * updateAll.exe: the window around the updateAll core. The core runs on a
  * worker thread and reports through posted messages; the window only
  * collects the choices, lists the files of the run with their progress, and
- * keeps the log the scripts would print.
+ * keeps the log the scripts would print. Updating this program itself is only
+ * done here, as the scripts are replaced with the SD-card archive.
  */
 #define _WIN32_WINNT 0x0601
 #define WIN32_LEAN_AND_MEAN
@@ -40,9 +41,12 @@
 #define WM_APP_FILE     (WM_APP + 7)   /* lParam: malloc'd file_msg */
 #define WM_APP_RELEASE  (WM_APP + 8)   /* lParam: malloc'd release_msg */
 #define WM_APP_CARD     (WM_APP + 9)   /* lParam: malloc'd card_msg */
+#define WM_APP_OFFER    (WM_APP + 10)  /* a good moment to ask about a newer program */
+#define WM_APP_SELF_FAILED (WM_APP + 11)   /* app.self_error says why */
+#define WM_APP_SELF_START (WM_APP + 12)    /* the download is done */
 #define TIMER_CHECK     1
 
-enum { JOB_NONE, JOB_CHECK, JOB_INSTALL, JOB_CONFIG };
+enum { JOB_NONE, JOB_CHECK, JOB_INSTALL, JOB_CONFIG, JOB_SELF };
 
 typedef struct {
     int kind;
@@ -51,6 +55,7 @@ typedef struct {
     int no_download, dry_run;
     int sdcard;              /* ua_options.sdcard */
     const ua_release *release;   /* the release if already read; stays valid */
+    const ua_release *program;   /* JOB_SELF: the release to update to; stays valid */
     DWORD last_bytes;        /* when on_bytes last reached the window */
     char *config_url, *config_dir;
 } job;
@@ -66,6 +71,7 @@ typedef struct {
 typedef struct {
     int ok;
     ua_release rel;
+    ua_release prog;         /* the newest release of this program; may be empty */
     char err[1024];
 } release_msg;
 
@@ -139,6 +145,10 @@ static struct {
     char *card_tag;          /* the release it holds, or NULL when not known */
     int archive_touched;     /* the user set the archive's tick for this card */
     int setting_tick;        /* the program sets ticks, not the user */
+    ua_release *program;     /* the newest release of this program; set once */
+    int offered;             /* the user was asked about it, or will not be */
+    int browsing;            /* the folder dialog is open */
+    wchar_t *self_error;     /* why this program could not be updated */
 } app;
 
 /* ------------------------------------------------------------------------- */
@@ -255,6 +265,137 @@ static int hook_cancelled(void *ctx)
     return app.cancel != 0;
 }
 
+/* This program's path, malloc'd; NULL when it is too long to add a suffix to,
+   as the paths here are limited to MAX_PATH. */
+static wchar_t *own_path(void)
+{
+    wchar_t *exe = malloc(MAX_PATH * sizeof *exe);
+    DWORD n = GetModuleFileNameW(NULL, exe, MAX_PATH);
+    if (!n || n + 9 >= MAX_PATH) {
+        free(exe);
+        return NULL;
+    }
+    return exe;
+}
+
+static wchar_t *with_suffix(const wchar_t *path, const wchar_t *suffix)
+{
+    size_t n = wcslen(path) + wcslen(suffix) + 1;
+    wchar_t *s = malloc(n * sizeof *s);
+    swprintf(s, n, L"%ls%ls", path, suffix);
+    return s;
+}
+
+/* Starts the copy at exe, and waits until it responds. 0 when it runs, 1 when it
+   cannot be started, which can pass as antivirus reads a new file, and -1 when
+   it exited at once. */
+static int start_copy(const wchar_t *exe)
+{
+    wchar_t cmd[MAX_PATH + 4];
+    swprintf(cmd, MAX_PATH + 4, L"\"%ls\"", exe);
+    STARTUPINFOW si = { .cb = sizeof si };
+    PROCESS_INFORMATION pi;
+    if (!CreateProcessW(exe, cmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi))
+        return 1;
+    WaitForInputIdle(pi.hProcess, 10000);
+    DWORD gone = WaitForSingleObject(pi.hProcess, 500);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    return gone == WAIT_OBJECT_0 ? -1 : 0;
+}
+
+static void self_failed(const char *why)
+{
+    free(app.self_error);
+    app.self_error = ua_widen(why);
+}
+
+/* JOB_SELF: downloads the new version next to this program, moves it into place,
+   and starts it. 0 when the new version runs, 1 when cancelled, and -1 with
+   app.self_error set otherwise; the program as it was is then still in place. */
+static int self_install(job *j)
+{
+    ua_hooks hooks = { .log = hook_log, .on_bytes = hook_bytes, .on_file = hook_file,
+                       .cancelled = hook_cancelled, .ctx = j };
+    wchar_t *exe = own_path();
+    if (!exe) {
+        self_failed("the path of this program is too long");
+        return -1;
+    }
+    /* Two running copies must not write the same file. */
+    HANDLE lock = CreateMutexW(NULL, FALSE, L"updateAll.selfupdate");
+    DWORD got = lock ? WaitForSingleObject(lock, 0) : WAIT_FAILED;
+    if (got != WAIT_OBJECT_0 && got != WAIT_ABANDONED) {
+        self_failed("another copy of updateAll is updating itself");
+        if (lock)
+            CloseHandle(lock);
+        free(exe);
+        return -1;
+    }
+    wchar_t *wnew = with_suffix(exe, L".new"), *wold = with_suffix(exe, L".old");
+    char *exe_u = ua_narrow(exe), *new_u = ua_narrow(wnew), *name = ua_narrow(wcsrchr(exe, L'\\') + 1);
+    char *why = NULL;
+    int rc = -1;
+    if (ua_program_download(j->program, name, new_u, &hooks, &why)) {
+        if (!strcmp(why, "cancelled"))
+            rc = 1;
+        else
+            self_failed(why);
+    } else if (app.cancel) {
+        ua_remove(new_u);
+        rc = 1;
+    } else {
+        /* Antivirus can take seconds over a new program, here and in starting it. */
+        PostMessageW(app.dlg, WM_APP_SELF_START, 0, 0);
+        int failed = 1;
+        for (int i = 0; failed && i < 5; i++) {
+            if (i)
+                Sleep(200);
+            failed = ua_replace(new_u, exe_u);
+        }
+        if (failed) {
+            self_failed(ua_last_error());
+            /* The new version is all there is if the old one could not be put back. */
+            if (GetFileAttributesW(exe) != INVALID_FILE_ATTRIBUTES)
+                ua_remove(new_u);
+        } else {
+            int started = 1;
+            for (int i = 0; started > 0 && i < 5; i++) {
+                if (i)
+                    Sleep(200);
+                started = start_copy(exe);
+            }
+            if (!started) {
+                rc = 0;
+            } else {
+                /* Back to how it was: this copy's file can be renamed while it runs. */
+                MoveFileExW(exe, wnew, MOVEFILE_REPLACE_EXISTING);
+                if (MoveFileExW(wold, exe, 0)) {
+                    DeleteFileW(wnew);
+                    self_failed("the new version did not start, so this version was put back");
+                } else {
+                    char *old_u = ua_narrow(wold), *text = malloc(strlen(old_u) * 2 + strlen(exe_u) + 96);
+                    sprintf(text, "the new version did not start, and this version could not be "
+                                  "put back: rename '%s' to '%s'", old_u, exe_u);
+                    self_failed(text);
+                    free(text);
+                    free(old_u);
+                }
+            }
+        }
+    }
+    free(why);
+    free(name);
+    free(new_u);
+    free(exe_u);
+    free(wold);
+    free(wnew);
+    free(exe);
+    ReleaseMutex(lock);
+    CloseHandle(lock);
+    return rc;
+}
+
 static void job_free(job *j)
 {
     if (!j)
@@ -297,6 +438,8 @@ static unsigned __stdcall worker(void *arg)
             ua_config_free(&f->cfg);
             free(f);
         }
+    } else if (j->kind == JOB_SELF) {
+        rc = self_install(j);
     } else {
         ua_hooks hooks = { .log = hook_log, .on_set = hook_set, .on_bytes = hook_bytes,
                            .on_file = hook_file, .cancelled = hook_cancelled, .ctx = j };
@@ -315,9 +458,10 @@ static unsigned __stdcall release_worker(void *arg)
 {
     (void)arg;
     release_msg *m = calloc(1, sizeof *m);
-    m->ok = !ua_release_fetch(&app.cfg, &m->rel, m->err, sizeof m->err);
+    m->ok = !ua_release_fetch(&app.cfg, &m->rel, &m->prog, m->err, sizeof m->err);
     if (!PostMessageW(app.dlg, WM_APP_RELEASE, 0, (LPARAM)m)) {
         ua_release_free(&m->rel);
+        ua_release_free(&m->prog);
         free(m);
     }
     return 0;
@@ -799,6 +943,12 @@ static void release_read(release_msg *m)
             free(why);
         }
     }
+    /* Independent of the archive, which a release can lack. */
+    if (m->prog.tag) {
+        app.program = malloc(sizeof *app.program);
+        *app.program = m->prog;
+        PostMessageW(app.dlg, WM_APP_OFFER, 0, 0);
+    }
     free(m);
     update_notice();
 }
@@ -887,6 +1037,25 @@ static void check_card(void)
     start_job(j);
 }
 
+/* What every run starts with; the job waits for a card check to stop. */
+static void begin_run(job *j)
+{
+    SetDlgItemTextW(app.dlg, IDC_STATUS, L"");
+    free(app.last_line);
+    app.last_line = NULL;
+    clear_files();
+    show_view(0);
+    SendMessageW(item(IDC_PROGRESS), PBM_SETSTATE, PBST_NORMAL, 0);
+    SendMessageW(item(IDC_PROGRESS), PBM_SETPOS, 0, 0);
+    set_running(1);
+    if (app.job == JOB_CHECK) {
+        app.cancel = 1;          /* started once the card check has stopped */
+        app.queued = j;
+    } else {
+        start_job(j);
+    }
+}
+
 static void install(void)
 {
     wchar_t sd[MAX_PATH * 2], zips[MAX_PATH * 2];
@@ -917,20 +1086,90 @@ static void install(void)
     }
 
     SetDlgItemTextW(app.dlg, IDC_LOG, L"");
-    SetDlgItemTextW(app.dlg, IDC_STATUS, L"");
-    free(app.last_line);
-    app.last_line = NULL;
-    clear_files();
-    show_view(0);
-    SendMessageW(item(IDC_PROGRESS), PBM_SETSTATE, PBST_NORMAL, 0);
-    SendMessageW(item(IDC_PROGRESS), PBM_SETPOS, 0, 0);
-    set_running(1);
-    if (app.job == JOB_CHECK) {
-        app.cancel = 1;          /* started once the card check has stopped */
-        app.queued = j;
-    } else {
-        start_job(j);
+    begin_run(j);
+}
+
+/* A program should only ever come over a connection that can be trusted; the
+   test fixtures are on this computer. */
+static int program_url_allowed(const char *url)
+{
+    static const char local[] = "http://127.0.0.1";
+    size_t n = sizeof local - 1;
+    return !_strnicmp(url, "https://", 8) ||
+           (!_strnicmp(url, local, n) && (url[n] == ':' || url[n] == '/'));
+}
+
+/* Asks once whether to update to a newer version of this program, if there is
+   one and it can be done. Posted, and posted again once whatever holds it back is
+   over: this is a message box, which must not nest in the steps of a job. */
+static void offer_update(void)
+{
+    if (!app.program || app.offered || app.running || app.browsing || app.closing)
+        return;
+    app.offered = 1;
+    /* Without main's configuration, removing the key there is not seen. */
+    if (app.cfg.fetch_error || !app.cfg.sd_program ||
+        !ua_version_older(UA_VERSION, app.program->tag) || !program_url_allowed(app.program->url))
+        return;
+    wchar_t *exe = own_path();
+    if (!exe)
+        return;
+    wchar_t *old = with_suffix(exe, L".old"), *probe = with_suffix(exe, L".new.part");
+    wchar_t *version = ua_widen(app.program->tag), *page = ua_widen(app.program->page);
+    /* The SD-card archive replaced this program during this run, or an update
+       still has to be cleared up: the new copy will ask, if there is anything newer. */
+    int replaced = GetFileAttributesW(old) != INVALID_FILE_ATTRIBUTES;
+    HANDLE h = replaced ? INVALID_HANDLE_VALUE
+                        : CreateFileW(probe, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
+                                      FILE_ATTRIBUTE_NORMAL | FILE_FLAG_DELETE_ON_CLOSE, NULL);
+    int writable = h != INVALID_HANDLE_VALUE;
+    if (writable)
+        CloseHandle(h);
+    if (!replaced && !writable) {
+        /* Nothing the user could agree to. */
+        size_t n = wcslen(version) + wcslen(page) + 96;
+        wchar_t *line = malloc(n * sizeof *line);
+        swprintf(line, n, L"updateAll %ls is available, but this folder cannot be written to: %ls\r\n",
+                 version, page);
+        log_text(line);
+        free(line);
+    } else if (!replaced) {
+        wchar_t text[512];
+        swprintf(text, 512, L"A new version of updateAll is available: %ls (this is %ls). Update now?"
+                            L"\r\n\r\nupdateAll closes and starts the new version.",
+                 version, UA_VERSION_W);
+        /* The window is not on the screen yet when the answer comes quickly. */
+        if (!IsWindowVisible(app.dlg))
+            ShowWindow(app.dlg, SW_SHOWNORMAL);
+        /* No by default, as the user may be typing when this appears. */
+        if (MessageBoxW(app.dlg, text, L"updateAll", MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) == IDYES) {
+            job *j = calloc(1, sizeof *j);
+            j->kind = JOB_SELF;
+            j->program = app.program;
+            begin_run(j);
+            app.nsets = 1;       /* the bar at the bottom shows the download */
+        }
     }
+    free(page);
+    free(version);
+    free(probe);
+    free(old);
+    free(exe);
+}
+
+static void show_self_failure(void)
+{
+    wchar_t *page = ua_widen(app.program->page);
+    const wchar_t *why = app.self_error ? app.self_error : L"unknown reason";
+    size_t n = wcslen(why) + wcslen(page) + 128;
+    wchar_t *text = malloc(n * sizeof *text);
+    swprintf(text, n, L"updateAll was not updated: %ls\r\n", why);
+    log_text(text);
+    swprintf(text, n, L"updateAll was not updated: %ls.\r\n\r\nThe new version can be downloaded from %ls",
+             why, page);
+    MessageBoxW(app.dlg, text, L"updateAll", MB_OK | MB_ICONWARNING);
+    free(text);
+    free(page);
 }
 
 static void job_done(int kind, int rc)
@@ -955,6 +1194,21 @@ static void job_done(int kind, int rc)
         }
         set_running(0);
         app.check_again = 1;
+        PostMessageW(app.dlg, WM_APP_OFFER, 0, 0);
+    }
+    if (kind == JOB_SELF) {
+        /* The new version runs, so this one goes. */
+        if (!rc || app.closing) {
+            EndDialog(app.dlg, 0);
+            return;
+        }
+        files_done(rc > 0);
+        SendMessageW(item(IDC_PROGRESS), PBM_SETSTATE, rc > 0 ? PBST_PAUSED : PBST_ERROR, 0);
+        SetDlgItemTextW(app.dlg, IDC_STATUS, rc > 0 ? L"Cancelled" : L"updateAll was not updated");
+        set_running(0);
+        app.check_again = 1;
+        if (rc < 0)
+            PostMessageW(app.dlg, WM_APP_SELF_FAILED, 0, 0);
     }
     if (app.queued) {
         job *j = app.queued;
@@ -1006,8 +1260,12 @@ static void browse(int field, const wchar_t *title)
         IShellItem_Release(folder);
     }
     IShellItem *result;
-    if (SUCCEEDED(IFileOpenDialog_Show(d, app.dlg)) &&
-        SUCCEEDED(IFileOpenDialog_GetResult(d, &result))) {
+    /* A message box closing now would re-enable the window under this dialog. */
+    app.browsing = 1;
+    HRESULT shown = IFileOpenDialog_Show(d, app.dlg);
+    app.browsing = 0;
+    PostMessageW(app.dlg, WM_APP_OFFER, 0, 0);
+    if (SUCCEEDED(shown) && SUCCEEDED(IFileOpenDialog_GetResult(d, &result))) {
         wchar_t *path;
         if (SUCCEEDED(IShellItem_GetDisplayName(result, SIGDN_FILESYSPATH, &path))) {
             SetDlgItemTextW(app.dlg, field, path);
@@ -1301,6 +1559,8 @@ static void layout(void)
 static void init_dialog(HWND dlg)
 {
     app.dlg = dlg;
+    /* ua_program_download() looks for this text in a downloaded copy, to see which
+       version it is: change it only together with is_program_of() in ua_core.c. */
     SetWindowTextW(dlg, L"updateAll " UA_VERSION_W);
     HINSTANCE inst = GetModuleHandleW(NULL);
     SendMessageW(dlg, WM_SETICON, ICON_BIG,
@@ -1481,6 +1741,18 @@ static INT_PTR CALLBACK dlg_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         release_read((release_msg *)lp);
         return TRUE;
 
+    case WM_APP_OFFER:
+        offer_update();
+        return TRUE;
+
+    case WM_APP_SELF_FAILED:
+        show_self_failure();
+        return TRUE;
+
+    case WM_APP_SELF_START:
+        SetDlgItemTextW(dlg, IDC_STATUS, L"Starting the new version...");
+        return TRUE;
+
     case WM_APP_CARD:
         if (!app.running && app.job == JOB_CHECK && !app.cancel) {
             card_checked((card_msg *)lp);
@@ -1517,17 +1789,38 @@ static INT_PTR CALLBACK dlg_proc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
     return FALSE;
 }
 
+/* What is left of the copy of this program that an update replaced. It may still
+   be exiting when this copy starts, so this keeps trying for a while. */
+static unsigned __stdcall remove_old_copy(void *arg)
+{
+    wchar_t *old = arg;
+    for (int i = 0; i < 50; i++) {
+        if (i)
+            Sleep(200);
+        SetFileAttributesW(old, FILE_ATTRIBUTE_NORMAL);
+        if (DeleteFileW(old) || GetLastError() == ERROR_FILE_NOT_FOUND)
+            break;
+    }
+    free(old);
+    return 0;
+}
+
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
 {
     (void)prev, (void)cmd, (void)show;
     /* No "insert a disk" boxes for card readers without a card. */
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX);
-    /* What is left of the copy of this program that an update replaced. */
-    wchar_t old[MAX_PATH + 8];
-    DWORD len = GetModuleFileNameW(NULL, old, MAX_PATH);
-    if (len && len < MAX_PATH) {
-        wcscpy(old + len, L".old");
-        DeleteFileW(old);
+    wchar_t *exe = own_path();
+    if (exe) {
+        wchar_t *old = with_suffix(exe, L".old");
+        HANDLE h = GetFileAttributesW(old) == INVALID_FILE_ATTRIBUTES
+                       ? NULL
+                       : (HANDLE)_beginthreadex(NULL, 0, remove_old_copy, old, 0, NULL);
+        if (h)
+            CloseHandle(h);
+        else
+            free(old);
+        free(exe);
     }
     CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
     INITCOMMONCONTROLSEX icc = { sizeof icc, ICC_LISTVIEW_CLASSES | ICC_PROGRESS_CLASS |

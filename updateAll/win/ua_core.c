@@ -20,6 +20,7 @@
 #define DOWNLOAD_ATTEMPTS 3
 #define TIMEOUT 60
 #define CONFIG_TIMEOUT 15
+#define PROGRAM_TIMEOUT 15   /* short, as Cancel waits for a stalled read */
 #define RELEASE_MARKER "emu/release.txt"
 #define OWN_CONFIG "updateAll/updateAll.json"
 
@@ -139,6 +140,18 @@ static int bad_name(const char *name)
 {
     return !name[0] || !strcmp(name, ".") || !strcmp(name, "..") ||
            strpbrk(name, "/\\:*?\"<>|") != NULL;
+}
+
+/* "updateAll-*.exe": a program's name, with one * for where the version goes. */
+static int is_program_pattern(const char *s)
+{
+    const char *star = strchr(s, '*');
+    if (!star || strchr(star + 1, '*') || !iends_with(star + 1, ".exe"))
+        return 0;
+    char *name = fmt("%.*s%s", (int)(star - s), s, star + 1);
+    int bad = bad_name(name);
+    free(name);
+    return !bad;
 }
 
 /* Whether a part of a path with "/" between its folders is a bad name. */
@@ -722,6 +735,11 @@ int ua_config_parse(const char *text, size_t len, const char *path, const char *
         cfg->sd_name = xstrdup(sd_name);
         cfg->sd_url = xstrdup(sd_url);
         cfg->sd_asset = xstrdup(sd_asset);
+        /* Only the Windows program reads this, so it is no error for the scripts
+           and none here: without a usable name it does not update itself. */
+        const char *sd_program = str_field(sdcard, "program_asset");
+        if (sd_program && is_program_pattern(sd_program))
+            cfg->sd_program = xstrdup(sd_program);
     }
     cfg->config_dir = xstrdup(config_dir);
     cfg->source = xstrdup(path);
@@ -797,6 +815,7 @@ void ua_config_free(ua_config *cfg)
     free(cfg->sd_name);
     free(cfg->sd_url);
     free(cfg->sd_asset);
+    free(cfg->sd_program);
     memset(cfg, 0, sizeof *cfg);
 }
 
@@ -1025,6 +1044,8 @@ typedef struct {
     int has_size;
     long long size;
     char *size_text;     /* the size as the database gives it */
+    const char *size_source;  /* who gives it, when not the database */
+    int timeout;         /* seconds, when not the usual */
     char *md5;
     const database *db;
 } db_hit;
@@ -1237,7 +1258,8 @@ static long long download(const db_hit *hit, const char *dest, int need_zip, con
             why = os_error(errno, tmp);
         } else {
             int status = 0;
-            int rc = ua_http_get(hit->url, dl_sink, &s, &status, TIMEOUT, err, sizeof err);
+            int rc = ua_http_get(hit->url, dl_sink, &s, &status, hit->timeout ? hit->timeout : TIMEOUT,
+                                 err, sizeof err);
             if (fclose(s.out) && !rc) {
                 rc = -1;
                 s.write_errno = errno ? errno : EIO;
@@ -1256,8 +1278,8 @@ static long long download(const db_hit *hit, const char *dest, int need_zip, con
                 char md5[33];
                 ua_md5_hex(&s.md5, md5);
                 if (hit->has_size && s.got != hit->size)
-                    why = fmt("received %" PRId64 " bytes, the database says %s", (int64_t)s.got,
-                              hit->size_text);
+                    why = fmt("received %" PRId64 " bytes, %s says %s", (int64_t)s.got,
+                              hit->size_source ? hit->size_source : "the database", hit->size_text);
                 else if (hit->md5 && !ieq(md5, hit->md5))
                     why = xstrdup("the MD5 does not match the database");
                 else if (need_zip && !is_zip_file(tmp))
@@ -1629,6 +1651,16 @@ char *ua_card_release(const char *sd_root)
     return tag;
 }
 
+/* Whether an asset of a release can be downloaded. */
+static int asset_usable(const cJSON *a)
+{
+    const cJSON *state = cJSON_GetObjectItemCaseSensitive(a, "state");
+    const cJSON *size = cJSON_GetObjectItemCaseSensitive(a, "size");
+    const char *url = str_field(a, "browser_download_url");
+    return (!state || (cJSON_IsString(state) && !strcmp(state->valuestring, "uploaded"))) &&
+           url && ua_is_url(url) && cJSON_IsNumber(size) && size->valuedouble >= 0;
+}
+
 /* _release_asset(): the usable asset of this name in a release, or NULL. */
 static const cJSON *release_asset(const cJSON *release, const char *asset)
 {
@@ -1638,19 +1670,96 @@ static const cJSON *release_asset(const cJSON *release, const char *asset)
     cJSON_ArrayForEach(a, assets) {
         if (!cJSON_IsObject(a) || !str_field(a, "name") || strcmp(str_field(a, "name"), asset))
             continue;
-        const cJSON *state = cJSON_GetObjectItemCaseSensitive(a, "state");
-        const cJSON *size = cJSON_GetObjectItemCaseSensitive(a, "size");
-        const char *url = str_field(a, "browser_download_url");
-        if ((!state || (cJSON_IsString(state) && !strcmp(state->valuestring, "uploaded"))) &&
-            url && ua_is_url(url) && cJSON_IsNumber(size) && size->valuedouble >= 0)
+        if (asset_usable(a))
             return a;
     }
     return NULL;
 }
 
-int ua_release_fetch(const ua_config *cfg, ua_release *rel, char *err, size_t errlen)
+/* Whether anything is offered from this release, and the numbers of its tag. The
+   workflow does not mark a dry run such as v0.2.1-alpha as a prerelease, so the
+   form of the tag is what sets it apart. */
+static int release_counts(const cJSON *r, unsigned key[3])
+{
+    if (!cJSON_IsObject(r) || cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(r, "draft")) ||
+        cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(r, "prerelease")))
+        return 0;
+    const char *tag = str_field(r, "tag_name"), *page = str_field(r, "html_url");
+    return tag && !parse_tag(tag, key) && page && ua_is_url(page);
+}
+
+/* The newest release in the list that holds this asset; rel stays empty when
+   there is none. */
+static void newest_with_asset(const cJSON *releases, const char *asset_name, ua_release *rel)
+{
+    unsigned best[3] = { 0, 0, 0 };
+    const cJSON *r;
+    cJSON_ArrayForEach(r, releases) {
+        unsigned key[3];
+        const cJSON *asset = release_counts(r, key) ? release_asset(r, asset_name) : NULL;
+        if (!asset || (rel->tag && key_cmp(key, best) <= 0))
+            continue;
+        ua_release_free(rel);
+        memcpy(best, key, sizeof best);
+        rel->tag = xstrdup(str_field(r, "tag_name"));
+        rel->page = xstrdup(str_field(r, "html_url"));
+        rel->url = xstrdup(str_field(asset, "browser_download_url"));
+        rel->size = (long long)cJSON_GetObjectItemCaseSensitive(asset, "size")->valuedouble;
+    }
+}
+
+/* The version in an asset's name, which fits a pattern such as "updateAll-*.exe",
+   malloc'd, or NULL when it does not fit or no version takes the place of the *. */
+static char *program_version(const char *pattern, const char *name)
+{
+    const char *star = strchr(pattern, '*');
+    size_t before = (size_t)(star - pattern), after = strlen(star + 1), n = strlen(name);
+    if (n <= before + after || strncmp(name, pattern, before) || strcmp(name + n - after, star + 1))
+        return NULL;
+    char *version = fmt("%.*s", (int)(n - before - after), name + before);
+    unsigned key[3];
+    if (parse_tag(version, key)) {
+        free(version);
+        return NULL;
+    }
+    return version;
+}
+
+/* The highest version of the program among the releases. Its version has nothing
+   to do with the tag of the release that holds it, so the asset's name gives it. */
+static void newest_program(const cJSON *releases, const char *pattern, ua_release *rel)
+{
+    unsigned best[3] = { 0, 0, 0 };
+    const cJSON *r;
+    cJSON_ArrayForEach(r, releases) {
+        unsigned tag_key[3];
+        const cJSON *assets = release_counts(r, tag_key) ? cJSON_GetObjectItemCaseSensitive(r, "assets") : NULL, *a;
+        if (!cJSON_IsArray(assets))
+            continue;
+        cJSON_ArrayForEach(a, assets) {
+            const char *name = cJSON_IsObject(a) ? str_field(a, "name") : NULL;
+            char *version = name && asset_usable(a) ? program_version(pattern, name) : NULL;
+            unsigned key[3];
+            if (version && !parse_tag(version, key) && (!rel->tag || key_cmp(key, best) > 0)) {
+                ua_release_free(rel);
+                memcpy(best, key, sizeof best);
+                rel->tag = version;
+                version = NULL;
+                rel->page = xstrdup(str_field(r, "html_url"));
+                rel->url = xstrdup(str_field(a, "browser_download_url"));
+                rel->size = (long long)cJSON_GetObjectItemCaseSensitive(a, "size")->valuedouble;
+            }
+            free(version);
+        }
+    }
+}
+
+int ua_release_fetch(const ua_config *cfg, ua_release *rel, ua_release *program, char *err,
+                     size_t errlen)
 {
     memset(rel, 0, sizeof *rel);
+    if (program)
+        memset(program, 0, sizeof *program);
     membuf m = { 0 };
     char why[512];
     int status;
@@ -1668,27 +1777,9 @@ int ua_release_fetch(const ua_config *cfg, ua_release *rel, char *err, size_t er
         set_err(err, errlen, "the answer is not a list of releases");
         return -1;
     }
-    unsigned best[3] = { 0, 0, 0 };
-    const cJSON *r;
-    cJSON_ArrayForEach(r, root) {
-        /* The workflow does not mark a dry run such as v0.2.1-alpha as a
-           prerelease, so the form of the tag is what sets it apart. */
-        if (!cJSON_IsObject(r) || cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(r, "draft")) ||
-            cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(r, "prerelease")))
-            continue;
-        const char *tag = str_field(r, "tag_name"), *page = str_field(r, "html_url");
-        const cJSON *asset = release_asset(r, cfg->sd_asset);
-        unsigned key[3];
-        if (!tag || parse_tag(tag, key) || !asset || !page || !ua_is_url(page) ||
-            (rel->tag && key_cmp(key, best) <= 0))
-            continue;
-        ua_release_free(rel);
-        memcpy(best, key, sizeof best);
-        rel->tag = xstrdup(tag);
-        rel->page = xstrdup(page);
-        rel->url = xstrdup(str_field(asset, "browser_download_url"));
-        rel->size = (long long)cJSON_GetObjectItemCaseSensitive(asset, "size")->valuedouble;
-    }
+    newest_with_asset(root, cfg->sd_asset, rel);
+    if (program && cfg->sd_program)
+        newest_program(root, cfg->sd_program, program);
     cJSON_Delete(root);
     if (!rel->tag) {
         set_err(err, errlen, "no release holds %s", cfg->sd_asset);
@@ -1725,6 +1816,70 @@ int ua_card_has_emu(const char *sd_root)
     int has = ua_is_dir(emu);
     free(emu);
     return has;
+}
+
+int ua_version_older(const char *running, const char *version)
+{
+    unsigned have[3], want[3];
+    return !parse_tag(running, have) && !parse_tag(version, want) && key_cmp(have, want) < 0;
+}
+
+/* The downloaded file is a program, and calls itself this version: its window
+   title, "updateAll <version>" in ua_gui.c, as UTF-16 with its terminator. Without
+   this, a mislabelled release would be offered again at every start. */
+static int is_program_of(const char *path, const char *version, char **why)
+{
+    char *data, *text = fmt("updateAll %s", version);
+    size_t len, n = strlen(text);
+    if (read_file(path, &data, &len, why)) {
+        free(text);
+        return 0;
+    }
+    int ok = 0;
+    if (len < 2 || memcmp(data, "MZ", 2)) {
+        *why = xstrdup("the file received is not a program");
+    } else {
+        size_t want = (n + 1) * 2;
+        char *wide = xmalloc(want);
+        memset(wide, 0, want);
+        for (size_t i = 0; i < n; i++)
+            wide[i * 2] = text[i];
+        for (size_t i = 0; i + want <= len && !ok; i++)
+            ok = !memcmp(data + i, wide, want);
+        free(wide);
+        if (!ok)
+            *why = fmt("the file received is not updateAll %s", version);
+    }
+    free(text);
+    free(data);
+    return ok;
+}
+
+int ua_program_download(const ua_release *rel, const char *name, const char *dest,
+                        const ua_hooks *h, char **why)
+{
+    db_hit hit = { 0 };
+    hit.url = xstrdup(rel->url);
+    hit.has_size = 1;
+    hit.size = rel->size;
+    hit.size_text = fmt("%lld", rel->size);
+    hit.size_source = "the release";
+    hit.timeout = PROGRAM_TIMEOUT;
+    *why = NULL;
+    file_event(h, "updateAll", name, UA_FILE_DOWNLOADING, "Downloading");
+    long long got = download(&hit, dest, 0, "updateAll", name, h, why);
+    hit_free(&hit);
+    if (got >= 0 && !is_program_of(dest, rel->tag, why)) {
+        ua_remove(dest);
+        got = -1;
+    }
+    if (got >= 0)
+        file_event(h, "updateAll", name, UA_FILE_DONE, "Downloaded");
+    else if (!strcmp(*why, "cancelled"))
+        file_event(h, "updateAll", name, UA_FILE_CANCELLED, "Cancelled");
+    else
+        file_event(h, "updateAll", name, UA_FILE_FAILED, *why);
+    return got >= 0 ? 0 : -1;
 }
 
 /* forget_stale_zip(): a release can be cut again, so a kept archive of the
@@ -2464,7 +2619,7 @@ int ua_run(const ua_config *cfg, const ua_options *opt, const ua_hooks *h)
             release.page = xstrdup(opt->release->page);
             release.url = xstrdup(opt->release->url);
             release.size = opt->release->size;
-        } else if (ua_release_fetch(cfg, &release, release_error, sizeof release_error)) {
+        } else if (ua_release_fetch(cfg, &release, NULL, release_error, sizeof release_error)) {
             memset(&release, 0, sizeof release);
         }
         if (release.tag) {

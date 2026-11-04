@@ -89,6 +89,10 @@ fi
 
 cd "$(dirname "$0")"
 LOADER_DIR="$(pwd)"
+# Now rather than after hours of building: the release workflow stops on this too.
+if [ -n "$RELEASE_TAG" ]; then
+    python3 "$LOADER_DIR/.github/scripts/updateall_version.py" "$RELEASE_TAG" || exit 1
+fi
 # Keep the clone+build tree OUTSIDE this repo so it doesn't pollute git status.
 BUILD_DIR="$(dirname "$LOADER_DIR")/emu-build"
 # Default GitHub owner: every REPO_OF entry without an owner of its own, and

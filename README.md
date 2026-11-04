@@ -57,10 +57,10 @@ they are **not** emulated.
    file name for each board. Hold BOOTSEL, connect the board over USB, and copy
    the `.uf2` onto the `RP2350` drive.
 2. **Prepare the SD card.** Download `pico-bootLoader_sdcard.zip` from the same
-   Releases page and unpack it onto a FAT32- or exFAT-formatted card. The
-   archive contains the emulators, the native ports, the menu artwork, a
-   sample configuration file and the `updateAll` installer for ROM sets, BIOS
-   files and game data. Alternatively,
+   Releases page and unpack it onto a FAT32-formatted card (exFAT also works,
+   but is not advised). The archive contains the emulators, the native ports,
+   the menu artwork, a sample configuration file and the `updateAll` installer
+   for ROM sets, BIOS files and game data. Alternatively,
    assemble the layout yourself as described in
    [SD card layout](#sd-card-layout).
 3. **Run `updateAll`.** With the card still in the computer, start

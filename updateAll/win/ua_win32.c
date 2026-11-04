@@ -218,7 +218,7 @@ static int is_running_program(const wchar_t *path)
 int ua_replace(const char *from, const char *to)
 {
     wchar_t *f = wpath(from), *t = wpath(to);
-    BOOL ok = MoveFileExW(f, t, MOVEFILE_REPLACE_EXISTING);
+    BOOL ok = MoveFileExW(f, t, MOVEFILE_REPLACE_EXISTING), moved_back = FALSE, lost = FALSE;
     DWORD err = GetLastError();
     /* The SD-card archive holds this program, which may run from that card.
        Its file cannot be replaced, but it can move aside; the next start
@@ -228,12 +228,18 @@ int ua_replace(const char *from, const char *to)
         size_t n = wcslen(t) + 5;
         wchar_t *old = malloc(n * sizeof *old);
         swprintf(old, n, L"%ls.old", t);
+        /* It inherits a read-only attribute, which would block the next update. */
+        SetFileAttributesW(old, FILE_ATTRIBUTE_NORMAL);
         DeleteFileW(old);
         if (MoveFileW(t, old)) {
             ok = MoveFileExW(f, t, MOVEFILE_REPLACE_EXISTING);
             err = GetLastError();
-            if (!ok)
-                MoveFileW(old, t);
+            for (int i = 0; !ok && !moved_back && i < 5; i++) {
+                if (i)
+                    Sleep(100);
+                moved_back = MoveFileW(old, t);
+            }
+            lost = !ok && !moved_back;
         }
         free(old);
     }
@@ -241,6 +247,9 @@ int ua_replace(const char *from, const char *to)
     free(t);
     if (!ok) {
         win_error(err, from, to);
+        if (lost)
+            snprintf(last_error + strlen(last_error), sizeof last_error - strlen(last_error),
+                     "; the program is now named '%s.old'", to);
         return -1;
     }
     return 0;

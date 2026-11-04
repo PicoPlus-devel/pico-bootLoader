@@ -119,9 +119,19 @@ The files are installed under the names the applications look for. The Videopac,
 4. Untick the sets that are not wanted. **Select all** ticks or unticks all sets at once, and shows a mixed state when only some are ticked. The BIOS files of all emulators are one row, **BIOS**. The first row, **SD card files**, is the SD-card archive. The **Status** column shows which sets are already complete on the card. A line above the list reports a newer SD-card archive, see [SD-card archive](#sd-card-archive).
 5. Select **Install**. The list of files shows each file that is downloaded or installed, with its own progress bar and its result; a set that is already complete on the card is not listed. The bar at the bottom shows the progress of the whole run. Each set has an equal share of it, so a large download moves it slowly. **Show log** switches between the list and the log, which holds the same report as the scripts. **Dry run** reports what would be downloaded and written without doing it. **Cancel** stops a run: a download in progress is abandoned, and files already written stay on the card.
 
-The program reads the latest configuration from this repository when it starts; until it has, **Install** is unavailable. When it cannot be read, the program uses an `updateAll.json` that is next to it, and its built-in copy otherwise. The line `Configuration:` in the log shows which one is used. Apart from the sets and the SD-card archive on the card, downloaded files in the zip folder and its temporary folder, it writes nothing: no settings, no registry entries.
+The program reads the latest configuration from this repository when it starts; until it has, **Install** is unavailable. When it cannot be read, the program uses an `updateAll.json` that is next to it, and its built-in copy otherwise. The line `Configuration:` in the log shows which one is used. Apart from the sets and the SD-card archive on the card, downloaded files in the zip folder and its temporary folder, and a new version of itself, it writes nothing: no settings, no registry entries.
 
 The program is not signed, so Windows may show "Windows protected your PC" the first time it is started. Select **More info**, then **Run anyway**.
+
+### Updating the program
+
+At every start, the program looks for a newer version of itself among the releases of this repository, and asks whether to update when there is one. With **Yes**, it downloads the new version, which the list of files shows and **Cancel** stops. It then replaces itself, starts the new version and closes. Antivirus software can take several seconds over a new program. If anything goes wrong, the program stays as it was and names the release page that the new version can be downloaded from. With **No**, nothing changes; the answer is not stored, so the question returns at the next start.
+
+The program has a version of its own, shown in its title bar. It is separate from the version of the bootloader and changes only when the program changes, so not every release of the bootloader offers an update.
+
+The program does not ask when it cannot write to its own folder, which the log then says, or when the latest configuration or the list of releases cannot be read. To turn this off, remove `program_asset` from `updateAll.json`, together with its `config_url`, see [Latest sets](#latest-sets). Copies from bootloader releases before v0.9 cannot update themselves. The scripts do not update themselves either; the SD-card archive replaces them.
+
+During an update, the running copy is moved aside as `updateAll.exe.old`, and the next start removes it. If a power failure or a removed card leaves no `updateAll.exe` next to that file, rename `updateAll.exe.old` to `updateAll.exe`.
 
 ## Scripts
 
@@ -189,9 +199,12 @@ The `sdcard` key of `updateAll.json` names the SD-card archive of pico-bootLoade
 "sdcard": {
   "name": "SD card files",
   "asset": "pico-bootLoader_sdcard.zip",
-  "releases_url": "https://api.github.com/repos/PicoPlus-devel/pico-bootLoader/releases?per_page=10"
+  "releases_url": "https://api.github.com/repos/PicoPlus-devel/pico-bootLoader/releases?per_page=10",
+  "program_asset": "updateAll-*.exe"
 }
 ```
+
+Only the Windows program reads `program_asset`, see [Updating the program](#updating-the-program). The `*` stands for the version of the program in the name of the release asset, such as `updateAll-v1.1.exe`.
 
 At every start, updateAll reads that list of releases and takes the newest one that holds the archive. Tags of the form `v0.N` and `v0.N.M` count; drafts, prereleases and other tags such as `v0.N-alpha` do not. It compares that release with `/emu/release.txt` on the card. A card without that file counts as older than any release.
 
@@ -356,6 +369,8 @@ win/build.sh                              # -> win/build/updateAll.exe
 ```
 
 `build_emulators.sh -z` builds it before it packs the SD-card archive.
+
+The version of the program is in `win/VERSION`. It does not depend on the tags or the state of the repository, so every build reports it, and nothing raises it by itself. Raise it with every change to the program: a release stops when the program changed and the version did not, see [RELEASING.md](../RELEASING.md). For a test, `UA_VERSION=v0.9 win/build.sh` builds a copy with another version. A copy with anything other than `vN.M` or `vN.M.P` as its version, such as `UA_VERSION=dev`, never asks to update itself.
 
 `win/ua_core.c` is a port of `updateAll.py`. `win/hosttest/` builds it for Linux with AddressSanitizer and checks that both give the same output, exit status and files on the card, for local zips as well as for downloads from a local HTTP server:
 

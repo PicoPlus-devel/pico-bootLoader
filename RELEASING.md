@@ -1,12 +1,13 @@
 # Releasing
 
-Maintainer checklist for publishing pico-bootLoader. Three artifacts ship, and
+Maintainer checklist for publishing pico-bootLoader. Four artifacts ship, and
 they have different lifecycles:
 
 | Artifact | Built by | How it gets onto the release |
 | --- | --- | --- |
 | `pico-bootLoader_<board>_arm[_piousb].uf2` (10 files) | CI, on the self-hosted runner | attached automatically by the workflow |
 | `pico-bootLoader_sdcard.zip` | **locally**, by `build_emulators.sh -c all -z` | `gh release upload`, by hand |
+| `updateAll-<version>.exe` | CI, on the self-hosted runner | attached by the workflow, only when `updateAll/win/VERSION` is higher than on earlier releases |
 | PCB gerbers (4 zips: PicoNES v2.6, PicoNES v2.8, Mini v2.0, Micro v1.2) | nobody — vendored in the `pico_shared` submodule | attached automatically by the workflow |
 
 The archive is not built in CI because it needs every application's toolchain and
@@ -54,6 +55,26 @@ has run.
 The pico-dragonslair and pico-quake2 releases attach an `updateAll.exe` too,
 built by their own workflows from this repository's `main`. A change to
 updateAll reaches them only once it is merged and their next release is cut.
+
+This repository's `updateAll-<version>.exe` asset is what the Windows program offers
+as an update of itself, to every copy from bootloader release v0.9 on, wherever that
+copy came from. The program has a version of its own in `updateAll/win/VERSION`,
+separate from the tags of this repository. Every build reports that number, whatever
+the state of the tree, so nothing raises it by itself.
+
+**Raise `updateAll/win/VERSION` with every change to `updateAll/win`** (`hosttest`
+excepted). The workflow attaches the program only when that number is higher than the
+highest version on a release, so that users are asked only when the program really
+changed. It stops at the start when `updateAll/win` changed and the number did not,
+and `build_emulators.sh -z -r` stops on the same check before it builds anything. A
+change to the sets in `updateAll/updateAll.json` needs no new version, as every copy
+reads that file from `main` when it starts.
+
+Commit changes to `updateAll/win` before building the archive, so that the copy in
+the archive and the one on the release are the same. A copy already on a tag is not
+told that its asset was replaced, so a bad exe needs a new version. To stop every copy
+from offering an update, remove `program_asset` from `updateAll/updateAll.json` on
+`main`.
 
 ## Prerequisites
 
@@ -169,6 +190,10 @@ gh release upload v0.2.1-alpha releases/pico-bootLoader_sdcard.zip
 gh release delete v0.2.1-alpha --cleanup-tag
 ```
 
+The full rehearsal also checks the version of updateAll, and stops in the same way
+when `updateAll/win` changed and `VERSION` did not. A program attached to an `-alpha`
+release is offered to nobody.
+
 ## Verifying a release
 
 ```bash
@@ -185,6 +210,9 @@ gh release view v0.2.1
   `unzip -p releases/pico-bootLoader_sdcard.zip emu/release.txt` prints the tag
   of this release. If it does not, updateAll still installs the archive, but a
   card unpacked by hand downloads it once more.
+- `updateAll-<version>.exe` present if `updateAll/win/VERSION` is higher than on
+  earlier releases. The log of the workflow's check says which it was. The window
+  title of the program shows that version.
 - **4 PCB gerber assets** — `pico_nesPCB_v2.6.zip`,
   `pico_nesPCB_v2.8_SNES_PORTS.zip`, `Gerber_PicoNES_Mini_PCB_v2.0.zip` and
   `Gerber_PicoNES_Micro_v1.2.zip`,
@@ -217,7 +245,8 @@ from `github.sha`, so it will point at whatever is current.
   tag into `CMakeLists.txt` and `pico_shared/menu.h`; `build_emulators.sh` seds
   each emulator's own `pico_shared/menu.h`. In-tree both keep their placeholders
   (`"0.1"`, `"VX.X"`), and a build from an unstamped tree shows the build date
-  instead — that is how a dev build identifies itself.
+  instead — that is how a dev build identifies itself. updateAll is the exception:
+  its version is committed in `updateAll/win/VERSION`, and no build stamps it.
 - **`pico_shared` in tag mode is `main`, not the revision the tag pins.** Tag mode
   builds each emulator's tagged source against `pico_shared` `main` and records
   both refs in the manifest. The reason was historical: `bld.sh` gained `-b`

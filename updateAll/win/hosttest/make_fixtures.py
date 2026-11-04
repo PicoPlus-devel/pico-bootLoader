@@ -529,15 +529,17 @@ def release(scenario, tag, data=REL_ZIP, name=ASSET, url=None, size=None, **extr
                  "html_url": f"{URL}/rel/tag/{tag}", "assets": [other, asset]}, **extra)
 
 
-def rel_cfg(scenario, releases, asset=ASSET, url=None):
+def rel_cfg(scenario, releases, asset=ASSET, url=None, program=None):
     """cfg_rel_<scenario>.json, with one more set, and its answer on the server.
     The server ignores the query, as it must for GitHub's per_page."""
     if url is None:
         text = releases if isinstance(releases, str) else json.dumps(releases)
         url = serve(f"api/{scenario}.json", text.encode()) + "?per_page=10"
+    sdcard = {"name": "SD card files", "releases_url": url, "asset": asset}
+    if program is not None:
+        sdcard["program_asset"] = program
     write(f"cfg_rel_{scenario}.json", json.dumps({
-        "cores": local[:1], "databases": [],
-        "sdcard": {"name": "SD card files", "releases_url": url, "asset": asset}}).encode())
+        "cores": local[:1], "databases": [], "sdcard": sdcard}).encode())
 
 
 def rel_card(name, marker=b"v0.9\n", files=(), edited=b"edited list\n"):
@@ -617,3 +619,85 @@ rel_card("card_rel_json_own", files=[("updateAll/updateAll.json", b'{"databases"
 rel_card("card_rel_json_bad", files=[("updateAll/updateAll.json", b'{"edited": \n')])
 rel_card("card_rel_json_online", files=[("updateAll/updateAll.json",
                                          b'{"config_url": "http://x/old.json", "cores": []}\n')])
+
+
+# ---------------------------------------------------------------------------
+# updateAll.exe finding and downloading a newer copy of itself
+# ---------------------------------------------------------------------------
+
+PROGRAM = "updateAll-*.exe"
+FAKE_BODY = blob(300)
+
+
+def fake_exe(title):
+    """As much of a program as the check looks at: its header and its window title."""
+    return b"MZ" + FAKE_BODY + title.encode("utf-16-le") + b"\0\0" + FAKE_BODY
+
+
+write("fake_exe_v0.10.bin", fake_exe("updateAll v0.10"))
+write("fake_exe_v1.5.bin", fake_exe("updateAll v1.5"))
+
+
+def with_program(scenario, tag, data=None, archive=False, url=None, size=None, version=None, name=None, **extra):
+    """A release holding the program, and the archive when asked for. The program's
+    version is the release's tag unless version says otherwise."""
+    version = version or tag
+    name = name or f"updateAll-{version}.exe"
+    data = fake_exe(f"updateAll {version}") if data is None else data
+    if url is None:
+        url = serve(f"rel/{scenario}/{tag}/{name}", data)
+    r = release(scenario, tag, **extra)
+    exe = {"name": name, "state": "uploaded", "size": len(data) if size is None else size,
+           "browser_download_url": url}
+    r["assets"] = (r["assets"] if archive else r["assets"][:1]) + [exe]
+    return r
+
+
+# Selection: the program may be older than the newest archive, or the only asset.
+rel_cfg("prog_older", [release("prog_older", "v0.10"),
+                       with_program("prog_older", "v0.9", archive=True)], program=PROGRAM)
+rel_cfg("prog_alone", [with_program("prog_alone", "v0.10")], program=PROGRAM)
+rel_cfg("prog_filter", [
+    with_program("prog_filter", "v0.20", draft=True), with_program("prog_filter", "v0.19", prerelease=True),
+    with_program("prog_filter", "v0.18-alpha"), with_program("prog_filter", "v0.16", size="big"),
+    dict(with_program("prog_filter", "v0.15"), assets=[
+        {"name": "updateAll-v0.15.exe", "state": "new", "size": 5, "browser_download_url": f"{URL}/x.exe"}]),
+    with_program("prog_filter", "v0.9"), with_program("prog_filter", "v0.12"),
+    with_program("prog_filter", "v0.8")], program=PROGRAM)
+rel_cfg("prog_none", [release("prog_none", "v0.10")], program=PROGRAM)
+rel_cfg("prog_nokey", [with_program("prog_nokey", "v0.10", archive=True)])
+rel_cfg("prog_404", None, url=f"{URL}/api/no-such-answer.json", program=PROGRAM)
+rel_cfg("prog_badname", [with_program("prog_badname", "v0.10", archive=True)], program="a/*.exe")
+rel_cfg("prog_notexe", [with_program("prog_notexe", "v0.10", archive=True)], program="updateAll-*.zip")
+rel_cfg("prog_nostar", [with_program("prog_nostar", "v0.10", archive=True)], program="updateAll.exe")
+rel_cfg("prog_twostars", [with_program("prog_twostars", "v0.10", archive=True)], program="updateAll-*-*.exe")
+# The version is the program's own, whatever the tag of the release holding it.
+rel_cfg("prog_separate", [with_program("prog_separate", "v0.10", version="v1.5", archive=True)], program=PROGRAM)
+rel_cfg("prog_highest", [with_program("prog_highest", "v0.12", version="v1.1"),
+                         with_program("prog_highest", "v0.11", version="v1.2"),
+                         with_program("prog_highest", "v0.10", version="v1.0")], program=PROGRAM)
+rel_cfg("prog_oldname", [with_program("prog_oldname", "v0.10", name="updateAll.exe")], program=PROGRAM)
+rel_cfg("prog_badversion", [
+    with_program("prog_badversion", "v0.14", name="updateAll-1.5.exe"),
+    with_program("prog_badversion", "v0.13", name="updateAll-v1.5-dirty.exe"),
+    with_program("prog_badversion", "v0.12", name="updateAll-.exe"),
+    with_program("prog_badversion", "v0.11", name="updateAll-v1.exe"),
+    with_program("prog_badversion", "v0.10", name="updateall-v1.5.exe")], program=PROGRAM)
+write("cfg_rel_prog_badtype.json", json.dumps({
+    "cores": local[:1], "databases": [],
+    "sdcard": {"name": "SD card files", "asset": ASSET, "program_asset": 5,
+               "releases_url": serve("api/prog_badtype.json", json.dumps(
+                   [with_program("prog_badtype", "v0.10", archive=True)]).encode())}}).encode())
+rel_cfg("prog_key", [with_program("prog_key", "v0.10", archive=True)], program=PROGRAM)
+
+# Download.
+rel_cfg("prog_ok", [with_program("prog_ok", "v0.10", archive=True)], program=PROGRAM)
+rel_cfg("prog_size", [with_program("prog_size", "v0.10", size=len(fake_exe("updateAll v0.10")) + 1)],
+        program=PROGRAM)
+rel_cfg("prog_mz", [with_program("prog_mz", "v0.10", b"PE" + fake_exe("updateAll v0.10"))], program=PROGRAM)
+rel_cfg("prog_title", [with_program("prog_title", "v0.10", fake_exe("updateAll v0.9"))], program=PROGRAM)
+rel_cfg("prog_longer", [with_program("prog_longer", "v0.10", fake_exe("updateAll v0.10.1"))], program=PROGRAM)
+rel_cfg("prog_gone", [with_program("prog_gone", "v0.10", url=f"{URL}/rel/nothing-here.exe")], program=PROGRAM)
+rel_cfg("prog_sep_ok", [with_program("prog_sep_ok", "v0.10", version="v1.5")], program=PROGRAM)
+rel_cfg("prog_sep_title", [with_program("prog_sep_title", "v0.10", fake_exe("updateAll v0.10"), version="v1.5")],
+        program=PROGRAM)

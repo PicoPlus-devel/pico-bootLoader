@@ -16,8 +16,17 @@ for tool in "$CC" "$WINDRES"; do
     command -v "$tool" >/dev/null || { echo "ERROR: $tool not found (apt install mingw-w64)" >&2; exit 1; }
 done
 
-# The version is the repository's: v0.6.1-3-gabc1234 gives 0,6,1,0.
-VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo dev)
+# The program's own version, which is not the version of the bootloader. Raise it
+# in VERSION whenever the program changes: the program offers itself as an update
+# by this number, and a release stops if the program changed and it did not.
+# UA_VERSION gives another one for a test build.
+if [ -n "${UA_VERSION:-}" ]; then
+    VERSION=$UA_VERSION
+else
+    VERSION=$(tr -d '[:space:]' < VERSION)
+    [[ $VERSION =~ ^v[0-9]{1,9}\.[0-9]{1,9}(\.[0-9]{1,9})?$ ]] ||
+        { echo "ERROR: VERSION must hold a version such as v1.0 or v1.0.1, not '$VERSION'" >&2; exit 1; }
+fi
 if [[ $VERSION =~ ^v?([0-9]+)\.([0-9]+)(\.([0-9]+))? ]]; then
     NUM="${BASH_REMATCH[1]},${BASH_REMATCH[2]},${BASH_REMATCH[4]:-0},0"
 else
