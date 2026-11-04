@@ -222,7 +222,7 @@ gh release view v0.2.1
   CHANGELOG text, just above the version table.
 - The version table lists every emulator with a real tag — no `VX.X`, no blanks
   in the Version column.
-- On hardware: unzip the archive at the root of a FAT32/exFAT card, boot, confirm
+- On hardware: unzip the archive at the root of a FAT32 card, boot, confirm
   the picker lists every entry, launch one emulator and check it shows its
   version rather than a build date. Run updateAll on the card, launch *Doom!*
   and confirm the WAD flashes from `/roms/doom/`. Without the file, *Doom!*
