@@ -56,28 +56,46 @@ they are **not** emulated.
    the table under [Supported hardware](#supported-hardware), below, gives the
    file name for each board. Hold BOOTSEL, connect the board over USB, and copy
    the `.uf2` onto the `RP2350` drive.
-2. **Prepare the SD card.** Download `pico-bootLoader_sdcard.zip` from the same
-   Releases page and unpack it onto a FAT32-formatted card (exFAT also works,
-   but is not advised). The archive contains the emulators, the native ports,
-   the menu artwork, a sample configuration file and the `updateAll` installer
-   for ROM sets, BIOS files and game data. Alternatively,
-   assemble the layout yourself as described in
-   [SD card layout](#sd-card-layout).
-3. **Run `updateAll`.** With the card still in the computer, start
-   `updateAll.exe` from the card's `updateAll` folder; the program selects that
-   card itself. Windows may report that the program is not signed: select
-   **More info**, then **Run anyway**. On Linux or macOS, run
-   `python3 updateAll.py --sd <path of the card>` from the same folder.
-   `updateAll` installs the arcade ROM sets, the BIOS files of the emulators and
+2. **Prepare the SD card.** Use a FAT32-formatted card (exFAT also works, but is
+   not advised), and insert it into the computer.
+
+   **On Windows, `updateAll` prepares the whole card.** Download
+   `updateAll-<version>.exe` from the most recent release on the Releases page
+   that holds it; a release holds it only when the program changed. The program
+   needs no installation and can be started from any folder. Windows may report
+   that the program is not signed: select **More info**, then **Run anyway**.
+   The program selects the first removable drive that holds a pico-bootLoader
+   card, or else the first removable drive, so check the **SD card** field; the
+   program warns when that drive holds files but no pico-bootLoader card. The
+   **SD card files** row starts ticked, and installs
+   `pico-bootLoader_sdcard.zip`: the emulators, the native ports, the menu
+   artwork, a sample configuration file and a copy of `updateAll`. All other rows
+   are unticked at every start. Tick what else you want, then select **Install**.
+
+   The other rows are the arcade ROM sets, the BIOS files of the emulators and
    the shareware or demo data of *Doom*, *Duke Nukem 3D*, *Quake II* and
-   *Diablo*, each in the folder its application reads, and downloads whatever
-   is not at hand. *Doom* does not start without it. The ROM sets and BIOS
-   files are not part of this project, and holding the rights to them is the
-   user's responsibility; [updateAll/README.md](updateAll/README.md)
-   describes how to use only zips you already have. Running it again later
-   installs the sets added since, and reports and installs a newer SD-card
-   archive; see [SD-card archive](updateAll/README.md#sd-card-archive).
-4. **Add your games.** The archive contains no games, ROMs or BIOS files. Each
+   *Diablo*. `updateAll` installs each in the folder its application reads, and
+   downloads whatever is not at hand. *Doom* does not start without its data.
+   [updateAll/README.md](updateAll/README.md) describes how to use only zips you
+   already have. Running it again later shows the sets added since, and reports
+   and installs a newer SD-card archive. That overwrites the files on the card
+   that the archive also holds, including custom artwork under the same name;
+   the Windows program asks first, and a menu list you edited is saved as `.bak`.
+   See [SD-card archive](updateAll/README.md#sd-card-archive).
+
+   **Copyright.** The ROM sets and BIOS files are copyright of their
+   manufacturers and are not part of this project. Holding the rights to them is
+   your responsibility. `updateAll` reminds you of this when they are selected.
+
+   **To prepare the card by hand,** which is the way on Linux or macOS, download
+   `pico-bootLoader_sdcard.zip` from the same Releases page and unpack it onto
+   the card. Then run `updateAll` from the card's `updateAll` folder to install
+   the rest: `updateAll.exe` on Windows, which selects that card itself, or
+   `python3 updateAll.py --sd <path of the card>` on Linux or macOS, which asks
+   whether to install the BIOS files, the arcade ROM sets and the game data.
+   Alternatively, assemble the layout yourself as described in
+   [SD card layout](#sd-card-layout).
+3. **Add your games.** The archive contains no games, ROMs or BIOS files. Each
    emulator's file browser opens in its own folder: `/roms/NES`, `/roms/SNES`,
    `/roms/MD` (Genesis / Mega Drive), `/roms/PCE`, `/roms/GB`, `/roms/SMS`
    (Master System and Game Gear), `/roms/O2E` (Videopac), `/roms/TI99` or
@@ -85,10 +103,11 @@ they are **not** emulated.
    The BIOS files and the folders of *ColecoVision*, *Doom*, *Duke Nukem 3D*,
    *Quake II*, *Diablo* and the arcade games are given under
    [Bootable applications](#bootable-applications).
-5. **Run it.** Insert the card and power on the board. The menu appears.
+4. **Run it.** Insert the card and power on the board. The menu appears.
 
-The Releases page provides two kinds of download: the per-board bootloader
-`.uf2` binaries and the `pico-bootLoader_sdcard.zip` SD-card archive.
+The Releases page provides three kinds of download: the per-board bootloader
+`.uf2` binaries, the `pico-bootLoader_sdcard.zip` SD-card archive and, on
+releases where the program changed, the standalone `updateAll-<version>.exe`.
 
 Release tags say which of the two changed:
 
@@ -98,7 +117,8 @@ Release tags say which of the two changed:
 | `v0.N.M` | emulator binaries only | replace `/emu` on the SD card; no re-flash needed |
 
 `updateAll` does the SD-card part: it reports a newer archive and installs it on
-the card. It does not flash the board, and says so when a release needs it.
+the card. It does not flash the board, and on a card already in use it says so
+when a release needs it.
 
 Every release lists the exact emulator versions its archive ships, and the same
 table is in `/emu/versions.txt` on the card.

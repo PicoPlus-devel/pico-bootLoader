@@ -147,7 +147,7 @@ static struct {
     int setting_tick;        /* the program sets ticks, not the user */
     ua_release *program;     /* the newest release of this program; set once */
     int offered;             /* the user was asked about it, or will not be */
-    int browsing;            /* the folder dialog is open */
+    int in_dialog;           /* the folder dialog or the question before installing is open */
     wchar_t *self_error;     /* why this program could not be updated */
 } app;
 
@@ -831,10 +831,10 @@ static int checked_sets(void)
     return n;
 }
 
-/* Select all leaves the archive alone on a card that does not hold one. */
+/* Select all is about the sets: the archive's row has its own default. */
 static int in_select_all(int row)
 {
-    return !is_archive_row(row) || app.card_emu;
+    return !is_archive_row(row);
 }
 
 static void select_all_counts(int *ticked, int *all)
@@ -953,8 +953,7 @@ static void release_read(release_msg *m)
     update_notice();
 }
 
-/* A check of the card reports. The archive is ticked on a card that has an emu
-   folder, unless the user chose otherwise for this card. */
+/* A check of the card reports. */
 static void card_checked(card_msg *c)
 {
     free(app.card_tag);
@@ -962,8 +961,6 @@ static void card_checked(card_msg *c)
     app.card_emu = c->has_emu;
     app.card_known = 1;
     free(c);
-    if (!app.archive_touched)
-        set_archive_tick(app.card_emu);
     update_notice();
     update_buttons();
 }
@@ -1013,7 +1010,7 @@ static void check_card(void)
         app.card_known = app.card_emu = app.archive_touched = 0;
         free(app.card_tag);
         app.card_tag = NULL;
-        set_archive_tick(0);
+        set_archive_tick(1);     /* whatever the user chose for the last card */
         update_notice();
         update_buttons();
     }
@@ -1056,11 +1053,111 @@ static void begin_run(job *j)
     }
 }
 
+/* A warning before anything happens, with No as the default answer, as the user
+   may press Enter without reading. A question about a new version of this program
+   waits until it is answered. */
+static int warn_first(const wchar_t *text)
+{
+    app.in_dialog = 1;
+    int yes = MessageBoxW(app.dlg, text, L"updateAll", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) == IDYES;
+    app.in_dialog = 0;
+    PostMessageW(app.dlg, WM_APP_OFFER, 0, 0);
+    return yes;
+}
+
+/* Whether the archive is newer than what this card holds. Without a release yet,
+   the run looks for it itself. */
+static int archive_newer_for(const char *sd_u)
+{
+    if (!app.release)
+        return 1;
+    ua_release rel = *app.release;
+    char *card = ua_card_release(sd_u);
+    rel.card = NULL;
+    ua_release_compare(&rel, card);
+    int newer = rel.newer;
+    free(rel.card);
+    free(card);
+    return newer;
+}
+
+/* Whether a folder holds anything of the user's. What Windows and macOS leave on a
+   new card does not count: System Volume Information and .fseventsd, for example. */
+static int holds_files(const wchar_t *sd)
+{
+    size_t n = wcslen(sd);
+    wchar_t pattern[MAX_PATH * 2 + 4];
+    swprintf(pattern, MAX_PATH * 2 + 4, L"%ls%ls*", sd, n && sd[n - 1] == L'\\' ? L"" : L"\\");
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(pattern, &fd);
+    if (h == INVALID_HANDLE_VALUE)
+        return 0;
+    int found = 0;
+    do {
+        found = fd.cFileName[0] != L'.' &&
+                !(fd.dwFileAttributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM));
+    } while (!found && FindNextFileW(h, &fd));
+    FindClose(h);
+    return found;
+}
+
+/* The archive's row starts ticked, so this asks before it overwrites files on a card
+   in use, or adds its folders to a drive that the program chose but is no such card. */
+static int confirm_archive(const wchar_t *sd)
+{
+    if (!archive_rows() || !ListView_GetCheckState(item(IDC_SETS), 0) ||
+        IsDlgButtonChecked(app.dlg, IDC_DRYRUN) == BST_CHECKED)
+        return 1;
+    char *sd_u = ua_narrow(sd);
+    int ok = 1;
+    if (ua_card_has_emu(sd_u)) {
+        if (archive_newer_for(sd_u))
+            ok = warn_first(L"Installing the SD card files replaces files on this card.\r\n\r\n"
+                            L"Files that the archive also holds are overwritten, including custom artwork "
+                            L"under the same name. A list in /emu that you edited is first saved as .bak. "
+                            L"Files that are not in the archive, such as your games and saves, are not "
+                            L"changed.\r\n\r\n"
+                            L"Continue? To leave the card as it is, select No and untick SD card files.");
+    } else if (holds_files(sd)) {
+        ok = warn_first(L"The selected SD card does not look like a pico-bootLoader card: it holds "
+                        L"files, but no emu folder.\r\n\r\n"
+                        L"Installing the SD card files adds the folders of the archive to it, such as "
+                        L"emu and updateAll, and overwrites files there under the same names. Other "
+                        L"files are not changed.\r\n\r\n"
+                        L"Continue? If this is the wrong drive, select No and choose another one.");
+    }
+    free(sd_u);
+    return ok;
+}
+
+/* Whether a BIOS file or a ROM set is ticked. Game data is shareware or a demo. */
+static int copyright_ticked(void)
+{
+    for (int r = archive_rows(); r < row_count(); r++) {
+        int first, n;
+        row_sets(r, &first, &n);
+        const ua_core *c = &app.cfg.cores[first];
+        if (ListView_GetCheckState(item(IDC_SETS), r) && (c->bios || !c->url))
+            return 1;
+    }
+    return 0;
+}
+
+/* Once per run rather than per row, as there can be many; no run, no warning. */
+static int confirm_rights(void)
+{
+    return !copyright_ticked() || IsDlgButtonChecked(app.dlg, IDC_DRYRUN) == BST_CHECKED ||
+           warn_first(L"BIOS files or arcade ROM sets are selected.\r\n\r\nThe ROM sets and BIOS files are copyright of their manufacturers and are not part of this project. Holding the rights to them is your responsibility.\r\n\r\n"
+                      L"Continue? To leave them out, select No and untick them.");
+}
+
 static void install(void)
 {
     wchar_t sd[MAX_PATH * 2], zips[MAX_PATH * 2];
     sd_path(sd, MAX_PATH * 2);
     field_path(IDC_ZIPS, zips, MAX_PATH * 2);
+    if (!confirm_archive(sd) || !confirm_rights())
+        return;
 
     job *j = calloc(1, sizeof *j);
     j->kind = JOB_INSTALL;
@@ -1104,7 +1201,7 @@ static int program_url_allowed(const char *url)
    over: this is a message box, which must not nest in the steps of a job. */
 static void offer_update(void)
 {
-    if (!app.program || app.offered || app.running || app.browsing || app.closing)
+    if (!app.program || app.offered || app.running || app.in_dialog || app.closing)
         return;
     app.offered = 1;
     /* Without main's configuration, removing the key there is not seen. */
@@ -1261,9 +1358,9 @@ static void browse(int field, const wchar_t *title)
     }
     IShellItem *result;
     /* A message box closing now would re-enable the window under this dialog. */
-    app.browsing = 1;
+    app.in_dialog = 1;
     HRESULT shown = IFileOpenDialog_Show(d, app.dlg);
-    app.browsing = 0;
+    app.in_dialog = 0;
     PostMessageW(app.dlg, WM_APP_OFFER, 0, 0);
     if (SUCCEEDED(shown) && SUCCEEDED(IFileOpenDialog_GetResult(d, &result))) {
         wchar_t *path;
@@ -1416,9 +1513,10 @@ static void row_texts(int row, char **name, char **zips, char **dest)
     *name = _strdup("BIOS");
 }
 
-/* One row per set, and one for all BIOS files; all ticked but those whose id
-   is in unticked. */
-static void fill_sets(char **unticked)
+/* One row per set, and one for all BIOS files. Nothing is installed unless the
+   user ticks it, and no choice is stored, so a set starts unticked unless its id
+   is in ticked. The archive's row starts ticked. */
+static void fill_sets(char **ticked)
 {
     HWND lv = item(IDC_SETS);
     app.setting_tick = 1;
@@ -1431,11 +1529,11 @@ static void fill_sets(char **unticked)
         ListView_InsertItem(lv, &it);
         ListView_SetItemText(lv, r, 1, wzips);
         ListView_SetItemText(lv, r, 2, wdest);
-        int tick = 1;
-        for (char **u = unticked; u && *u && tick; u++)
-            tick = _stricmp(*u, row_id(r)) != 0;
+        int tick = 0;
+        for (char **t = ticked; t && *t && !tick; t++)
+            tick = !_stricmp(*t, row_id(r));
         if (is_archive_row(r) && !app.archive_touched)
-            tick = app.card_emu;
+            tick = 1;
         ListView_SetCheckState(lv, r, tick);
         free(name);
         free(zips);
@@ -1493,9 +1591,10 @@ static void log_config(void)
              why ? L" (" : L"", why ? why : L"", why ? L")" : L"");
     log_text(line);
     log_text(can_download()
-                 ? L"Choose the SD card, and the folder with your MAME zips if you have one. "
-                   L"Files that are not in it are downloaded.\r\n"
-                 : L"Choose the SD card and the folder with your MAME zips.\r\n");
+                 ? L"Choose the SD card, tick what to install, and choose the folder with your "
+                   L"MAME zips if you have one. Files that are not in it are downloaded.\r\n"
+                 : L"Choose the SD card, tick what to install, and choose the folder with your "
+                   L"MAME zips.\r\n");
     free(line);
     free(why);
     free(from);
@@ -1506,21 +1605,21 @@ static void log_config(void)
 static void config_fetched(fetched *f)
 {
     if (f->ok) {
-        /* Sets unticked in the meantime stay unticked. */
-        char **unticked = calloc((size_t)row_count() + 1, sizeof *unticked);
+        /* Sets ticked in the meantime stay ticked. */
+        char **ticked = calloc((size_t)row_count() + 1, sizeof *ticked);
         for (int r = 0, n = 0; r < row_count(); r++)
-            if (!ListView_GetCheckState(item(IDC_SETS), r))
-                unticked[n++] = _strdup(row_id(r));
+            if (ListView_GetCheckState(item(IDC_SETS), r))
+                ticked[n++] = _strdup(row_id(r));
         int had = can_download();
         ua_config_free(&app.cfg);
         app.cfg = f->cfg;
-        fill_sets(unticked);
+        fill_sets(ticked);
         size_status_column();
         show_databases(had);
         update_notice();
-        for (char **u = unticked; *u; u++)
-            free(*u);
-        free(unticked);
+        for (char **t = ticked; *t; t++)
+            free(*t);
+        free(ticked);
     } else {
         app.cfg.fetch_error = _strdup(f->err);
     }

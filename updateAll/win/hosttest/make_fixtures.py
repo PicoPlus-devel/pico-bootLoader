@@ -418,6 +418,10 @@ with open(os.path.join(OUT, "cfg_bios.json"), "w") as f:
     json.dump({"databases": [f"{URL}/db.json.zip"], "cores": [remote[0]], "data": [gdata],
                "bios": bios}, f, indent=2)
 
+# All three kinds of set, about which the scripts ask.
+with open(os.path.join(OUT, "cfg_ask.json"), "w") as f:
+    json.dump({"databases": [], "cores": local[:1], "data": game[:1], "bios": bios[:1]}, f, indent=2)
+
 # A card with one part of b_slice on it, and the other wrong.
 write("card_bios_partial/bios/rom.bin", boot[0x200:0x600])
 write("card_bios_partial/bios/grom.bin", b"edited")

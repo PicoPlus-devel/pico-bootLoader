@@ -2626,6 +2626,8 @@ int ua_run(const ua_config *cfg, const ua_options *opt, const ua_hooks *h)
             char *card = ua_card_release(opt->sd);
             ua_release_compare(&release, card);
             free(card);
+            /* A new card says nothing about the board, so it gets no reminder. */
+            release.firmware = release.firmware && has_emu;
         }
     }
 
@@ -2644,6 +2646,9 @@ int ua_run(const ua_config *cfg, const ua_options *opt, const ua_hooks *h)
     else if (release.tag && has_emu && release.newer)
         out(h, "New archive:  %s %s is available (card: %s): %s", cfg->sd_asset, release.tag,
             release.card ? release.card : "unknown", release.page);
+    int install_archive = release.tag && (asked || (!opt->sdcard && !requested && has_emu && !opt->no_download));
+    if (install_archive && has_emu && release.newer && !opt->dry_run)
+        out(h, "Warning:      files on the card that the archive also holds are replaced; edited lists in /emu are saved as .bak");
     if (use_databases)
         out(h, "Databases:    %d, used for zips that are not in the zip folder", sources.n);
     if (opt->dry_run)
@@ -2660,7 +2665,7 @@ int ua_run(const ua_config *cfg, const ua_options *opt, const ua_hooks *h)
        kept zip is otherwise never downloaded again. */
     ua_core archive_core;
     char *zip_list[2] = { NULL, NULL }, *no_parts[1] = { NULL };
-    if (release.tag && (asked || (!opt->sdcard && !requested && has_emu && !opt->no_download))) {
+    if (install_archive) {
         size_t stem = strlen(cfg->sd_asset) - 4;
         archive_zip = fmt("%.*s-%s%s", (int)stem, cfg->sd_asset, release.tag, cfg->sd_asset + stem);
         zip_list[0] = archive_zip;

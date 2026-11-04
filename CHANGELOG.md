@@ -6,6 +6,10 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 
 [Binaries for each configuration and PCB design are at the end of this page](#downloads___).
 
+**Copyright.** The ROM sets and BIOS files that **updateAll** can install are
+copyright of their manufacturers and are not part of this project. Holding the
+rights to them is your responsibility.
+
 ## v0.9
 
 USB controllers on the Adafruit Fruit Jam and the other boards with PIO-USB
@@ -55,10 +59,14 @@ installs the BIOS files the emulators need.
   them as one entry, **BIOS**, that can be unticked. As with the ROM sets,
   holding the rights to them is your responsibility.
 - **updateAll tells you when a new SD-card archive is available**, and installs
-  it on the card. Only files that changed are written, and a menu list you edited
-  is first saved as `.bak`. updateAll cannot flash the board, but tells you when
+  it on the card. This overwrites files on the card, so the Windows program asks
+  first. Only files that changed are written, and a menu list you edited is first
+  saved as `.bak`. updateAll cannot flash the board, but tells you when
   a release needs it. On a card without an `/emu` folder, it does this only if
   you ask for it.
+- **updateAll installs only what you choose.** In the Windows program, only
+  **SD card files** starts ticked, so tick the sets you want. The scripts ask.
+  Both remind you that ROM sets and BIOS files are copyrighted.
 - **The updateAll Windows program can update itself.** When a newer version
   exists, it asks you, and with **Yes** it downloads the new version and restarts.
   It now has its own version number, shown in its title bar.

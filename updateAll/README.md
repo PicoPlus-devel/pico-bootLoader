@@ -116,8 +116,8 @@ The files are installed under the names the applications look for. The Videopac,
 1. Start `updateAll.exe`. The SD card is selected for you: the card the program was started from, or else the first removable drive that holds a pico-bootLoader card (an `emu` folder), or else the first removable drive.
 2. Under **SD card**, choose another card if needed. Any existing folder can be chosen instead.
 3. Under **Zip folder**, choose the folder with the MAME zips you already have, if any. When **Download missing files** is ticked, which it is by default, zips that are not in the folder are downloaded from the configured databases, and game data from its own address; without a zip folder they are downloaded into a temporary folder that is removed afterwards.
-4. Untick the sets that are not wanted. **Select all** ticks or unticks all sets at once, and shows a mixed state when only some are ticked. The BIOS files of all emulators are one row, **BIOS**. The first row, **SD card files**, is the SD-card archive. The **Status** column shows which sets are already complete on the card. A line above the list reports a newer SD-card archive, see [SD-card archive](#sd-card-archive).
-5. Select **Install**. The list of files shows each file that is downloaded or installed, with its own progress bar and its result; a set that is already complete on the card is not listed. The bar at the bottom shows the progress of the whole run. Each set has an equal share of it, so a large download moves it slowly. **Show log** switches between the list and the log, which holds the same report as the scripts. **Dry run** reports what would be downloaded and written without doing it. **Cancel** stops a run: a download in progress is abandoned, and files already written stay on the card.
+4. Tick the sets to install. At every start, all rows are unticked except **SD card files**, as the program stores no choices. **Select all** ticks or unticks all sets at once, apart from **SD card files**, and shows a mixed state when only some are ticked. The BIOS files of all emulators are one row, **BIOS**. The first row, **SD card files**, is the SD-card archive. The **Status** column shows which sets are already complete on the card. A line above the list reports a newer SD-card archive, see [SD-card archive](#sd-card-archive).
+5. Select **Install**. When BIOS files or ROM sets are ticked, the program first warns that they are copyright of their manufacturers and that holding the rights to them is your responsibility, and asks whether to continue, with **No** as the default. Game data does not lead to this warning. The list of files shows each file that is downloaded or installed, with its own progress bar and its result; a set that is already complete on the card is not listed. The bar at the bottom shows the progress of the whole run. Each set has an equal share of it, so a large download moves it slowly. **Show log** switches between the list and the log, which holds the same report as the scripts. **Dry run** reports what would be downloaded and written without doing it. **Cancel** stops a run: a download in progress is abandoned, and files already written stay on the card.
 
 The program reads the latest configuration from this repository when it starts; until it has, **Install** is unavailable. When it cannot be read, the program uses an `updateAll.json` that is next to it, and its built-in copy otherwise. The line `Configuration:` in the log shows which one is used. Apart from the sets and the SD-card archive on the card, downloaded files in the zip folder and its temporary folder, and a new version of itself, it writes nothing: no settings, no registry entries.
 
@@ -151,13 +151,16 @@ Windows PowerShell 5.1 or PowerShell 7:
 
 `--sd` is the root of the SD card. The sets are written below it, for example to `E:\roms\ORUN`. Any existing folder can be given instead of a card, for example `C:\temp\test` to inspect the result first.
 
+Without `--core` or `--all`, the script asks whether to install the BIOS files, the arcade ROM sets and the game data, one question for each, with no as the default. It states first that the ROM sets and BIOS files are copyright of their manufacturers, and that holding the rights to them is your responsibility. The answers are not stored. Without a terminal or answers on its standard input, each answer is no, so nothing but the SD-card archive is installed. `--core` and `--all` ask nothing.
+
 If Windows refuses to run the script because it is not signed, start it with `powershell -ExecutionPolicy Bypass -File .\updateAll.ps1 -Zips D:\MAME\roms -Sd E:\`.
 
 | Python | PowerShell | Description |
 | --- | --- | --- |
 | `--sd DIR` | `-Sd DIR` | Root of the SD card. Required. |
 | `--zips DIR` | `-Zips DIR` | Folder with MAME zips you already have. Downloaded zips and game data are kept here as well; it is created if necessary. Without it, they are downloaded into a temporary folder that is removed after the run. Required when nothing is to be downloaded. |
-| `--core ID[,ID]` | `-Core ID[,ID]` | Install only these sets; `bios` stands for all BIOS files, and `sdcard` for the SD-card archive. Default: all configured sets, and the archive on a card with an `emu` folder. |
+| `--core ID[,ID]` | `-Core ID[,ID]` | Install only these sets, without asking; `bios` stands for all BIOS files, and `sdcard` for the SD-card archive. Without this or `--all`, the script asks, and installs the archive on a card with an `emu` folder. |
+| `--all` | `-All` | Install all configured sets without asking, and the archive on a card with an `emu` folder. |
 | `--db SRC[,SRC]` | `-Database SRC[,SRC]` | Download databases to use in addition to those in the configuration: URLs or files. |
 | `--no-download` | `-NoDownload` | Use only the files already in the zip folder. |
 | `--dry-run` | `-DryRun` | Report what would be downloaded and written without doing it. |
@@ -214,7 +217,7 @@ At every start, updateAll reads that list of releases and takes the newest one t
 | The same, with the row unticked, `--core` naming other sets, or `--no-download` | Yes | No |
 | The same, with **Dry run** or `--dry-run` | Yes | No; the report names what would be done |
 | Card already up to date | No | No |
-| Card without an `emu` folder | No | Only when its row is ticked, or with `--core sdcard` |
+| Card without an `emu` folder | No | In the Windows program, unless its row is unticked; the scripts only with `--core sdcard` |
 | The list of releases cannot be read | The reason, in the log | No; the exit status does not change |
 
 The Windows program shows the message above the list of sets, the scripts as a line of their report:
@@ -225,13 +228,21 @@ New archive:  pico-bootLoader_sdcard.zip v0.10 is available (card: v0.9): https:
 
 The archive is installed before the sets, and as a set: it is downloaded to the zip folder, or the temporary folder, under a name that holds the tag, for example `pico-bootLoader_sdcard-v0.10.zip`, and its size is checked. Older archives stay in the zip folder until they are removed by hand. Files with the correct size and CRC32 are left as they are. `/boot.txt` is not part of the archive, and files that are not part of it are not changed.
 
+**Installing the archive overwrites files on the card:** a file that the archive also holds is replaced when its size or CRC32 differs. On a card with an `emu` folder, the Windows program therefore asks for confirmation when **Install** is selected, with **No** as the default. On a drive or folder that holds files but no `emu` folder, it warns in the same way that this does not look like a pico-bootLoader card; hidden and system files, and names that start with a dot, do not count, so a new card gets no such warning. It does not ask on a card that is up to date, or with **Dry run**. The scripts do not ask. Their report states it before anything is installed, as does the log of the Windows program:
+
+```text
+Warning:      files on the card that the archive also holds are replaced; edited lists in /emu are saved as .bak
+```
+
+To leave a card as it is, untick the row, or use `--core` with other sets or `--no-download`.
+
 - An archive that holds a file name that could lead outside the card is rejected as a whole.
 - A list in `/emu` that changes, such as `emulators.txt`, is first saved next to it as `emulators.txt.bak`, or `.bak2` and so on if that name is taken by other contents. Edits to these lists must be repeated after an update, as new applications appear in the menu only through the new lists. `versions.txt` and `boot.example.txt` are not saved. Custom artwork under a name that the archive also holds is replaced without a copy.
 - `updateAll/updateAll.json` is not replaced when it has no `config_url`, or cannot be read: that is how a card is set to use its own configuration. Other copies are replaced.
 - `updateAll.exe` can replace itself when it runs from the card. The copy that was running stays next to it as `updateAll.exe.old` until the next start, and continues the current run.
 - `/emu/release.txt` is written last, and only when the whole archive was installed. A run that was cancelled or failed is repeated in full by the next one, which leaves the files that were already written as they are.
 
-updateAll does not flash the board. When an archive of another `v0.N` is installed, or the release on the card is not known, the report ends with a reminder, and the Windows program also says so above the list of sets:
+updateAll does not flash the board. When an archive of another `v0.N` is installed on a card with an `emu` folder, or the release on such a card is not known, the report ends with a reminder, and the Windows program also says so above the list of sets. A card without an `emu` folder gets no reminder, as it says nothing about the board:
 
 ```text
 Firmware:     flash the board with the bootloader of v0.10 as well; updateAll cannot do that: https://github.com/PicoPlus-devel/pico-bootLoader/releases/tag/v0.10

@@ -37,6 +37,10 @@ emu/release.txt records is reported, and its archive is installed like a set;
 --core sdcard selects it on any other card. The files of the archive are found
 in the archive itself. A list in emu that changes is first saved as .bak.
 
+Nothing else is installed unless it is chosen: without --core or --all, this
+asks about the BIOS files, the arcade ROM sets and the game data. The answers
+are not stored, and without anyone to answer each is no.
+
 Only the files listed for a set are extracted. They are found by size and
 CRC32 rather than by name, as the applications themselves do, so merged, split
 and non-merged sets all work, and they are written under the names from the
@@ -172,6 +176,7 @@ def parse_config(text, path, config_dir):
             raise ConfigError(f"{path}: core '{cid}' is defined twice")
         ids.add(cid.lower())
 
+        core["_kind"] = kind
         core["_bios"] = kind == "bios"
         core["_release"] = None
         core["_url"] = None
@@ -898,6 +903,8 @@ def main(argv=None):
                          "bios selects every BIOS file and sdcard the SD-card archive "
                          "(default: every core in the configuration, and the archive "
                          "on a card with an emu folder)")
+    ap.add_argument("--all", action="store_true",
+                    help="install every configured set, without asking")
     ap.add_argument("--db", metavar="URL|FILE", action="append", default=[],
                     help="download database to use in addition to those in the "
                          "configuration; repeat or separate with commas")
@@ -966,6 +973,8 @@ def main(argv=None):
             return 1
         cores = [c for c in cores
                  if c["id"].lower() in requested or (c["_bios"] and "bios" in requested)]
+    elif not args.all:
+        cores = choose_sets(cores, args.no_download)
 
     # The check is separate from installing: a newer archive is reported on a
     # card with an emu folder even when this run does not install it.
@@ -974,6 +983,8 @@ def main(argv=None):
     if sdcard and (has_emu or "sdcard" in requested):
         try:
             release = fetch_release(sdcard, args.sd)
+            # A new card says nothing about the board, so it gets no reminder.
+            release["firmware"] = release["firmware"] and has_emu
         except DownloadError as e:
             release_error = str(e)
 
@@ -986,15 +997,21 @@ def main(argv=None):
     elif release and has_emu and release["newer"]:
         print(f"New archive:  {sdcard['asset']} {release['tag']} is available "
               f"(card: {release['card'] or 'unknown'}): {release['page']}")
+    install_archive = release and ("sdcard" in requested or (not requested and has_emu and not args.no_download))
+    if install_archive and has_emu and release["newer"] and not args.dry_run:
+        print("Warning:      files on the card that the archive also holds are replaced; edited lists in /emu are saved as .bak")
     if use_databases:
         print(f"Databases:    {len(db_sources)}, used for zips that are not in the zip folder")
     if args.dry_run:
         print("Dry run:      nothing is downloaded or written")
     print()
+    if not cores and not install_archive and not args.core and not args.all:
+        print("Nothing to install: no sets were chosen. --core names sets, and --all installs every set.")
+        return 0
 
     # Without --zips, downloads go to a temporary folder that is removed again.
     temp_dir = None if args.zips else tempfile.mkdtemp(prefix="updateAll-")
-    if release and ("sdcard" in requested or (not requested and has_emu and not args.no_download)):
+    if install_archive:
         cores = [release_core(sdcard, release)] + cores
     try:
         return run(args, cores, requested, args.zips or temp_dir,
@@ -1008,6 +1025,29 @@ def files_to_install(core, sd_root):
     dest = os.path.join(sd_root, *core["_dest_parts"])
     return [f for f in core["files"]
             if not is_current(os.path.join(dest, *f["_parts"]), f["_size"], f["_crc"])]
+
+
+def ask_yes(question):
+    """No unless the answer says yes, also when nobody can answer."""
+    try:
+        answer = input(f"{question} [y/N] ")
+    except EOFError:
+        answer = ""
+    if not sys.stdin.isatty():      # a terminal shows the Enter itself
+        print()
+    return answer.strip().lower() in ("y", "yes")
+
+
+def choose_sets(cores, no_download):
+    """Nothing is installed unasked, so this asks per kind of set. The answers are
+    not stored."""
+    verb = "Install" if no_download else "Download and install"
+    print("The ROM sets and BIOS files are copyright of their manufacturers and are not part of this project. Holding the rights to them is your responsibility.")
+    wanted = [kind for kind, what in (("bios", "the BIOS files of the emulators"),
+                                      ("cores", "the arcade ROM sets"),
+                                      ("data", "the shareware and demo data of the ported games"))
+              if any(c["_kind"] == kind for c in cores) and ask_yes(f"{verb} {what}?")]
+    return [c for c in cores if c["_kind"] in wanted]
 
 
 def run(args, cores, requested, zip_dir, databases, url_downloads):

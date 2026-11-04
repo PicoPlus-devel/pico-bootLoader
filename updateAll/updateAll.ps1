@@ -60,8 +60,13 @@
 
 .PARAMETER Core
     Install only these cores, by the IDs that -List shows; bios selects every
-    BIOS file and sdcard the SD-card archive. Default: every core in the
-    configuration, and the archive on a card with an emu folder.
+    BIOS file and sdcard the SD-card archive. Without this or -All, the script
+    asks about the BIOS files, the arcade ROM sets and the game data; the answers
+    are not stored, and without anyone to answer each is no. The archive is
+    installed on a card with an emu folder.
+
+.PARAMETER All
+    Install every set in the configuration, without asking.
 
 .PARAMETER Database
     Download databases to use in addition to those in the configuration: URLs
@@ -105,6 +110,9 @@ param(
 
     [Parameter(ParameterSetName = 'Install')]
     [string[]] $Core,
+
+    [Parameter(ParameterSetName = 'Install')]
+    [switch] $All,
 
     # Not -Db: that is already an alias of the common parameter -Debug.
     [string[]] $Database,
@@ -379,6 +387,7 @@ function ConvertFrom-Core($d, [string] $Kind, [string] $Path, [hashtable] $Ids) 
         Url       = $url
         Archives  = @($archives)
         Uf2       = $uf2
+        Kind      = $Kind
         Bios      = $Kind -eq 'bios'
         Sliced    = $sliced
         Release   = $null
@@ -1263,6 +1272,25 @@ try {
             throw "unknown core: $($unknown -join ', '). Configured: $($known -join ', ')"
         }
         $defs = @($defs | Where-Object { $requested -contains $_.Id -or ($_.Bios -and $requested -contains 'bios') })
+    } elseif (-not $All) {
+        # Nothing is installed unasked, so this asks per kind of set. The answers
+        # are not stored.
+        $verb = if ($NoDownload) { 'Install' } else { 'Download and install' }
+        Write-Host 'The ROM sets and BIOS files are copyright of their manufacturers and are not part of this project. Holding the rights to them is your responsibility.'
+        $wanted = @()
+        foreach ($choice in @(@('bios', 'the BIOS files of the emulators'),
+                              @('cores', 'the arcade ROM sets'),
+                              @('data', 'the shareware and demo data of the ported games'))) {
+            if (@($defs | Where-Object { $_.Kind -eq $choice[0] }).Count -gt 0) {
+                Write-Host "$verb $($choice[1])? [y/N] " -NoNewline
+                # No unless the answer says yes, also when nobody can answer.
+                try { $answer = [Console]::In.ReadLine() } catch { $answer = $null }
+                # A terminal shows the Enter itself.
+                if ([Console]::IsInputRedirected) { Write-Host '' }
+                if ($answer -and $answer.Trim() -match '^(y|yes)$') { $wanted += $choice[0] }
+            }
+        }
+        $defs = @($defs | Where-Object { $wanted -contains $_.Kind })
     }
 
     # The check is separate from installing: a newer archive is reported on a
@@ -1273,6 +1301,8 @@ try {
     if ($cfg.Sdcard -and ($hasEmu -or $requested -contains 'sdcard')) {
         try {
             $release = Read-Release $cfg.Sdcard $sdRoot
+            # A new card says nothing about the board, so it gets no reminder.
+            $release.Firmware = $release.Firmware -and $hasEmu
         } catch {
             $releaseError = $_.Exception.Message
         }
@@ -1287,11 +1317,19 @@ try {
         $cardShown = if ($release.Card) { $release.Card } else { 'unknown' }
         Write-Host "New archive:  $($cfg.Sdcard.Asset) $($release.Tag) is available (card: $cardShown): $($release.Page)"
     }
+    $installArchive = $release -and ($requested -contains 'sdcard' -or ($requested.Count -eq 0 -and $hasEmu -and -not $NoDownload))
+    if ($installArchive -and $hasEmu -and $release.Newer -and -not $DryRun) {
+        Write-Host 'Warning:      files on the card that the archive also holds are replaced; edited lists in /emu are saved as .bak'
+    }
     if ($useDatabases) {
         Write-Host "Databases:    $($script:DbSources.Count), used for zips that are not in the zip folder"
     }
     if ($DryRun) { Write-Host 'Dry run:      nothing is downloaded or written' }
     Write-Host ''
+    if ($defs.Count -eq 0 -and -not $installArchive -and -not $Core -and -not $All) {
+        Write-Host 'Nothing to install: no sets were chosen. --core names sets, and --all installs every set.'
+        exit 0
+    }
 
     if (-not $Zips) {
         # Without -Zips, downloads go to a temporary folder that is removed again.
@@ -1299,7 +1337,7 @@ try {
         [void][System.IO.Directory]::CreateDirectory($tempDir)
         $zipDir = $tempDir
     }
-    if ($release -and ($requested -contains 'sdcard' -or ($requested.Count -eq 0 -and $hasEmu -and -not $NoDownload))) {
+    if ($installArchive) {
         $defs = @(New-ReleaseCore $cfg.Sdcard $release) + $defs
     }
 

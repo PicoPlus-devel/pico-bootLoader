@@ -92,6 +92,8 @@ int main(int argc, char **argv)
             program = 1;
         } else if (!strcmp(a, "--to") && v) {
             program_to = argv[++i];
+        } else if (!strcmp(a, "--all")) {
+            /* Only the scripts ask: the core does this without --core. */
         } else if (!strcmp(a, "--zips") && v) {
             opt.zips = argv[++i];
         } else if (!strcmp(a, "--sd") && v) {

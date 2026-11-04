@@ -121,6 +121,14 @@ REL_CASES = {
     "rel-explicit-no-download": rel("main", "card_rel_v09", "--core sdcard --no-download"),
     "rel-noemu": rel("check404", None),
     "rel-noemu-explicit": rel("main", None, "--core sdcard"),
+    "rel-noemu-dry": rel("main", None, "--core sdcard --dry-run"),
+    "rel-warn-newer": rel("main", "card_rel_v09"),
+    "rel-warn-nomarker": rel("main", "card_rel_nomarker", "--core sdcard"),
+    "rel-warn-dry": rel("main", "card_rel_v09", "--dry-run"),
+    "rel-warn-empty": rel("main", None, "--core sdcard"),
+    "rel-warn-current": rel("gone", "card_rel_v010", "--core sdcard"),
+    "rel-warn-other": rel("main", "card_rel_v09", "--core alpha"),
+    "rel-warn-no-download": rel("main", "card_rel_v09", "--no-download"),
     "rel-temp-folder": ("--config cfg_rel_main.json --sd {card} --core SDCARD", None),
     "rel-with-set": rel("main", None, "--core alpha,sdcard"),
     "rel-check-404": rel("check404", "card_rel_v09"),
@@ -159,6 +167,7 @@ NOTICE = "New archive:  pico-bootLoader_sdcard.zip v0.10 is available (card: {ca
 FLASH = "Firmware:     flash the board with the bootloader of v0.10 as well; " \
         "updateAll cannot do that: {url}/rel/tag/v0.10"
 ANY_NOTICE, ANY_FLASH, ANY_SET = "New archive:", "Firmware:", "SD card files:"
+REPLACES = "Warning:      files on the card that the archive also holds are replaced; edited lists in /emu are saved as .bak"
 MARKER = "card/emu/release.txt"
 LIST = "card/emu/emulators.txt"
 NEW_LIST = b"piconesPlus;nes;NES\npicoNew;new;New\n"
@@ -192,7 +201,7 @@ EXPECT = {
                              "not": [ANY_NOTICE, "Alpha:"]},
     "rel-nomarker": {"rc": 0, "has": [NOTICE.format(card="unknown", url="{url}"), FLASH,
                                       "6 up to date"],
-                     "not": ["written", "saved"],
+                     "not": ["written", "saved emu"],
                      "files": {MARKER: b"v0.10\n", "card/emu/emulators.txt.bak": None}},
     "rel-crlf": {"rc": 0, "has": ["(card: v0.9)"], "files": {MARKER: b"v0.10\n"}},
     "rel-garbage": {"rc": 0, "has": ["(card: unknown)", FLASH], "files": {MARKER: b"v0.10\n"}},
@@ -215,7 +224,16 @@ EXPECT = {
                                  "not": [ANY_FLASH], "files": UNCHANGED},
     "rel-noemu": {"rc": 0, "not": [ANY_NOTICE, ANY_SET, ANY_FLASH, "could not check"],
                   "files": {MARKER: None}},
-    "rel-noemu-explicit": {"rc": 0, "has": ["SD card files: pico", FLASH], "not": [ANY_NOTICE],
+    "rel-noemu-dry": {"rc": 0, "has": ["SD card files: pico", "Dry run:"], "not": [ANY_NOTICE, ANY_FLASH]},
+    # The warning that files are overwritten: only where that will happen.
+    "rel-warn-newer": {"rc": 0, "has": [REPLACES]},
+    "rel-warn-nomarker": {"rc": 0, "has": [REPLACES]},
+    "rel-warn-dry": {"rc": 0, "not": [REPLACES]},
+    "rel-warn-empty": {"rc": 0, "not": [REPLACES]},
+    "rel-warn-current": {"rc": 0, "not": [REPLACES]},
+    "rel-warn-other": {"rc": 0, "not": [REPLACES]},
+    "rel-warn-no-download": {"rc": 0, "not": [REPLACES]},
+    "rel-noemu-explicit": {"rc": 0, "has": ["SD card files: pico"], "not": [ANY_NOTICE, ANY_FLASH],
                            "files": {MARKER: b"v0.10\n", LIST: NEW_LIST,
                                      "card/emu/emulators.txt.bak": None}},
     "rel-temp-folder": {"rc": 0, "has": ["Zips from:    downloads only", "1 complete"],
@@ -332,13 +350,42 @@ PROGRAM_CASES = [
 # arguments, card, EXPECT entry).
 ROW_CASES = [
     ("row-tick-empty-card", "1", "--config cfg_rel_main.json --zips {zips} --sd {card}", None,
-     {"rc": 0, "has": ["SD card files: pico", "Alpha: "], "not": [ANY_NOTICE],
+     {"rc": 0, "has": ["SD card files: pico", "Alpha: "], "not": [ANY_NOTICE, ANY_FLASH, REPLACES],
       "files": {MARKER: b"v0.10\n"}}),
     ("row-untick", "-1", "--config cfg_rel_main.json --zips {zips} --sd {card}", "card_rel_v09",
-     {"rc": 0, "has": [ANY_NOTICE, "Alpha: "], "not": [ANY_SET, ANY_FLASH], "files": UNCHANGED}),
+     {"rc": 0, "has": [ANY_NOTICE, "Alpha: "], "not": [ANY_SET, ANY_FLASH, REPLACES], "files": UNCHANGED}),
     ("row-only", "1", "--config cfg_rel_main.json --zips {zips} --sd {card} --core sdcard", "card_rel_v09",
-     {"rc": 0, "has": [ANY_NOTICE, "SD card files: pico"], "not": ["Alpha: "],
+     {"rc": 0, "has": [ANY_NOTICE, "SD card files: pico", REPLACES], "not": ["Alpha: "],
       "files": {MARKER: b"v0.10\n"}}),
+]
+
+# updateAll.py only, as only the scripts ask: (name, arguments, card, what is typed
+# in, what it must show). Nothing is installed unless it is chosen.
+ASK = "--config cfg_ask.json --zips {zips} --sd {card}"
+Q_BIOS, Q_SETS, Q_DATA = ("Download and install the BIOS files of the emulators? [y/N]",
+                          "Download and install the arcade ROM sets? [y/N]",
+                          "Download and install the shareware and demo data of the ported games? [y/N]")
+S_BIOS, S_SETS, S_DATA, S_NONE = "Test BIOS: ", "Alpha: ", "Rho data: ", "Nothing to install"
+RIGHTS = "The ROM sets and BIOS files are copyright of their manufacturers and are not part of this project. Holding the rights to them is your responsibility."
+ASK_CASES = [
+    ("ask-nobody", ASK, None, "", {"rc": 0, "has": [RIGHTS, Q_BIOS, Q_SETS, Q_DATA, S_NONE],
+                                   "not": [S_BIOS, S_SETS, S_DATA]}),
+    ("ask-all-no", ASK, None, "n\nno\n\n", {"rc": 0, "has": [S_NONE], "not": [S_BIOS, S_SETS, S_DATA]}),
+    ("ask-bios", ASK, None, "y\nn\nn\n", {"rc": 0, "has": [S_BIOS], "not": [S_SETS, S_DATA, S_NONE]}),
+    ("ask-sets", ASK, None, "n\ny\nn\n", {"rc": 0, "has": [S_SETS], "not": [S_BIOS, S_DATA, S_NONE]}),
+    ("ask-data", ASK, None, "n\nn\nyes\n", {"rc": 0, "has": [S_DATA], "not": [S_BIOS, S_SETS, S_NONE]}),
+    ("ask-all-yes", ASK, None, "y\nYES\n Y \n", {"rc": 0, "has": [S_BIOS, S_SETS, S_DATA], "not": [S_NONE]}),
+    ("ask-other-answer", ASK, None, "ja\nmaybe\n1\n", {"rc": 0, "has": [S_NONE], "not": [S_BIOS, S_SETS, S_DATA]}),
+    ("ask-no-download", ASK + " --no-download", None, "n\nn\nn\n",
+     {"rc": 0, "has": ["Install the arcade ROM sets? [y/N]"], "not": ["Download and install"]}),
+    ("ask-core", ASK + " --core alpha", None, "", {"rc": 0, "has": [S_SETS], "not": ["[y/N]", S_BIOS, S_DATA, RIGHTS]}),
+    ("ask-all-flag", ASK + " --all", None, "", {"rc": 0, "has": [S_BIOS, S_SETS, S_DATA], "not": ["[y/N]", RIGHTS]}),
+    # The archive does not depend on the answers, on a card that holds one.
+    ("ask-archive", "--config cfg_rel_main.json --zips {zips} --sd {card}", "card_rel_v09", "",
+     {"rc": 0, "has": [Q_SETS, "SD card files: pico", REPLACES], "not": [S_SETS, S_NONE],
+      "files": {MARKER: b"v0.10\n"}}),
+    ("ask-empty-card", "--config cfg_rel_main.json --zips {zips} --sd {card}", None, "",
+     {"rc": 0, "has": [S_NONE], "not": ["SD card files:", S_SETS], "files": {MARKER: None}}),
 ]
 
 # ua_host only, stopped after this many calls of on_bytes: (name, arguments, calls,
@@ -515,7 +562,7 @@ def main():
         full = os.path.join(fx, "full")
         os.makedirs(full)
         subprocess.run([sys.executable, SCRIPT, "--config", "cfg_local.json", "--zips",
-                        os.path.join(fx, "zips"), "--sd", full], cwd=fx, env=env,
+                        os.path.join(fx, "zips"), "--sd", full, "--all"], cwd=fx, env=env,
                        stdout=subprocess.DEVNULL)
         # And the card a complete game-data run leaves, for "data-again".
         full_data = os.path.join(fx, "full_data")
@@ -532,7 +579,7 @@ def main():
 
         events = os.path.join(work, "events.txt")
 
-        def run_case(tool, argline, card, extra_env=None):
+        def run_case(tool, argline, card, extra_env=None, answers=None):
             if os.path.exists(events):
                 os.remove(events)
             shutil.rmtree(run_dir, ignore_errors=True)
@@ -545,9 +592,12 @@ def main():
             argv = argline.format(zips=os.path.join(run_dir, "zips"),
                                   card=os.path.join(run_dir, "card"),
                                   run=run_dir, fx=fx, url=url).split()
+            # What these cases are about comes after the scripts' questions.
+            if answers is None and "--core" not in argv:
+                argv.append("--all")
             start = time.time()
             p = subprocess.run(tool + argv, cwd=fx, env=dict(env, **(extra_env or {})),
-                               capture_output=True, text=True)
+                               capture_output=True, text=True, input=answers or "")
             return {"rc": p.returncode, "out": normalise(p.stdout),
                     "err": normalise(p.stderr), "tree": tree(run_dir),
                     "time": time.time() - start}
@@ -583,6 +633,19 @@ def main():
                 print("     --- rows ---")
                 for r in rows:
                     print(f"     {r['set']}/{r['file']}: {r['details']} {r['states']}")
+
+        for name, argline, card, answers, want in ASK_CASES:
+            if args.k and args.k not in name:
+                continue
+            total += 1
+            py = run_case([sys.executable, SCRIPT], argline, card, answers=answers)
+            problems = check_expected(want, py, url)
+            failures += bool(problems)
+            print(f"{'FAIL' if problems else 'ok':4} {name:22} exit {py['rc']}")
+            for p in problems:
+                print("     " + p)
+            if args.v or problems:
+                print("     " + (py["out"] + py["err"]).replace("\n", "\n     "))
 
         for name, argline, calls, doing in CANCEL_CASES:
             if args.k and args.k not in name:
