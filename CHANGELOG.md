@@ -464,19 +464,30 @@ For board-by-board wiring, supported display modes and more refer to the [pico-i
 1. **Flash the bootloader.** Download the loader `.uf2` for your board. Hold
    BOOTSEL, connect the board over USB, and copy the `.uf2` onto the
    `RP2350` drive. See [Supported hardware](https://github.com/PicoPlus-devel/pico-bootLoader#supported-hardware) in the README.
-2. **Prepare the SD card.** Download `pico-bootLoader_sdcard.zip` from the same
-   Releases page and unpack it onto a FAT32-formatted card (exFAT also works,
-   but is not advised). The archive contains the emulators, the native ports,
-   the menu artwork, a sample configuration file and the `updateAll` tool for
-   the arcade ROMs.
+2. **Prepare the SD card.** Use a FAT32-formatted card (exFAT also works, but is
+   not advised).
+
+   **On Windows,** download `updateAll-<version>.exe` from the most recent release
+   on the [Releases](https://github.com/PicoPlus-devel/pico-bootLoader/releases)
+   page that holds it, and start it from any folder. If Windows says the program
+   is not signed, select **More info**, then **Run anyway**. Check the **SD card**
+   field. **SD card files** is already ticked, and installs the emulators, the
+   native ports and the menu artwork. Tick what else you want, then select
+   **Install**.
+
+   **By hand,** which is the way on Linux or macOS, download
+   `pico-bootLoader_sdcard.zip` from the Releases page and unpack it onto the card.
+   Then run `updateAll` from the card's `updateAll` folder for the rest:
+   `updateAll.exe` on Windows, or `python3 updateAll.py --sd <path of the card>`.
 3. **Add your games.** The archive contains no games, ROMs or BIOS files. Each
    emulator opens in its own folder: `/roms/NES`, `/roms/SNES`, `/roms/MD`
    (Genesis), `/roms/PCE`, `/roms/GB`, `/roms/SMS` (Master System and Game
-   Gear), `/roms/O2E` (Videopac) or `/roms/TI99`, or at the root of the card
-   when that folder does not exist. The BIOS files and the folders of the other
+   Gear), `/roms/O2E` (Videopac), `/roms/TI99` or `/roms/C64`, or at the root of
+   the card when that folder does not exist. The BIOS files and the folders of the other
    applications are listed in the README under
    [Bootable applications](https://github.com/PicoPlus-devel/pico-bootLoader#bootable-applications);
-   `updateAll` installs the arcade ROM sets.
+   `updateAll` installs the arcade ROM sets, the BIOS files and the game data of
+   the ports.
 4. **Run it.** Insert the card and power on the board. The menu appears.
 
 
