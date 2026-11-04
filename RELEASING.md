@@ -112,8 +112,8 @@ changes but the board does not need re-flashing.
 
 Check the grand summary before going further. Every emulator should be `BUILT`
 for the boards it supports. `SKIP` is expected for excluded combinations
-(`picogenesisPlus` on HW 7; `picosnesPlus` and `picoOutRun` on HW 1, 5, 6, 7, 9;
-Doom outside boards 2, 8, 13, 14, 15; `duke3d_game` outside boards 2, 8, 13, 15;
+(`picogenesisPlus` on HW 7; `picosnesPlus`, `picoOutRun` and `picoSalamander` on
+HW 1, 5, 6, 7, 9; Doom outside boards 2, 8, 13, 14, 15; `duke3d_game` outside boards 2, 8, 13, 15;
 `pico-quake2` and `pico-lutionX` outside boards 2, 8; `colecojam` outside
 board 8). The updateAll entry `diablo` downloads the SD-card assets of
 pico-lutionX's release v0.1-alpha, so that release must stay published.
@@ -224,11 +224,10 @@ from `github.sha`, so it will point at whatever is current.
   (`BUILD_FOR_BOOTLOADER`) only in `pico_shared` `f2c8be9`, and the emulator tags
   of the time predated it, so their pinned revision rejected `-b` outright.
   That reason no longer applies — every current tag pins a descendant of
-  `f2c8be9` — but the substitution is not a no-op. For v0.7.2 1943 v0.1 pins
-  `82ac5d8`, which is `main`; Galagino v0.2 and OutRun v0.5.1 pin `9d81d14`,
-  Phoenix v0.2.2 and Moon Cresta v0.2.2 `ce03f96`, Dragon's Lair v0.1
-  `929281d`, and every other emulator tag pins `6e65df4`. The whole bundle is built against the one `pico_shared` `main`
-  that `emu/versions.txt` records.
+  `f2c8be9` — but the substitution is not a no-op. For v0.9 Salamander v0.2 pins
+  `cd147e0`, which is `main`, and every other emulator tag pins `8b93b28`. The
+  whole bundle is built against the one `pico_shared` `main` that
+  `emu/versions.txt` records.
   An older tag that no longer builds against `main` shows up as a `FAIL` in the
   grand summary.
 - **A tag pushed from CI would not trigger this workflow** — GitHub does not fire

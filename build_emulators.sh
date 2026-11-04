@@ -335,10 +335,10 @@ PIOUSB_CONFIGS=(7 8 9 14)
 # pixel clock (capped at 324 MHz, where the engine is too slow) and puts the
 # sound chain back on core0. See pico-outrun/buildAll.sh.
 #
-# picoSalamander is restricted to the same five boards, for the same reasons:
-# the machine's ROMs and data are held in PSRAM, and it runs at a fixed 384 MHz,
-# which the PicoDVI path cannot. Its CMake stops on a board without HSTX. See
-# pico-salamander/buildAll.sh.
+# picoSalamander is restricted to the same five boards because it runs at a
+# fixed 384 MHz, which the PicoDVI path cannot. PSRAM is optional: without it the
+# machine's data is copied into flash. Its CMake stops on a board without HSTX.
+# See pico-salamander/buildAll.sh.
 declare -A EXCLUDE_HWCONFIGS=(
     [picogenesisPlus]="7"
     [picosnesPlus]="1 5 6 7 9"

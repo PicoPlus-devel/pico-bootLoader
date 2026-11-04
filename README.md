@@ -151,8 +151,8 @@ Flash `pico-bootLoader_OlimexPicoPC_arm.uf2` and put the applications in
   application partition.
 - **PSRAM.** A standard Pico 2 has no PSRAM. A PSRAM chip can be added with its
   chip-select pin on GPIO 8. Without it, the entries that require PSRAM — the
-  Super Nintendo emulator, *PCEngine CD*, *OutRun*, *Salamander*, *Duke Nukem
-  3D* and `doom_tiny_full` — still appear in the menu but do not run.
+  Super Nintendo emulator, *PCEngine CD*, *OutRun*, *Duke Nukem 3D* and
+  `doom_tiny_full` — still appear in the menu but do not run.
 
 Support for this board was contributed by
 [DnCraptor](https://github.com/DnCraptor).
@@ -404,10 +404,13 @@ mode* setting as Phoenix.
 *Salamander* is the seventh **Arcade** entry: an emulation of Konami's 1986
 arcade board, which plays *Salamander* and *Lifeforce*. Like OutRun, it is built
 for five boards: Adafruit Fruit Jam (HW_CONFIG 8), the Adafruit DVI + MicroSD
-breakout combination (2, on a Pimoroni Pico Plus 2), Murmulator M2 (13), Adafruit
-Feather RP2350 with a TLV320DAC3100 (14) and the Olimex RP2040-PICO-PC with a
-Pico 2 (15, with a PSRAM chip fitted on GPIO 8). It needs **PSRAM** on all five,
-and runs at a fixed 384 MHz, which only the **HSTX** boards allow. The games are
+breakout combination (2, on a Pimoroni Pico Plus 2 or a Raspberry Pi Pico 2),
+Murmulator M2 (13), Adafruit Feather RP2350 with a TLV320DAC3100 (14) and the
+Olimex RP2040-PICO-PC with a Pico 2 (15). It runs at a fixed 384 MHz, which only
+the **HSTX** boards allow. **PSRAM** is optional: on a board without it, the game
+is copied into flash the first time it is started, which takes a few seconds and
+uses 704 KB of flash. An application started from the loader can overwrite that
+copy, which is then made again at the next start. The games are
 copyright Konami and are not distributed with the bundle: copy MAME's
 `salamand.zip` to `/roms/arcade/SALAMAND` and `lifefrce.zip` to
 `/roms/arcade/LIFEFRCE` on the SD card, either as they are or unzipped. Of

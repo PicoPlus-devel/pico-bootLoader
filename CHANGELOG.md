@@ -38,10 +38,11 @@ installs the BIOS files the emulators need.
   installs the shareware version and the files the game needs in
   `/roms/devilutionx/`.
 - **Salamander** joins the Arcade category: Konami's *Salamander* and
-  *Lifeforce*. It runs on the boards with PSRAM and HSTX video, the same boards
-  as *OutRun*. The games are not included: copy MAME's `salamand.zip` to
-  `/roms/arcade/SALAMAND` and `lifefrce.zip` to `/roms/arcade/LIFEFRCE`, or let
-  updateAll install them.
+  *Lifeforce*. It runs on the boards with HSTX video, the same boards as
+  *OutRun*. PSRAM is optional: without it, such as on a Raspberry Pi Pico 2, the
+  game is copied into flash the first time it starts. The games are not
+  included: copy MAME's `salamand.zip` to `/roms/arcade/SALAMAND` and
+  `lifefrce.zip` to `/roms/arcade/LIFEFRCE`, or let updateAll install them.
 - **Commodore 64 and 128** join the Computer category. The Commodore 64 runs on
   every board; the Commodore 128 needs HSTX video and PSRAM. The emulator has so
   far been tried only on the Adafruit Fruit Jam and with the Adafruit DVI and
@@ -62,6 +63,60 @@ installs the BIOS files the emulators need.
   its own progress bar, and the bar at the bottom now shows the whole run. A
   **Select all** box ticks or unticks all sets, and the full report is still
   there under **Show log**.
+
+### Updated applications
+
+The applications have the fixes above where they apply. Those that overclock now
+run at 384 MHz instead of 378 MHz, and in the menus of the emulators and arcade
+games, Enter selects and Esc goes back on a USB keyboard. Also new:
+
+- **Super Nintendo**
+  [v0.9](https://github.com/PicoPlus-devel/pico-snesPlus/releases/tag/v0.9) and
+  [v0.10](https://github.com/PicoPlus-devel/pico-snesPlus/releases/tag/v0.10): an
+  original SNES Mouse can be used in controller port 1, for *Mario Paint* and
+  other mouse games.
+- **PC Engine**
+  [v0.9](https://github.com/PicoPlus-devel/pico-pcePlus/releases/tag/v0.9):
+  SuperGrafx games run at full speed on more boards.
+- **Master System/Game Gear**
+  [v0.33](https://github.com/PicoPlus-devel/pico-smsplus/releases/tag/v0.33): the
+  YM2413 FM setting always matches the speed the board runs at.
+- **OutRun**
+  [v0.6](https://github.com/PicoPlus-devel/pico-outrun/releases/tag/v0.6): the
+  settings menu no longer opens by itself with a controller on the Wii port.
+- **Galagino**
+  [v0.2.1](https://github.com/PicoPlus-devel/pico-galagino/releases/tag/v0.2.1): a
+  screen at start-up shows which games can be played.
+- **Galagino**, **Phoenix**
+  [v0.2.3](https://github.com/PicoPlus-devel/pico-phoenix/releases/tag/v0.2.3),
+  **Moon Cresta**
+  [v0.2.3](https://github.com/PicoPlus-devel/pico-mooncresta/releases/tag/v0.2.3)
+  and **1943**
+  [v0.2](https://github.com/PicoPlus-devel/pico-1943/releases/tag/v0.2): the
+  scanline mode is no longer offered on boards with PicoDVI video.
+- **Duke Nukem 3D**
+  [v0.5](https://github.com/PicoPlus-devel/pico-duke3D/releases/tag/v0.5): USB
+  mouse support, and the SNES Mouse with the Adafruit DVI and microSD breakouts.
+- **Quake II**
+  [v0.3-alpha](https://github.com/PicoPlus-devel/pico-quake2/releases/tag/v0.3-alpha):
+  the first load of a level no longer ends with "Loading plaque timed out", and
+  an original SNES Mouse can be used on the Pimoroni Pico Plus 2.
+
+**NES**
+[v0.55](https://github.com/PicoPlus-devel/pico-infonesPlus/releases/tag/v0.55),
+**Genesis**
+[v0.20](https://github.com/PicoPlus-devel/pico-genesisPlus/releases/tag/v0.20),
+**Videopac**
+[v0.6.2](https://github.com/PicoPlus-devel/pico-pacPlus/releases/tag/v0.6.2),
+**Game Boy**
+[v0.15.2](https://github.com/PicoPlus-devel/pico-peanutGB/releases/tag/v0.15.2),
+**TI-99/4A**
+[v0.3.1](https://github.com/PicoPlus-devel/pico-994A/releases/tag/v0.3.1),
+**Dragon's Lair**
+[v0.1.2](https://github.com/PicoPlus-devel/pico-dragonslair/releases/tag/v0.1.2)
+and **Doom**
+[v0.5](https://github.com/PicoPlus-devel/pico-doom/releases/tag/v0.5) have only the
+changes above.
 
 ## v0.8
 
