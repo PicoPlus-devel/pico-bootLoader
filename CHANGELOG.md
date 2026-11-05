@@ -19,16 +19,20 @@ picture. *Diablo* joins the Ports category, *Salamander* the Arcade category,
 the *Commodore 64 and 128* the Computer category, and **updateAll** now also
 installs the BIOS files the emulators need.
 
-> **Do you need to update?** Yes. On boards with PIO-USB, re-flash the board.
-> On every board, replace the `/emu` and `/updateAll` folders on the card with
-> the ones in the new `pico-bootLoader_sdcard.zip`, and run **updateAll** to
-> install *Diablo* and the BIOS files.
+> **Do you need to update?** Yes. Re-flash the board, and replace the `/emu` and
+> `/updateAll` folders on the card with the ones in the new
+> `pico-bootLoader_sdcard.zip`. Then run **updateAll**, where the data of *Diablo*
+> is already ticked, and tick what else you want, such as the BIOS files.
 
 ### Changes
 
 - **USB controllers on the Adafruit Fruit Jam and other boards with PIO-USB are
   now found at every start.** On boards with an older RP2350 chip they were
   often not detected, in the menu and in the applications.
+- **USB controllers connected through a USB hub are found reliably** on boards
+  that use their built-in USB port, such as a Pimoroni Pico Plus 2, the Murmulator
+  M2 and the Olimex RP2040-PICO-PC. They were often not found, and the board could
+  stop.
 - **No more dots or lines in the picture.** On boards with HSTX video, some TVs
   and monitors showed small dots or short dotted lines in some applications, for
   example in the Genesis and Super Nintendo emulators, or with Overclock on. The
@@ -42,9 +46,11 @@ installs the BIOS files the emulators need.
   installs the shareware version and the files the game needs in
   `/roms/devilutionx/`.
 - **Salamander** joins the Arcade category: Konami's *Salamander* and
-  *Lifeforce*. It runs on the boards with HSTX video, the same boards as
-  *OutRun*. PSRAM is optional: without it, such as on a Raspberry Pi Pico 2, the
-  game is copied into flash the first time it starts. The games are not
+  *Lifeforce*. It runs on the same boards as *OutRun*: the Adafruit Fruit Jam, the
+  Adafruit DVI and microSD breakouts, the Murmulator M2, the Adafruit Feather
+  RP2350 and the Olimex RP2040-PICO-PC. PSRAM is optional: without it, such as on
+  a Raspberry Pi Pico 2, the game is copied into flash the first time it starts.
+  The games are not
   included: copy MAME's `salamand.zip` to `/roms/arcade/SALAMAND` and
   `lifefrce.zip` to `/roms/arcade/LIFEFRCE`, or let updateAll install them.
 - **Commodore 64 and 128** join the Computer category. The Commodore 64 runs on
@@ -113,7 +119,9 @@ games, Enter selects and Esc goes back on a USB keyboard. Also new:
 - **Quake II**
   [v0.3-alpha](https://github.com/PicoPlus-devel/pico-quake2/releases/tag/v0.3-alpha):
   the first load of a level no longer ends with "Loading plaque timed out", and
-  an original SNES Mouse can be used on the Pimoroni Pico Plus 2.
+  an original SNES Mouse can be used on the Pimoroni Pico Plus 2. On that board,
+  USB devices now go on the Pico's own USB port, not on a USB-A socket on GPIO 20
+  and 21.
 
 **NES**
 [v0.55](https://github.com/PicoPlus-devel/pico-infonesPlus/releases/tag/v0.55),
@@ -461,7 +469,7 @@ for the full list.
 
 ## Getting started
 
-For board-by-board wiring, supported display modes and more refer to the [pico-infonesPlus documentation](https://github.com/PicoPlus-devel/pico-infonesPlus#setup). The set of supported boards and their pinouts is identical between the two projects.
+For board-by-board wiring, supported display modes and more refer to the [pico-infonesPlus documentation](https://github.com/PicoPlus-devel/pico-infonesPlus#setup). The pinouts are the same in both projects, but the loader runs only on the boards listed under [Supported hardware](https://github.com/PicoPlus-devel/pico-bootLoader#supported-hardware).
 
 1. **Flash the bootloader.** Download the loader `.uf2` for your board. Hold
    BOOTSEL, connect the board over USB, and copy the `.uf2` onto the

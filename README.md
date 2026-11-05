@@ -317,9 +317,8 @@ place. Savegames and settings are written there too. The first load of each
 level copies its textures, models and sounds from the card into flash, above the
 application, and takes considerably longer than later loads. Other applications
 may overwrite that copy; it is then refreshed on the next load. On HW_CONFIG 2,
-*Quake II* reads USB controllers only from a USB-A socket on GPIO 20 (D+) and
-21 (D−), not from the Pico's own USB port that the loader and the emulators
-use; NES and SNES controllers in the controller ports work as usual. *Quake II*
+*Quake II* uses the Pico's own USB port, like the loader and the emulators; NES
+and SNES controllers in the controller ports work as usual. *Quake II*
 is an early pre-release; its
 [README](https://github.com/PicoPlus-devel/pico-quake2#status-and-limitations)
 lists the known limitations.
@@ -460,7 +459,7 @@ files of the emulators, which it downloads from third-party sources as well. See
 
 Additional emulators may be added over time.
 
-For board-by-board wiring, supported display modes and more refer to the [pico-infonesPlus documentation](https://github.com/PicoPlus-devel/pico-infonesPlus#setup). The set of supported boards and their pinouts is identical between the two projects.
+For board-by-board wiring, supported display modes and more refer to the [pico-infonesPlus documentation](https://github.com/PicoPlus-devel/pico-infonesPlus#setup). The pinouts are the same in both projects, but the loader runs only on the boards listed under [Supported hardware](#supported-hardware).
 
 ## How it works
 

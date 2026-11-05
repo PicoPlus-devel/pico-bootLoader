@@ -111,7 +111,7 @@ The files are installed under the names the applications look for. The Videopac,
 
 ## Windows program
 
-`updateAll.exe` is a single file of about 270 KB. It needs no installation and no runtime, and runs on Windows 10 and 11. The SD-card archive of pico-bootLoader holds it in the `updateAll` folder, next to `emu`.
+`updateAll.exe` is a single file of about 300 KB. It needs no installation and no runtime, and runs on Windows 10 and 11. The SD-card archive of pico-bootLoader holds it in the `updateAll` folder, next to `emu`.
 
 1. Start `updateAll.exe`. The SD card is selected for you: the card the program was started from, or else the first removable drive that holds a pico-bootLoader card (an `emu` folder), or else the first removable drive.
 2. Under **SD card**, choose another card if needed. Any existing folder can be chosen instead.
