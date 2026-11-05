@@ -18,7 +18,7 @@ IDI_APP ICON "updateAll.ico"
 /* The configuration the program uses when no updateAll.json is next to it. */
 IDR_CONFIG RCDATA "../updateAll.json"
 
-IDD_MAIN DIALOGEX 0, 0, 420, 298
+IDD_MAIN DIALOGEX 0, 0, 420, 318
 STYLE DS_SHELLFONT | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX |
       WS_MAXIMIZEBOX | WS_THICKFRAME | WS_CLIPCHILDREN
 CAPTION "updateAll"
@@ -35,20 +35,20 @@ BEGIN
     CONTROL         "Select &all", IDC_SELECT_ALL, "Button", BS_3STATE | WS_TABSTOP, 70, 44, 80, 10
     LTEXT           "Se&ts to install:", -1, 7, 45, 60, 8
     CONTROL         "", IDC_SETS, WC_LISTVIEW, LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL |
-                    LVS_NOSORTHEADER | WS_BORDER | WS_TABSTOP, 7, 55, 406, 74
-    AUTOCHECKBOX    "&Download missing files", IDC_DOWNLOAD, 7, 134, 220, 10
-    AUTOCHECKBOX    "Dry r&un: only show what would be done", IDC_DRYRUN, 230, 134, 183, 10
-    AUTOCHECKBOX    "Show lo&g", IDC_SHOWLOG, 363, 149, 50, 10
-    LTEXT           "&Log:", IDC_VIEW_LABEL, 7, 150, 60, 8
+                    LVS_NOSORTHEADER | WS_BORDER | WS_TABSTOP, 7, 55, 406, 116
+    AUTOCHECKBOX    "&Download missing files", IDC_DOWNLOAD, 7, 176, 220, 10
+    AUTOCHECKBOX    "Dry r&un: only show what would be done", IDC_DRYRUN, 230, 176, 183, 10
+    AUTOCHECKBOX    "Show lo&g", IDC_SHOWLOG, 363, 191, 50, 10
+    LTEXT           "&Log:", IDC_VIEW_LABEL, 7, 192, 60, 8
     /* These two share one place; the window shows one of them. */
-    EDITTEXT        IDC_LOG, 7, 160, 406, 101, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL |
+    EDITTEXT        IDC_LOG, 7, 202, 406, 79, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL |
                     WS_VSCROLL | WS_TABSTOP
     CONTROL         "", IDC_FILES, WC_LISTVIEW, LVS_REPORT | LVS_SINGLESEL | LVS_NOSORTHEADER |
-                    WS_BORDER | WS_TABSTOP, 7, 160, 406, 101
-    LTEXT           "", IDC_STATUS, 7, 265, 406, 8, SS_ENDELLIPSIS | SS_NOPREFIX
-    CONTROL         "", IDC_PROGRESS, PROGRESS_CLASS, PBS_SMOOTH, 7, 279, 282, 12
-    DEFPUSHBUTTON   "&Install", IDOK, 296, 277, 57, 14
-    PUSHBUTTON      "Close", IDCANCEL, 356, 277, 57, 14
+                    WS_BORDER | WS_TABSTOP, 7, 202, 406, 79
+    LTEXT           "", IDC_STATUS, 7, 285, 406, 8, SS_ENDELLIPSIS | SS_NOPREFIX
+    CONTROL         "", IDC_PROGRESS, PROGRESS_CLASS, PBS_SMOOTH, 7, 299, 282, 12
+    DEFPUSHBUTTON   "&Install", IDOK, 296, 297, 57, 14
+    PUSHBUTTON      "Close", IDCANCEL, 356, 297, 57, 14
 END
 
 VS_VERSION_INFO VERSIONINFO

@@ -608,6 +608,10 @@ rel_remote = serve("cfg_rel_remote.json", json.dumps({
 write("cfg_rel_fetch.json", json.dumps({"config_url": rel_remote, "cores": local[:1]}).encode())
 
 rel_card("card_rel_v09")
+# No emu folder: a drive with other files, and what operating systems leave on a new card.
+write("card_rel_other/photo.jpg", b"mine\n")
+write("card_rel_newcard/.fseventsd/x", b"x")
+write("card_rel_newcard/System Volume Information/IndexerVolumeGuid", b"x")
 rel_card("card_rel_v08", b"v0.8\n")
 rel_card("card_rel_v010", b"v0.10\n")
 rel_card("card_rel_crlf", b"  v0.9 \r\nanything else\n")

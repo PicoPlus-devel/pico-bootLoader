@@ -149,6 +149,8 @@ static struct {
     int offered;             /* the user was asked about it, or will not be */
     int in_dialog;           /* the folder dialog or the question before installing is open */
     wchar_t *self_error;     /* why this program could not be updated */
+    int *order;              /* what each row of the list stands for, see sort_rows() */
+    int archive_row;         /* the row of the archive, when it has one */
 } app;
 
 /* ------------------------------------------------------------------------- */
@@ -164,9 +166,11 @@ static int archive_rows(void)
     return app.cfg.sd_asset != NULL;
 }
 
+#define ROW_ARCHIVE (-1)
+
 static int is_archive_row(int row)
 {
-    return row == 0 && archive_rows();
+    return archive_rows() && app.order && app.order[row] == ROW_ARCHIVE;
 }
 
 static int bios_first(void)
@@ -183,17 +187,59 @@ static int row_count(void)
     return archive_rows() + b + (b < app.cfg.ncores);
 }
 
+/* BIOS files and ROM sets, which are copyright of their makers, rather than the
+   archive or game data, which is shareware or a demo. what is as in app.order. */
+static int set_needs_rights(int what)
+{
+    return what != ROW_ARCHIVE && (app.cfg.cores[what].bios || !app.cfg.cores[what].url);
+}
+
+static const char *set_name(int what)
+{
+    return what == ROW_ARCHIVE ? app.cfg.sd_name : app.cfg.cores[what].bios ? "BIOS" : app.cfg.cores[what].name;
+}
+
+static int compare_rows(const void *pa, const void *pb)
+{
+    int a = *(const int *)pa, b = *(const int *)pb;
+    if (a == ROW_ARCHIVE || b == ROW_ARCHIVE)
+        return (b == ROW_ARCHIVE) - (a == ROW_ARCHIVE);
+    int group = set_needs_rights(a) - set_needs_rights(b);
+    int name = group ? 0 : _stricmp(set_name(a), set_name(b));
+    return group ? group : name ? name : a - b;
+}
+
+/* The archive comes first, then the other rows that start ticked, then the rest, the
+   last two groups each sorted by name. app.order gives for each row ROW_ARCHIVE or an
+   index in cfg.cores, the first BIOS file for their row. The order in the configuration
+   is the order of installing, which stays. */
+static void sort_rows(void)
+{
+    int n = 0, b = bios_first();
+    free(app.order);
+    app.order = malloc((size_t)(row_count() + 1) * sizeof *app.order);
+    if (archive_rows())
+        app.order[n++] = ROW_ARCHIVE;
+    for (int i = 0; i < b; i++)
+        app.order[n++] = i;
+    if (b < app.cfg.ncores)
+        app.order[n++] = b;
+    qsort(app.order, (size_t)n, sizeof *app.order, compare_rows);
+    for (int r = 0; r < n; r++)
+        if (app.order[r] == ROW_ARCHIVE)
+            app.archive_row = r;
+}
+
 /* The sets a row stands for: cores first .. first + n - 1. */
 static void row_sets(int row, int *first, int *n)
 {
-    int b = bios_first();
-    if (is_archive_row(row)) {
+    int what = app.order[row], b = bios_first();
+    if (what == ROW_ARCHIVE) {
         *first = *n = 0;
         return;
     }
-    row -= archive_rows();
-    *first = row < b ? row : b;
-    *n = row < b ? 1 : app.cfg.ncores - b;
+    *first = what;
+    *n = what < b ? 1 : app.cfg.ncores - b;
 }
 
 /* The id the row is selected by, as with --core. */
@@ -201,8 +247,14 @@ static const char *row_id(int row)
 {
     if (is_archive_row(row))
         return "sdcard";
-    row -= archive_rows();
-    return row < bios_first() ? app.cfg.cores[row].id : "bios";
+    int first, n;
+    row_sets(row, &first, &n);
+    return app.cfg.cores[first].bios ? "bios" : app.cfg.cores[first].id;
+}
+
+static int needs_rights(int row)
+{
+    return set_needs_rights(app.order[row]);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -424,7 +476,9 @@ static unsigned __stdcall worker(void *arg)
             free(c->tag);
             free(c);
         }
-        for (int r = archive_rows(), rows = row_count(); r < rows && !app.cancel; r++) {
+        for (int r = 0, rows = row_count(); r < rows && !app.cancel; r++) {
+            if (is_archive_row(r))
+                continue;
             int first, n, current = 0;
             row_sets(r, &first, &n);
             for (int i = first; i < first + n && card && !app.cancel; i++)
@@ -848,12 +902,17 @@ static void select_all_counts(int *ticked, int *all)
     }
 }
 
+static int archive_ticked(void)
+{
+    return archive_rows() && ListView_GetCheckState(item(IDC_SETS), app.archive_row);
+}
+
 static void set_archive_tick(int tick)
 {
     if (!archive_rows())
         return;
     app.setting_tick = 1;
-    ListView_SetCheckState(item(IDC_SETS), 0, tick);
+    ListView_SetCheckState(item(IDC_SETS), app.archive_row, tick);
     app.setting_tick = 0;
 }
 
@@ -924,7 +983,7 @@ static void update_notice(void)
     }
     SetDlgItemTextW(app.dlg, IDC_NOTICE, notice);
     if (archive_rows())
-        ListView_SetItemText(item(IDC_SETS), 0, 3, status);
+        ListView_SetItemText(item(IDC_SETS), app.archive_row, 3, status);
 }
 
 static void release_read(release_msg *m)
@@ -1105,8 +1164,7 @@ static int holds_files(const wchar_t *sd)
    in use, or adds its folders to a drive that the program chose but is no such card. */
 static int confirm_archive(const wchar_t *sd)
 {
-    if (!archive_rows() || !ListView_GetCheckState(item(IDC_SETS), 0) ||
-        IsDlgButtonChecked(app.dlg, IDC_DRYRUN) == BST_CHECKED)
+    if (!archive_ticked() || IsDlgButtonChecked(app.dlg, IDC_DRYRUN) == BST_CHECKED)
         return 1;
     char *sd_u = ua_narrow(sd);
     int ok = 1;
@@ -1130,16 +1188,12 @@ static int confirm_archive(const wchar_t *sd)
     return ok;
 }
 
-/* Whether a BIOS file or a ROM set is ticked. Game data is shareware or a demo. */
+/* Whether a BIOS file or a ROM set is ticked. */
 static int copyright_ticked(void)
 {
-    for (int r = archive_rows(); r < row_count(); r++) {
-        int first, n;
-        row_sets(r, &first, &n);
-        const ua_core *c = &app.cfg.cores[first];
-        if (ListView_GetCheckState(item(IDC_SETS), r) && (c->bios || !c->url))
+    for (int r = 0; r < row_count(); r++)
+        if (ListView_GetCheckState(item(IDC_SETS), r) && needs_rights(r))
             return 1;
-    }
     return 0;
 }
 
@@ -1168,14 +1222,14 @@ static void install(void)
     /* Unticked sets work like --core with the ticked ones. The archive's row
        goes apart: a set that is skipped is no failure just because the archive
        was unticked. */
-    int archive = archive_rows() && ListView_GetCheckState(item(IDC_SETS), 0);
+    int archive = archive_ticked();
     if (archive_rows())
         j->sdcard = !archive ? -1 : may_download() ? 1 : 0;
     j->release = app.release;
     if (checked_sets() - archive < row_count() - archive_rows()) {
         j->ids = calloc((size_t)row_count() + 1, sizeof *j->ids);
-        for (int r = archive_rows(), n = 0; r < row_count(); r++)
-            if (ListView_GetCheckState(item(IDC_SETS), r))
+        for (int r = 0, n = 0; r < row_count(); r++)
+            if (!is_archive_row(r) && ListView_GetCheckState(item(IDC_SETS), r))
                 j->ids[n++] = _strdup(row_id(r));
         /* Only the archive is ticked: no set at all, rather than every set. */
         if (!j->ids[0] && archive)
@@ -1513,13 +1567,23 @@ static void row_texts(int row, char **name, char **zips, char **dest)
     *name = _strdup("BIOS");
 }
 
-/* One row per set, and one for all BIOS files. Nothing is installed unless the
-   user ticks it, and no choice is stored, so a set starts unticked unless its id
-   is in ticked. The archive's row starts ticked. */
-static void fill_sets(char **ticked)
+static int in_ids(char **ids, const char *id)
+{
+    for (; ids && *ids; ids++)
+        if (!_stricmp(*ids, id))
+            return 1;
+    return 0;
+}
+
+/* One row per set, and one for all BIOS files. BIOS files and ROM sets are only
+   installed when the user ticks them, and no choice is stored, so they start
+   unticked; the archive and game data start ticked. A row in seen was on the screen
+   before the configuration changed, and stays as it was: ticked, if it is in ticked. */
+static void fill_sets(char **ticked, char **seen)
 {
     HWND lv = item(IDC_SETS);
     app.setting_tick = 1;
+    sort_rows();
     ListView_DeleteAllItems(lv);
     for (int r = 0; r < row_count(); r++) {
         char *name, *zips, *dest;
@@ -1529,9 +1593,7 @@ static void fill_sets(char **ticked)
         ListView_InsertItem(lv, &it);
         ListView_SetItemText(lv, r, 1, wzips);
         ListView_SetItemText(lv, r, 2, wdest);
-        int tick = 0;
-        for (char **t = ticked; t && *t && !tick; t++)
-            tick = !_stricmp(*t, row_id(r));
+        int tick = in_ids(seen, row_id(r)) ? in_ids(ticked, row_id(r)) : !needs_rights(r);
         if (is_archive_row(r) && !app.archive_touched)
             tick = 1;
         ListView_SetCheckState(lv, r, tick);
@@ -1605,21 +1667,27 @@ static void log_config(void)
 static void config_fetched(fetched *f)
 {
     if (f->ok) {
-        /* Sets ticked in the meantime stay ticked. */
+        /* What the user ticked or unticked in the meantime stays. */
         char **ticked = calloc((size_t)row_count() + 1, sizeof *ticked);
-        for (int r = 0, n = 0; r < row_count(); r++)
+        char **seen = calloc((size_t)row_count() + 1, sizeof *seen);
+        for (int r = 0, n = 0; r < row_count(); r++) {
+            seen[r] = _strdup(row_id(r));
             if (ListView_GetCheckState(item(IDC_SETS), r))
                 ticked[n++] = _strdup(row_id(r));
+        }
         int had = can_download();
         ua_config_free(&app.cfg);
         app.cfg = f->cfg;
-        fill_sets(ticked);
+        fill_sets(ticked, seen);
         size_status_column();
         show_databases(had);
         update_notice();
         for (char **t = ticked; *t; t++)
             free(*t);
         free(ticked);
+        for (char **s = seen; *s; s++)
+            free(*s);
+        free(seen);
     } else {
         app.cfg.fetch_error = _strdup(f->err);
     }
@@ -1694,7 +1762,7 @@ static void init_dialog(HWND dlg)
     load_config();
     if (app.cfg_ok) {
         init_sets();
-        fill_sets(NULL);
+        fill_sets(NULL, NULL);
     }
 
     SendMessageW(item(IDC_SD), CB_SETCUEBANNER, 0, (LPARAM)L"Root of the SD card");

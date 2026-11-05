@@ -56,16 +56,18 @@ installs the BIOS files the emulators need.
 - **updateAll installs the BIOS files**, as MiSTer's Update All does: for the
   TI-99/4A, Commodore 64 and 128, Videopac, ColecoVision and PC Engine CD, and
   for Famicom Disk System games and Sega CD discs. The Windows program shows
-  them as one entry, **BIOS**, that can be unticked. As with the ROM sets,
+  them as one entry, **BIOS**. As with the ROM sets,
   holding the rights to them is your responsibility.
 - **updateAll tells you when a new SD-card archive is available**, and installs
   it on the card. This overwrites files on the card, so the Windows program asks
   first. Only files that changed are written, and a menu list you edited is first
   saved as `.bak`. updateAll cannot flash the board, but tells you when
-  a release needs it. On a card without an `/emu` folder, it does this only if
-  you ask for it.
-- **updateAll installs only what you choose.** In the Windows program, only
-  **SD card files** starts ticked, so tick the sets you want. The scripts ask.
+  a release needs it. The Windows program warns before it installs the archive on
+  a drive with other files but no `/emu` folder; the scripts install it there only
+  if you ask.
+- **You choose the ROM sets and BIOS files in updateAll.** In the Windows program,
+  **SD card files** and the data of the ported games start ticked, so tick the ROM
+  sets and BIOS files you want. The scripts ask.
   Both remind you that ROM sets and BIOS files are copyrighted.
 - **The updateAll Windows program can update itself.** When a newer version
   exists, it asks you, and with **Yes** it downloads the new version and restarts.
@@ -472,8 +474,8 @@ For board-by-board wiring, supported display modes and more refer to the [pico-i
    page that holds it, and start it from any folder. If Windows says the program
    is not signed, select **More info**, then **Run anyway**. Check the **SD card**
    field. **SD card files** is already ticked, and installs the emulators, the
-   native ports and the menu artwork. Tick what else you want, then select
-   **Install**.
+   native ports and the menu artwork, and so is the data of the ported games. Tick
+   the arcade ROM sets and BIOS files you want, then select **Install**.
 
    **By hand,** which is the way on Linux or macOS, download
    `pico-bootLoader_sdcard.zip` from the Releases page and unpack it onto the card.

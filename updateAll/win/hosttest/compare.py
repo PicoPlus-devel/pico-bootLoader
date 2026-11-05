@@ -14,6 +14,7 @@ import argparse
 import difflib
 import hashlib
 import os
+import pty
 import re
 import shutil
 import socket
@@ -360,17 +361,23 @@ ROW_CASES = [
 ]
 
 # updateAll.py only, as only the scripts ask: (name, arguments, card, what is typed
-# in, what it must show). Nothing is installed unless it is chosen.
+# in, what it must show). The default is no, unless someone is at a terminal, below.
 ASK = "--config cfg_ask.json --zips {zips} --sd {card}"
 Q_BIOS, Q_SETS, Q_DATA = ("Download and install the BIOS files of the emulators? [y/N]",
                           "Download and install the arcade ROM sets? [y/N]",
                           "Download and install the shareware and demo data of the ported games? [y/N]")
+Q_DATA_AT_TERMINAL = "Download and install the shareware and demo data of the ported games? [Y/n]"
 S_BIOS, S_SETS, S_DATA, S_NONE = "Test BIOS: ", "Alpha: ", "Rho data: ", "Nothing to install"
+Q_ARCHIVE, Q_ARCHIVE_AT_TERMINAL = ("Download and install the SD card files? [y/N]",
+                                    "Download and install the SD card files? [Y/n]")
+RELMAIN = "--config cfg_rel_main.json --zips {zips} --sd {card}"
+OTHER_FILES = "Warning:      this does not look like a pico-bootLoader card: it holds files, but no emu folder. The archive adds its folders to it, such as emu and updateAll, and overwrites files there under the same names."
 RIGHTS = "The ROM sets and BIOS files are copyright of their manufacturers and are not part of this project. Holding the rights to them is your responsibility."
 ASK_CASES = [
     ("ask-nobody", ASK, None, "", {"rc": 0, "has": [RIGHTS, Q_BIOS, Q_SETS, Q_DATA, S_NONE],
                                    "not": [S_BIOS, S_SETS, S_DATA]}),
-    ("ask-all-no", ASK, None, "n\nno\n\n", {"rc": 0, "has": [S_NONE], "not": [S_BIOS, S_SETS, S_DATA]}),
+    ("ask-enter", ASK, None, "\n\n\n", {"rc": 0, "has": [S_NONE], "not": [S_BIOS, S_SETS, S_DATA]}),
+    ("ask-all-no", ASK, None, "n\nno\nN\n", {"rc": 0, "has": [S_NONE], "not": [S_BIOS, S_SETS, S_DATA]}),
     ("ask-bios", ASK, None, "y\nn\nn\n", {"rc": 0, "has": [S_BIOS], "not": [S_SETS, S_DATA, S_NONE]}),
     ("ask-sets", ASK, None, "n\ny\nn\n", {"rc": 0, "has": [S_SETS], "not": [S_BIOS, S_DATA, S_NONE]}),
     ("ask-data", ASK, None, "n\nn\nyes\n", {"rc": 0, "has": [S_DATA], "not": [S_BIOS, S_SETS, S_NONE]}),
@@ -382,10 +389,47 @@ ASK_CASES = [
     ("ask-all-flag", ASK + " --all", None, "", {"rc": 0, "has": [S_BIOS, S_SETS, S_DATA], "not": ["[y/N]", RIGHTS]}),
     # The archive does not depend on the answers, on a card that holds one.
     ("ask-archive", "--config cfg_rel_main.json --zips {zips} --sd {card}", "card_rel_v09", "",
-     {"rc": 0, "has": [Q_SETS, "SD card files: pico", REPLACES], "not": [S_SETS, S_NONE],
+     {"rc": 0, "has": [Q_SETS, "SD card files: pico", REPLACES], "not": [S_SETS, S_NONE, Q_ARCHIVE],
       "files": {MARKER: b"v0.10\n"}}),
-    ("ask-empty-card", "--config cfg_rel_main.json --zips {zips} --sd {card}", None, "",
-     {"rc": 0, "has": [S_NONE], "not": ["SD card files:", S_SETS], "files": {MARKER: None}}),
+    # A card without an emu folder: asked, and left out when nobody answers.
+    ("ask-empty-card", RELMAIN, None, "",
+     {"rc": 0, "has": [Q_ARCHIVE, S_NONE], "not": ["SD card files:", S_SETS, OTHER_FILES], "files": {MARKER: None}}),
+    ("ask-empty-blank", RELMAIN, None, "\n\n", {"rc": 0, "has": [S_NONE], "not": ["SD card files:"], "files": {MARKER: None}}),
+    ("ask-empty-no", RELMAIN, None, "n\nn\n", {"rc": 0, "has": [S_NONE], "not": ["SD card files:"], "files": {MARKER: None}}),
+    ("ask-empty-yes", RELMAIN, None, "y\nn\n",
+     {"rc": 0, "has": ["SD card files: pico"], "not": [S_NONE, S_SETS, REPLACES, ANY_FLASH, OTHER_FILES],
+      "files": {MARKER: b"v0.10\n"}}),
+    ("ask-empty-dry", RELMAIN + " --dry-run", None, "y\nn\n",
+     {"rc": 0, "has": ["SD card files: pico", "Dry run:"], "files": {MARKER: None}}),
+    ("ask-empty-no-download", RELMAIN + " --no-download", None, "n\n",
+     {"rc": 0, "has": [S_NONE], "not": ["SD card files?"], "files": {MARKER: None}}),
+    ("ask-empty-all", RELMAIN + " --all", None, "",
+     {"rc": 0, "has": [S_SETS], "not": ["[y/N]", "SD card files:"], "files": {MARKER: None}}),
+    ("ask-other-files", RELMAIN, "card_rel_other", "",
+     {"rc": 0, "has": [OTHER_FILES, Q_ARCHIVE, S_NONE], "not": ["SD card files:"],
+      "files": {MARKER: None, "card/photo.jpg": b"mine\n"}}),
+    ("ask-other-files-yes", RELMAIN, "card_rel_other", "y\nn\n",
+     {"rc": 0, "has": [OTHER_FILES, "SD card files: pico"], "not": [S_NONE],
+      "files": {MARKER: b"v0.10\n", "card/photo.jpg": b"mine\n"}}),
+    ("ask-new-card", RELMAIN, "card_rel_newcard", "y\nn\n",
+     {"rc": 0, "has": ["SD card files: pico"], "not": [OTHER_FILES], "files": {MARKER: b"v0.10\n"}}),
+]
+# The same with someone at a terminal, where Enter takes the default.
+TERMINAL_CASES = [
+    ("terminal-data-enter", ASK, None, "\n\n\n",
+     {"rc": 0, "has": [Q_BIOS, Q_SETS, Q_DATA_AT_TERMINAL, S_DATA], "not": [S_BIOS, S_SETS, S_NONE]}),
+    ("terminal-data-no", ASK, None, "\n\nn\n",
+     {"rc": 0, "has": [Q_DATA_AT_TERMINAL, S_NONE], "not": [S_BIOS, S_SETS, S_DATA]}),
+    ("terminal-empty-enter", RELMAIN, None, "\n\n",
+     {"rc": 0, "has": [Q_ARCHIVE_AT_TERMINAL, "SD card files: pico"], "not": [S_NONE, OTHER_FILES, S_SETS],
+      "files": {MARKER: b"v0.10\n"}}),
+    ("terminal-empty-no", RELMAIN, None, "n\n\n",
+     {"rc": 0, "has": [Q_ARCHIVE_AT_TERMINAL, S_NONE], "not": ["SD card files:"], "files": {MARKER: None}}),
+    ("terminal-other-enter", RELMAIN, "card_rel_other", "\n\n",
+     {"rc": 0, "has": [OTHER_FILES, Q_ARCHIVE, S_NONE], "not": ["SD card files:"], "files": {MARKER: None}}),
+    ("terminal-new-card-enter", RELMAIN, "card_rel_newcard", "\n\n",
+     {"rc": 0, "has": [Q_ARCHIVE_AT_TERMINAL, "SD card files: pico"], "not": [OTHER_FILES],
+      "files": {MARKER: b"v0.10\n"}}),
 ]
 
 # ua_host only, stopped after this many calls of on_bytes: (name, arguments, calls,
@@ -579,7 +623,7 @@ def main():
 
         events = os.path.join(work, "events.txt")
 
-        def run_case(tool, argline, card, extra_env=None, answers=None):
+        def run_case(tool, argline, card, extra_env=None, answers=None, terminal=False):
             if os.path.exists(events):
                 os.remove(events)
             shutil.rmtree(run_dir, ignore_errors=True)
@@ -596,8 +640,17 @@ def main():
             if answers is None and "--core" not in argv:
                 argv.append("--all")
             start = time.time()
+            if terminal:
+                master, slave = pty.openpty()
+                os.write(master, answers.encode())
+                stdin = {"stdin": slave}
+            else:
+                stdin = {"input": answers or ""}
             p = subprocess.run(tool + argv, cwd=fx, env=dict(env, **(extra_env or {})),
-                               capture_output=True, text=True, input=answers or "")
+                               capture_output=True, text=True, **stdin)
+            if terminal:
+                os.close(slave)
+                os.close(master)
             return {"rc": p.returncode, "out": normalise(p.stdout),
                     "err": normalise(p.stderr), "tree": tree(run_dir),
                     "time": time.time() - start}
@@ -634,11 +687,12 @@ def main():
                 for r in rows:
                     print(f"     {r['set']}/{r['file']}: {r['details']} {r['states']}")
 
-        for name, argline, card, answers, want in ASK_CASES:
+        for name, argline, card, answers, want, terminal in (
+                [c + (False,) for c in ASK_CASES] + [c + (True,) for c in TERMINAL_CASES]):
             if args.k and args.k not in name:
                 continue
             total += 1
-            py = run_case([sys.executable, SCRIPT], argline, card, answers=answers)
+            py = run_case([sys.executable, SCRIPT], argline, card, answers=answers, terminal=terminal)
             problems = check_expected(want, py, url)
             failures += bool(problems)
             print(f"{'FAIL' if problems else 'ok':4} {name:22} exit {py['rc']}")

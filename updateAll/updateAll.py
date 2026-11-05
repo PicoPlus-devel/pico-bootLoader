@@ -34,12 +34,12 @@ cannot be read, the local file is used.
 The "sdcard" key of updateAll.json names the SD-card archive of pico-bootLoader
 on GitHub. On a card with an emu folder, a release newer than the one that
 emu/release.txt records is reported, and its archive is installed like a set;
---core sdcard selects it on any other card. The files of the archive are found
-in the archive itself. A list in emu that changes is first saved as .bak.
+on any other card this asks, and --core sdcard selects it. The files of the archive
+are found in the archive itself. A list in emu that changes is first saved as .bak.
 
-Nothing else is installed unless it is chosen: without --core or --all, this
-asks about the BIOS files, the arcade ROM sets and the game data. The answers
-are not stored, and without anyone to answer each is no.
+Without --core or --all, this asks what else to install: the BIOS files and the
+arcade ROM sets, no by default, and the game data, yes by default at a terminal.
+The answers are not stored, and a run that nobody attends installs none of them.
 
 Only the files listed for a set are extracted. They are found by size and
 CRC32 rather than by name, as the applications themselves do, so merged, split
@@ -64,6 +64,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import struct
 import sys
 import tempfile
@@ -958,6 +959,8 @@ def main(argv=None):
         print(f"ERROR: zip folder not found: {args.zips}", file=sys.stderr)
         return 1
 
+    has_emu = os.path.isdir(os.path.join(args.sd, "emu"))
+    archive_chosen = False
     requested = []
     if args.core:
         requested = [cid.strip().lower() for arg in args.core for cid in arg.split(",") if cid.strip()]
@@ -974,13 +977,14 @@ def main(argv=None):
         cores = [c for c in cores
                  if c["id"].lower() in requested or (c["_bios"] and "bios" in requested)]
     elif not args.all:
+        archive_chosen = (bool(sdcard) and not has_emu and not args.no_download and
+                          choose_archive(args.sd, sdcard))
         cores = choose_sets(cores, args.no_download)
 
     # The check is separate from installing: a newer archive is reported on a
     # card with an emu folder even when this run does not install it.
-    has_emu = os.path.isdir(os.path.join(args.sd, "emu"))
     release = release_error = None
-    if sdcard and (has_emu or "sdcard" in requested):
+    if sdcard and (has_emu or archive_chosen or "sdcard" in requested):
         try:
             release = fetch_release(sdcard, args.sd)
             # A new card says nothing about the board, so it gets no reminder.
@@ -997,7 +1001,8 @@ def main(argv=None):
     elif release and has_emu and release["newer"]:
         print(f"New archive:  {sdcard['asset']} {release['tag']} is available "
               f"(card: {release['card'] or 'unknown'}): {release['page']}")
-    install_archive = release and ("sdcard" in requested or (not requested and has_emu and not args.no_download))
+    install_archive = release and (archive_chosen or "sdcard" in requested or
+                                   (not requested and has_emu and not args.no_download))
     if install_archive and has_emu and release["newer"] and not args.dry_run:
         print("Warning:      files on the card that the archive also holds are replaced; edited lists in /emu are saved as .bak")
     if use_databases:
@@ -1027,26 +1032,50 @@ def files_to_install(core, sd_root):
             if not is_current(os.path.join(dest, *f["_parts"]), f["_size"], f["_crc"])]
 
 
-def ask_yes(question):
-    """No unless the answer says yes, also when nobody can answer."""
+def ask_yes(question, default):
+    """The default without an answer, also when nobody can answer; else only yes is yes."""
     try:
-        answer = input(f"{question} [y/N] ")
+        answer = input(f"{question} {'[Y/n]' if default else '[y/N]'} ")
     except EOFError:
         answer = ""
     if not sys.stdin.isatty():      # a terminal shows the Enter itself
         print()
-    return answer.strip().lower() in ("y", "yes")
+    answer = answer.strip().lower()
+    return answer in ("y", "yes") if answer else default
+
+
+def holds_files(folder):
+    """Whether a folder holds anything of the user's. What operating systems leave
+    on a new card does not count."""
+    left_on_a_new_card = ("system volume information", "$recycle.bin", "found.000", "lost+found", "lost.dir")
+    for entry in os.scandir(folder):
+        attributes = getattr(entry.stat(follow_symlinks=False), "st_file_attributes", 0)
+        if (not entry.name.startswith(".") and entry.name.lower() not in left_on_a_new_card and
+                not attributes & (stat.FILE_ATTRIBUTE_HIDDEN | stat.FILE_ATTRIBUTE_SYSTEM)):
+            return True
+    return False
+
+
+def choose_archive(sd_root, sdcard):
+    """A card without an emu folder only gets the archive when the user wants it. That
+    is the default for someone at a terminal, unless the folder holds other files, and
+    never for a run that nobody attends."""
+    other_files = holds_files(sd_root)
+    if other_files:
+        print("Warning:      this does not look like a pico-bootLoader card: it holds files, but no emu folder. The archive adds its folders to it, such as emu and updateAll, and overwrites files there under the same names.")
+    return ask_yes(f"Download and install the {sdcard['name']}?", sys.stdin.isatty() and not other_files)
 
 
 def choose_sets(cores, no_download):
-    """Nothing is installed unasked, so this asks per kind of set. The answers are
-    not stored."""
+    """BIOS files and ROM sets are only installed when the user says so, and game
+    data unless someone at a terminal says no. The answers are not stored."""
     verb = "Install" if no_download else "Download and install"
     print("The ROM sets and BIOS files are copyright of their manufacturers and are not part of this project. Holding the rights to them is your responsibility.")
-    wanted = [kind for kind, what in (("bios", "the BIOS files of the emulators"),
-                                      ("cores", "the arcade ROM sets"),
-                                      ("data", "the shareware and demo data of the ported games"))
-              if any(c["_kind"] == kind for c in cores) and ask_yes(f"{verb} {what}?")]
+    wanted = [kind for kind, what, default in (
+                  ("bios", "the BIOS files of the emulators", False),
+                  ("cores", "the arcade ROM sets", False),
+                  ("data", "the shareware and demo data of the ported games", sys.stdin.isatty()))
+              if any(c["_kind"] == kind for c in cores) and ask_yes(f"{verb} {what}?", default)]
     return [c for c in cores if c["_kind"] in wanted]
 
 

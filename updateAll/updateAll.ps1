@@ -61,8 +61,10 @@
 .PARAMETER Core
     Install only these cores, by the IDs that -List shows; bios selects every
     BIOS file and sdcard the SD-card archive. Without this or -All, the script
-    asks about the BIOS files, the arcade ROM sets and the game data; the answers
-    are not stored, and without anyone to answer each is no. The archive is
+    asks about the BIOS files and the arcade ROM sets, no by default, and the game
+    data, yes by default at a terminal; the answers are not stored. On a card without
+    an emu folder it also asks about the archive. A run that nobody attends installs
+    none of these. The archive is
     installed on a card with an emu folder.
 
 .PARAMETER All
@@ -721,6 +723,32 @@ function Compare-Tag($A, $B) {
 }
 
 # The release the card holds according to its marker, or nothing.
+# The default without an answer, also when nobody can answer; else only yes is yes.
+function Read-Answer([string] $Question, [bool] $Default) {
+    $hint = if ($Default) { '[Y/n]' } else { '[y/N]' }
+    Write-Host "$Question $hint " -NoNewline
+    try { $answer = [Console]::In.ReadLine() } catch { $answer = $null }
+    # A terminal shows the Enter itself.
+    if ([Console]::IsInputRedirected) { Write-Host '' }
+    if ([string]::IsNullOrWhiteSpace($answer)) { return $Default }
+    return $answer.Trim() -match '^(y|yes)$'
+}
+
+# Whether a folder holds anything of the user's. What operating systems leave on a
+# new card does not count.
+function Test-HoldsFiles([string] $Folder) {
+    $leftOnANewCard = @('system volume information', '$recycle.bin', 'found.000', 'lost+found', 'lost.dir')
+    foreach ($entry in [System.IO.Directory]::GetFileSystemEntries($Folder)) {
+        $name = [System.IO.Path]::GetFileName($entry)
+        $hidden = [System.IO.File]::GetAttributes($entry) -band
+            ([System.IO.FileAttributes]::Hidden -bor [System.IO.FileAttributes]::System)
+        if (-not $name.StartsWith('.') -and $leftOnANewCard -notcontains $name.ToLowerInvariant() -and -not $hidden) {
+            return $true
+        }
+    }
+    return $false
+}
+
 function Read-Marker([string] $SdRoot) {
     try {
         $bytes = [System.IO.File]::ReadAllBytes((Get-TargetPath $SdRoot $script:ReleaseMarker))
@@ -1257,6 +1285,8 @@ try {
         }
     }
 
+    $hasEmu = [System.IO.Directory]::Exists((Join-Path $sdRoot 'emu'))
+    $archiveChosen = $false
     $requested = @()
     if ($Core) {
         # -File passes "a,b" as one string, so split on commas here as well.
@@ -1273,21 +1303,26 @@ try {
         }
         $defs = @($defs | Where-Object { $requested -contains $_.Id -or ($_.Bios -and $requested -contains 'bios') })
     } elseif (-not $All) {
-        # Nothing is installed unasked, so this asks per kind of set. The answers
-        # are not stored.
+        # A card without an emu folder only gets the archive when the user wants it. That
+        # is the default for someone at a terminal, unless the folder holds other files,
+        # and never for a run that nobody attends.
+        if ($cfg.Sdcard -and -not $hasEmu -and -not $NoDownload) {
+            $otherFiles = Test-HoldsFiles $sdRoot
+            if ($otherFiles) {
+                Write-Host 'Warning:      this does not look like a pico-bootLoader card: it holds files, but no emu folder. The archive adds its folders to it, such as emu and updateAll, and overwrites files there under the same names.'
+            }
+            $archiveChosen = Read-Answer "Download and install the $($cfg.Sdcard.Name)?" (-not [Console]::IsInputRedirected -and -not $otherFiles)
+        }
+        # BIOS files and ROM sets are only installed when the user says so, and game
+        # data unless someone at a terminal says no. The answers are not stored.
         $verb = if ($NoDownload) { 'Install' } else { 'Download and install' }
         Write-Host 'The ROM sets and BIOS files are copyright of their manufacturers and are not part of this project. Holding the rights to them is your responsibility.'
         $wanted = @()
-        foreach ($choice in @(@('bios', 'the BIOS files of the emulators'),
-                              @('cores', 'the arcade ROM sets'),
-                              @('data', 'the shareware and demo data of the ported games'))) {
+        foreach ($choice in @(@('bios', 'the BIOS files of the emulators', $false),
+                              @('cores', 'the arcade ROM sets', $false),
+                              @('data', 'the shareware and demo data of the ported games', (-not [Console]::IsInputRedirected)))) {
             if (@($defs | Where-Object { $_.Kind -eq $choice[0] }).Count -gt 0) {
-                Write-Host "$verb $($choice[1])? [y/N] " -NoNewline
-                # No unless the answer says yes, also when nobody can answer.
-                try { $answer = [Console]::In.ReadLine() } catch { $answer = $null }
-                # A terminal shows the Enter itself.
-                if ([Console]::IsInputRedirected) { Write-Host '' }
-                if ($answer -and $answer.Trim() -match '^(y|yes)$') { $wanted += $choice[0] }
+                if (Read-Answer "$verb $($choice[1])?" $choice[2]) { $wanted += $choice[0] }
             }
         }
         $defs = @($defs | Where-Object { $wanted -contains $_.Kind })
@@ -1295,10 +1330,9 @@ try {
 
     # The check is separate from installing: a newer archive is reported on a
     # card with an emu folder even when this run does not install it.
-    $hasEmu = [System.IO.Directory]::Exists((Join-Path $sdRoot 'emu'))
     $release = $null
     $releaseError = $null
-    if ($cfg.Sdcard -and ($hasEmu -or $requested -contains 'sdcard')) {
+    if ($cfg.Sdcard -and ($hasEmu -or $archiveChosen -or $requested -contains 'sdcard')) {
         try {
             $release = Read-Release $cfg.Sdcard $sdRoot
             # A new card says nothing about the board, so it gets no reminder.
@@ -1317,7 +1351,7 @@ try {
         $cardShown = if ($release.Card) { $release.Card } else { 'unknown' }
         Write-Host "New archive:  $($cfg.Sdcard.Asset) $($release.Tag) is available (card: $cardShown): $($release.Page)"
     }
-    $installArchive = $release -and ($requested -contains 'sdcard' -or ($requested.Count -eq 0 -and $hasEmu -and -not $NoDownload))
+    $installArchive = $release -and ($archiveChosen -or $requested -contains 'sdcard' -or ($requested.Count -eq 0 -and $hasEmu -and -not $NoDownload))
     if ($installArchive -and $hasEmu -and $release.Newer -and -not $DryRun) {
         Write-Host 'Warning:      files on the card that the archive also holds are replaced; edited lists in /emu are saved as .bak'
     }

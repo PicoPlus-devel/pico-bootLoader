@@ -1438,7 +1438,7 @@
     },
     {
       "id": "diablo_spawn",
-      "name": "Diablo",
+      "name": "Diablo (spawn.mpq)",
       "set": "shareware data (spawn.mpq)",
       "url": "https://github.com/diasurgical/devilutionx-assets/releases/download/v2/spawn.mpq",
       "destination": "/roms/devilutionx",

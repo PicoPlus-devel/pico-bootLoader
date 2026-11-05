@@ -69,14 +69,14 @@ they are **not** emulated.
    program warns when that drive holds files but no pico-bootLoader card. The
    **SD card files** row starts ticked, and installs
    `pico-bootLoader_sdcard.zip`: the emulators, the native ports, the menu
-   artwork, a sample configuration file and a copy of `updateAll`. All other rows
-   are unticked at every start. Tick what else you want, then select **Install**.
+   artwork, a sample configuration file and a copy of `updateAll`. The rows of the
+   shareware or demo data of *Doom*, *Duke Nukem 3D*, *Quake II* and *Diablo* start
+   ticked too; *Doom* does not start without its data. The rows of the arcade ROM
+   sets and the BIOS files of the emulators are unticked at every start. Tick the
+   ones you want, then select **Install**.
 
-   The other rows are the arcade ROM sets, the BIOS files of the emulators and
-   the shareware or demo data of *Doom*, *Duke Nukem 3D*, *Quake II* and
-   *Diablo*. `updateAll` installs each in the folder its application reads, and
-   downloads whatever is not at hand. *Doom* does not start without its data.
-   [updateAll/README.md](updateAll/README.md) describes how to use only zips you
+   `updateAll` installs each in the folder its application reads, and downloads
+   whatever is not at hand. [updateAll/README.md](updateAll/README.md) describes how to use only zips you
    already have. Running it again later shows the sets added since, and reports
    and installs a newer SD-card archive. That overwrites the files on the card
    that the archive also holds, including custom artwork under the same name;
@@ -92,7 +92,9 @@ they are **not** emulated.
    the card. Then run `updateAll` from the card's `updateAll` folder to install
    the rest: `updateAll.exe` on Windows, which selects that card itself, or
    `python3 updateAll.py --sd <path of the card>` on Linux or macOS, which asks
-   whether to install the BIOS files, the arcade ROM sets and the game data.
+   whether to install the BIOS files, the arcade ROM sets and the game data. A
+   copy of the script in another folder, with its `updateAll.json`, also offers to
+   install the archive on a card without an `emu` folder.
    Alternatively, assemble the layout yourself as described in
    [SD card layout](#sd-card-layout).
 3. **Add your games.** The archive contains no games, ROMs or BIOS files. Each
