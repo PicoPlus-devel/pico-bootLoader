@@ -36,9 +36,17 @@
 # from /roms/arcade/1943 and 1943kai.zip from /roms/arcade/1943KAI, zipped or
 # unzipped; updateAll installs both. Without PSRAM a game is copied into flash
 # the first time it is started.
+#
+# picoSalamander needs PSRAM and HSTX, so it is built for HW_CONFIG 2, 8, 13, 14
+# and 15 only: Salamander and Lifeforce, chosen at start when both sets are on
+# the card. The games are copyright Konami: they read MAME's salamand.zip from
+# /roms/arcade/SALAMAND and lifefrce.zip (a clone of salamand) from
+# /roms/arcade/LIFEFRCE, zipped or unzipped; updateAll installs both, from a
+# merged salamand.zip.
 picoOutRun;outrun;OutRun
 picoPhoenix;phoenix;Phoenix
 picoMoonCresta;mooncresta;Moon Cresta
 picoGalagino;galagino;Galagino
 picoDragonsLair;dragonslair;Dragon's Lair
 pico1943;1943;1943/1943 Kai
+picoSalamander;salamander;Salamander/Lifeforce

@@ -26,9 +26,11 @@ picoMoonCresta;mooncresta;Moon Cresta
 picoGalagino;galagino;Galagino
 picoDragonsLair;dragonslair;Dragon's Lair
 pico1943;1943;1943/1943 Kai
+picoSalamander;salamander;Salamander/Lifeforce
 
 # --- Computer ---
 pico994A;ti99;TI99/4A
+picoC64;c64;Commodore 64/128
 
 # --- Consoles ---
 piconesPlus;nes;Nintendo Entertainment System
@@ -47,3 +49,4 @@ doom_tiny;doom;Doom!;doom/doom1-whx-bootloader.uf2
 doom_tiny_full;doom_full;Doom Full!
 duke3d_game;duke3d;Duke Nukem 3D
 pico-quake2;quake2;Quake II
+pico-lutionX;diablo;Diablo

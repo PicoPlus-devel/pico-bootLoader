@@ -1,12 +1,13 @@
 # Releasing
 
-Maintainer checklist for publishing pico-bootLoader. Three artifacts ship, and
+Maintainer checklist for publishing pico-bootLoader. Four artifacts ship, and
 they have different lifecycles:
 
 | Artifact | Built by | How it gets onto the release |
 | --- | --- | --- |
 | `pico-bootLoader_<board>_arm[_piousb].uf2` (10 files) | CI, on the self-hosted runner | attached automatically by the workflow |
 | `pico-bootLoader_sdcard.zip` | **locally**, by `build_emulators.sh -c all -z` | `gh release upload`, by hand |
+| `updateAll-<version>.exe` | CI, on the self-hosted runner | attached by the workflow, only when `updateAll/win/VERSION` is higher than on earlier releases |
 | PCB gerbers (4 zips: PicoNES v2.6, PicoNES v2.8, Mini v2.0, Micro v1.2) | nobody — vendored in the `pico_shared` submodule | attached automatically by the workflow |
 
 The archive is not built in CI because it needs every application's toolchain and
@@ -25,6 +26,14 @@ after the CHANGELOG, saying the firmware is unchanged since `v0.N`, so users kno
 not to re-flash.
 Both forms are matched by the existing `push:` tag globs, and `v*.*-alpha` is
 available for dry runs.
+
+updateAll reports a newer archive and installs it on a card with an `emu` folder:
+it takes the newest release with a `vN.M` or `vN.M.P` tag that holds
+`pico-bootLoader_sdcard.zip`, and compares it with `/emu/release.txt` on the card.
+So once the archive is uploaded, every copy of updateAll from v0.9 on offers it. A
+release without the archive is passed over, and is not reported. `-alpha` tags are
+ignored, so a dry run is never offered. Upload a corrected archive under a new
+tag: a card already on a tag does not notice that its archive was replaced.
 
 A set added to `updateAll/updateAll.json` needs no release: every copy of
 updateAll from v0.7.2 on reads that file from `main` at start-up (its
@@ -46,6 +55,26 @@ has run.
 The pico-dragonslair and pico-quake2 releases attach an `updateAll.exe` too,
 built by their own workflows from this repository's `main`. A change to
 updateAll reaches them only once it is merged and their next release is cut.
+
+This repository's `updateAll-<version>.exe` asset is what the Windows program offers
+as an update of itself, to every copy from bootloader release v0.9 on, wherever that
+copy came from. The program has a version of its own in `updateAll/win/VERSION`,
+separate from the tags of this repository. Every build reports that number, whatever
+the state of the tree, so nothing raises it by itself.
+
+**Raise `updateAll/win/VERSION` with every change to `updateAll/win`** (`hosttest`
+excepted). The workflow attaches the program only when that number is higher than the
+highest version on a release, so that users are asked only when the program really
+changed. It stops at the start when `updateAll/win` changed and the number did not,
+and `build_emulators.sh -z -r` stops on the same check before it builds anything. A
+change to the sets in `updateAll/updateAll.json` needs no new version, as every copy
+reads that file from `main` when it starts.
+
+Commit changes to `updateAll/win` before building the archive, so that the copy in
+the archive and the one on the release are the same. A copy already on a tag is not
+told that its asset was replaced, so a bad exe needs a new version. To stop every copy
+from offering an update, remove `program_asset` from `updateAll/updateAll.json` on
+`main`.
 
 ## Prerequisites
 
@@ -98,15 +127,18 @@ changes but the board does not need re-flashing.
 
 ```bash
 # 1. Build every emulator from its latest release tag and pack the archive.
-#    -j 3 keeps total load near nproc; -z requires -c all.
-./build_emulators.sh -c all -j 3 -z
+#    -j 3 keeps total load near nproc; -z requires -c all. -r is the tag of step 3.
+./build_emulators.sh -c all -j 3 -z -r v0.2.1
 ```
 
 Check the grand summary before going further. Every emulator should be `BUILT`
 for the boards it supports. `SKIP` is expected for excluded combinations
-(`picogenesisPlus` on HW 7; `picosnesPlus` and `picoOutRun` on HW 1, 5, 6, 7, 9;
-Doom outside boards 2, 8, 13, 14, 15; `duke3d_game` outside boards 2, 8, 13, 15;
-`pico-quake2` outside boards 2, 8; `colecojam` outside board 8). A `FAIL` for
+(`picogenesisPlus` on HW 7; `picosnesPlus`, `picoOutRun` and `picoSalamander` on
+HW 1, 5, 6, 7, 9; Doom outside boards 2, 8, 13, 14, 15; `duke3d_game` outside boards 2, 8, 13, 15;
+`pico-quake2` and `pico-lutionX` outside boards 2, 8; `colecojam` outside
+board 8). The updateAll entry `diablo` downloads the SD-card assets of
+pico-lutionX's release v0.1-alpha, so that release must stay published.
+A `FAIL` for
 `pico-quake2` that says `fruitjam-build-forbootloader.sh not found` means its
 latest release tag predates the bootloader build scripts; tag a newer
 pico-quake2 release first. Likewise, a `FAIL` for `doom_tiny` that says
@@ -135,9 +167,9 @@ gh release upload v0.2.1 releases/pico-bootLoader_sdcard.zip
 
 ## Scenario C — both changed
 
-Run Scenario B's steps 1–2, fold the firmware notes into `CHANGELOG.md`, then
-publish with a **two-component** tag (`v0.3`, not `v0.3.0`) so users are told to
-re-flash, and upload the archive as in step 4.
+Run Scenario B's steps 1–2, with the new tag as `-r`, fold the firmware notes into
+`CHANGELOG.md`, then publish with a **two-component** tag (`v0.3`, not `v0.3.0`) so
+users are told to re-flash, and upload the archive as in step 4.
 
 ---
 
@@ -158,6 +190,10 @@ gh release upload v0.2.1-alpha releases/pico-bootLoader_sdcard.zip
 gh release delete v0.2.1-alpha --cleanup-tag
 ```
 
+The full rehearsal also checks the version of updateAll, and stops in the same way
+when `updateAll/win` changed and `VERSION` did not. A program attached to an `-alpha`
+release is offered to nobody.
+
 ## Verifying a release
 
 ```bash
@@ -171,6 +207,12 @@ gh release view v0.2.1
   (`unzip -l releases/pico-bootLoader_sdcard.zip | grep updateAll/`), and its
   `ld2pico/` folder holds `ld2pico.exe` and its README
   (`unzip -l releases/pico-bootLoader_sdcard.zip | grep ld2pico/`).
+  `unzip -p releases/pico-bootLoader_sdcard.zip emu/release.txt` prints the tag
+  of this release. If it does not, updateAll still installs the archive, but a
+  card unpacked by hand downloads it once more.
+- `updateAll-<version>.exe` present if `updateAll/win/VERSION` is higher than on
+  earlier releases. The log of the workflow's check says which it was. The window
+  title of the program shows that version.
 - **4 PCB gerber assets** — `pico_nesPCB_v2.6.zip`,
   `pico_nesPCB_v2.8_SNES_PORTS.zip`, `Gerber_PicoNES_Mini_PCB_v2.0.zip` and
   `Gerber_PicoNES_Micro_v1.2.zip`,
@@ -180,7 +222,7 @@ gh release view v0.2.1
   CHANGELOG text, just above the version table.
 - The version table lists every emulator with a real tag — no `VX.X`, no blanks
   in the Version column.
-- On hardware: unzip the archive at the root of a FAT32/exFAT card, boot, confirm
+- On hardware: unzip the archive at the root of a FAT32 card, boot, confirm
   the picker lists every entry, launch one emulator and check it shows its
   version rather than a build date. Run updateAll on the card, launch *Doom!*
   and confirm the WAD flashes from `/roms/doom/`. Without the file, *Doom!*
@@ -203,18 +245,18 @@ from `github.sha`, so it will point at whatever is current.
   tag into `CMakeLists.txt` and `pico_shared/menu.h`; `build_emulators.sh` seds
   each emulator's own `pico_shared/menu.h`. In-tree both keep their placeholders
   (`"0.1"`, `"VX.X"`), and a build from an unstamped tree shows the build date
-  instead — that is how a dev build identifies itself.
+  instead — that is how a dev build identifies itself. updateAll is the exception:
+  its version is committed in `updateAll/win/VERSION`, and no build stamps it.
 - **`pico_shared` in tag mode is `main`, not the revision the tag pins.** Tag mode
   builds each emulator's tagged source against `pico_shared` `main` and records
   both refs in the manifest. The reason was historical: `bld.sh` gained `-b`
   (`BUILD_FOR_BOOTLOADER`) only in `pico_shared` `f2c8be9`, and the emulator tags
   of the time predated it, so their pinned revision rejected `-b` outright.
   That reason no longer applies — every current tag pins a descendant of
-  `f2c8be9` — but the substitution is not a no-op. For v0.7.2 1943 v0.1 pins
-  `82ac5d8`, which is `main`; Galagino v0.2 and OutRun v0.5.1 pin `9d81d14`,
-  Phoenix v0.2.2 and Moon Cresta v0.2.2 `ce03f96`, Dragon's Lair v0.1
-  `929281d`, and every other emulator tag pins `6e65df4`. The whole bundle is built against the one `pico_shared` `main`
-  that `emu/versions.txt` records.
+  `f2c8be9` — but the substitution is not a no-op. For v0.9 Salamander v0.2 and
+  Commodore 64 v0.2 pin `cd147e0`, every other emulator tag pins `8b93b28`, and
+  the bundle is built against `main`, `f16f692`. The whole bundle is built against
+  the one `pico_shared` `main` that `emu/versions.txt` records.
   An older tag that no longer builds against `main` shows up as a `FAIL` in the
   grand summary.
 - **A tag pushed from CI would not trigger this workflow** — GitHub does not fire

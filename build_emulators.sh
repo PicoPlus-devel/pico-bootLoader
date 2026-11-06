@@ -30,10 +30,11 @@ TAG_MODE=1
 BRANCH_MODE=0
 MAIN_MODE=0
 PACK_ZIP=0
+RELEASE_TAG=""
 HWCONFIG_ARG=""
 usage() {
     cat <<EOF
-Usage: $0 [-c N|all] [-j N] [-B|-m] [-z] [-h]
+Usage: $0 [-c N|all] [-j N] [-B|-m] [-z [-r TAG]] [-h]
   -c N   build for HW_CONFIG N non-interactively (skip the picker).
   -c all build for every supported HW_CONFIG, unattended. PIO-USB configs are
          skipped automatically when PICO_PIO_USB_PATH is unset/unusable.
@@ -51,13 +52,16 @@ Usage: $0 [-c N|all] [-j N] [-B|-m] [-z] [-h]
          needs mingw-w64, ld2pico.exe curl). Requires -c all (a zip built from
          one hwconfig would be missing every other board) and the default tag
          mode (a release bundle must be built from tags).
+  -r TAG with -z: the release this archive is for, such as v0.9 or v0.9.1. It is
+         recorded in the archive as emu/release.txt, so that updateAll does not
+         download the archive again on a card unpacked by hand.
   -h     this help
 
 Default (no -B/-m): each emulator repo's latest release tag, built against
 pico_shared main rather than the tag's own pin (see the note at the top).
 EOF
 }
-while getopts "c:j:Btmzh" opt; do
+while getopts "c:j:Btmzr:h" opt; do
     case "$opt" in
         c) HWCONFIG_ARG="$OPTARG" ;;
         j) JOBS="$OPTARG" ;;
@@ -65,6 +69,7 @@ while getopts "c:j:Btmzh" opt; do
         m) MAIN_MODE=1; TAG_MODE=0 ;;
         t) TAG_MODE=1 ;;   # accepted for compatibility: tag mode is now the default
         z) PACK_ZIP=1 ;;
+        r) RELEASE_TAG="$OPTARG" ;;
         h) usage; exit 0 ;;
         *) usage >&2; exit 1 ;;
     esac
@@ -74,10 +79,20 @@ done
 if (( PACK_ZIP )); then
     (( TAG_MODE )) || { echo "ERROR: -z requires the default tag mode (not -B/-m): a release bundle must be built from release tags" >&2; exit 1; }
     [ "$HWCONFIG_ARG" = "all" ] || { echo "ERROR: -z requires -c all: a zip built from a single hwconfig would be missing every other board" >&2; exit 1; }
+    [ -n "$RELEASE_TAG" ] || echo "WARN: no -r TAG: updateAll will download this archive again on a card unpacked by hand" >&2
+fi
+if [ -n "$RELEASE_TAG" ]; then
+    (( PACK_ZIP )) || { echo "ERROR: -r only applies with -z" >&2; exit 1; }
+    # The form updateAll accepts: a dry run such as v0.9-alpha is not a release to it.
+    [[ "$RELEASE_TAG" =~ ^v[0-9]{1,9}(\.[0-9]{1,9}){1,2}$ ]] || { echo "ERROR: -r needs a tag such as v0.9 or v0.9.1, not '$RELEASE_TAG'" >&2; exit 1; }
 fi
 
 cd "$(dirname "$0")"
 LOADER_DIR="$(pwd)"
+# Now rather than after hours of building: the release workflow stops on this too.
+if [ -n "$RELEASE_TAG" ]; then
+    python3 "$LOADER_DIR/.github/scripts/updateall_version.py" "$RELEASE_TAG" || exit 1
+fi
 # Keep the clone+build tree OUTSIDE this repo so it doesn't pollute git status.
 BUILD_DIR="$(dirname "$LOADER_DIR")/emu-build"
 # Default GitHub owner: every REPO_OF entry without an owner of its own, and
@@ -99,16 +114,19 @@ declare -A REPO_OF=(
     [picoPacPlus]=pico-pacPlus
     [picosnesPlus]=pico-snesPlus
     [pico994A]=pico-994A
+    [picoC64]=pico-c64
     [picoOutRun]=pico-outrun
     [picoPhoenix]=pico-phoenix
     [picoMoonCresta]=pico-mooncresta
     [picoGalagino]=pico-galagino
     [picoDragonsLair]=pico-dragonslair
     [pico1943]=pico-1943
+    [picoSalamander]=pico-salamander
     [doom_tiny]=pico-doom
     [doom_tiny_full]=pico-doom
     [duke3d_game]=pico-duke3D
     [pico-quake2]=pico-quake2
+    [pico-lutionX]=pico-lutionX
     [colecojam]=cogliano/Adafruit_ColecoJam
 )
 
@@ -158,6 +176,13 @@ repo_name() { echo "${REPO_OF[$1]##*/}"; }
 # It needs PSRAM and 16 MB of flash, and PIO USB on both boards. Its CMake target
 # is quake2, so the UF2 it produces is quake2.uf2, not <prog>.uf2.
 #
+# pico-lutionX (Diablo, on the DevilutionX engine) ships one, pico-lutionX, for
+# boards 2 and 8, built like pico-quake2: no companion image, the game data in
+# /roms/devilutionx on the SD card, and a flash cache of level graphics above its
+# own image. It needs PSRAM and 16 MB of flash. Its CMake stops without
+# Pico-PIO-USB on both boards, although on board 2 it uses the native USB port.
+# Its CMake target is pico_lutionx, so the UF2 it produces is pico_lutionx.uf2.
+#
 # Adafruit_ColecoJam ships one, colecojam, for the Fruit Jam only. It is hosted
 # outside $GITHUB_OWNER and its tags carry no "v" prefix (1.3), which
 # latest_tag_of handles as is. Its build script fetches FatFs, Pico-PIO-USB,
@@ -173,6 +198,7 @@ declare -A SCRIPTED_BRANCH=(
     [doom_tiny_full]=main
     [duke3d_game]=fix/audio-production-rate
     [pico-quake2]=main
+    [pico-lutionX]=main
     [colecojam]=main
 )
 declare -A SCRIPTED_CLONE_OF=(
@@ -180,6 +206,7 @@ declare -A SCRIPTED_CLONE_OF=(
     [doom_tiny_full]=pico-doom-full
     [duke3d_game]=pico-duke3D
     [pico-quake2]=pico-quake2
+    [pico-lutionX]=pico-lutionX
     [colecojam]=Adafruit_ColecoJam
 )
 # The git ref each variant is actually cloned at — a tag when one exists, else
@@ -192,6 +219,7 @@ declare -A SCRIPTED_SCRIPT_FMT=(
     [doom_tiny_full]="%s-build-full-forbootloader.sh"
     [duke3d_game]="%s-build-forbootloader.sh"
     [pico-quake2]="%s-build-forbootloader.sh"
+    [pico-lutionX]="%s-build-forbootloader.sh"
     [colecojam]="%s-build-forbootloader.sh"
 )
 declare -A SCRIPTED_BUILD_FMT=(
@@ -199,16 +227,18 @@ declare -A SCRIPTED_BUILD_FMT=(
     [doom_tiny_full]="build_bl_full_%s"
     [duke3d_game]="build_bl_%s"
     [pico-quake2]="build_bl_%s"
+    [pico-lutionX]="build_bl_%s"
     [colecojam]="build_bl_%s"
 )
 # Where under the build tree the produced UF2s land. pico-doom puts them in
-# src/; pico-duke3D and pico-quake2 one level deeper, in src/pico/;
-# Adafruit_ColecoJam in the build tree itself.
+# src/; pico-duke3D, pico-quake2 and pico-lutionX one level deeper, in
+# src/pico/; Adafruit_ColecoJam in the build tree itself.
 declare -A SCRIPTED_OUT_SUBDIR=(
     [doom_tiny]="src"
     [doom_tiny_full]="src"
     [duke3d_game]="src/pico"
     [pico-quake2]="src/pico"
+    [pico-lutionX]="src/pico"
     [colecojam]="."
 )
 # The app UF2's file name in that directory, for a variant whose CMake target is
@@ -216,6 +246,7 @@ declare -A SCRIPTED_OUT_SUBDIR=(
 # It is installed as emu/<hw>/<prog>.uf2 either way.
 declare -A SCRIPTED_UF2_OF=(
     [pico-quake2]="quake2.uf2"
+    [pico-lutionX]="pico_lutionx.uf2"
 )
 # Companion DATA-family UF2 the variant must produce (emulators.txt aux_uf2
 # column), or "" when it needs none. Every per-board build script that emits one
@@ -225,24 +256,28 @@ declare -A SCRIPTED_AUX_OF=(
     [doom_tiny_full]=""
     [duke3d_game]=""
     [pico-quake2]=""
+    [pico-lutionX]=""
     [colecojam]=""
 )
 # 1 for a variant whose build resolves its toolchain through pico-extras.
-# pico-doom does (via its pico-env.sh); pico-duke3D, pico-quake2 and
-# Adafruit_ColecoJam do not, so they must still build when PICO_EXTRAS_PATH is
-# unset.
+# pico-doom does (via its pico-env.sh); pico-duke3D, pico-quake2, pico-lutionX
+# and Adafruit_ColecoJam do not, so they must still build when PICO_EXTRAS_PATH
+# is unset.
 declare -A SCRIPTED_NEEDS_EXTRAS=(
     [doom_tiny]=1
     [doom_tiny_full]=1
     [duke3d_game]=0
     [pico-quake2]=0
+    [pico-lutionX]=0
     [colecojam]=0
 )
 # 1 for a variant that needs PICO_PIO_USB_PATH on every board it builds for,
 # including boards outside PIOUSB_CONFIGS. pico-quake2 drives USB host over PIO
-# on HW_CONFIG 2 as well, and its CMake stops without Pico-PIO-USB.
+# on HW_CONFIG 2 as well, and its CMake stops without Pico-PIO-USB; pico-lutionX's
+# CMake stops without it on every board too.
 declare -A SCRIPTED_NEEDS_PIOUSB=(
     [pico-quake2]=1
+    [pico-lutionX]=1
 )
 # HW_CONFIG -> board "tag" naming the per-board build script and build tree.
 # Shared across the family: the tag is the board's canonical short name and every
@@ -266,6 +301,7 @@ declare -A SCRIPTED_HWCONFIGS=(
     [doom_tiny_full]="2 8 13 14 15"
     [duke3d_game]="2 8 13 15"
     [pico-quake2]="2 8"
+    [pico-lutionX]="2 8"
     [colecojam]="8"
 )
 
@@ -302,10 +338,16 @@ PIOUSB_CONFIGS=(7 8 9 14)
 # required because the bit-banged PicoDVI path ties the system clock to the
 # pixel clock (capped at 324 MHz, where the engine is too slow) and puts the
 # sound chain back on core0. See pico-outrun/buildAll.sh.
+#
+# picoSalamander is restricted to the same five boards because it runs at a
+# fixed 384 MHz, which the PicoDVI path cannot. PSRAM is optional: without it the
+# machine's data is copied into flash. Its CMake stops on a board without HSTX.
+# See pico-salamander/buildAll.sh.
 declare -A EXCLUDE_HWCONFIGS=(
     [picogenesisPlus]="7"
     [picosnesPlus]="1 5 6 7 9"
     [picoOutRun]="1 5 6 7 9"
+    [picoSalamander]="1 5 6 7 9"
 )
 
 die()  { echo "ERROR: $*" >&2; exit 1; }
@@ -1309,7 +1351,7 @@ if (( PACK_ZIP )); then
     ZIP_OUT="$LOADER_DIR/releases/pico-bootLoader_sdcard.zip"
     mkdir -p "$LOADER_DIR/releases"
     echo
-    if "$PACKER" "$LOADER_DIR" "$ZIP_OUT"; then
+    if "$PACKER" "$LOADER_DIR" "$ZIP_OUT" ${RELEASE_TAG:+"$RELEASE_TAG"}; then
         info "SD-card archive: $ZIP_OUT ($(human_size "$(stat -c%s "$ZIP_OUT")"))"
     else
         warn "packing the SD-card archive failed"

@@ -6,6 +6,141 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 
 [Binaries for each configuration and PCB design are at the end of this page](#downloads___).
 
+**Copyright.** The ROM sets and BIOS files that **updateAll** can install are
+copyright of their manufacturers and are not part of this project. Holding the
+rights to them is your responsibility.
+
+## v0.9
+
+USB controllers on the Adafruit Fruit Jam and the other boards with PIO-USB
+are now found at every start, in the menu and in the applications. On boards
+with HSTX video the applications no longer show small dots or lines in the
+picture. *Diablo* joins the Ports category, *Salamander* the Arcade category,
+the *Commodore 64 and 128* the Computer category, and **updateAll** now also
+installs the BIOS files the emulators need.
+
+> **Do you need to update?** Yes. Re-flash the board, and replace the `/emu` and
+> `/updateAll` folders on the card with the ones in the new
+> `pico-bootLoader_sdcard.zip`. Then run **updateAll**, where the data of *Diablo*
+> is already ticked, and tick what else you want, such as the BIOS files.
+
+### Changes
+
+- **USB controllers on the Adafruit Fruit Jam and other boards with PIO-USB are
+  now found at every start.** On boards with an older RP2350 chip they were
+  often not detected, in the menu and in the applications.
+- **USB controllers connected through a USB hub are found reliably** on boards
+  that use their built-in USB port, such as a Pimoroni Pico Plus 2, the Murmulator
+  M2 and the Olimex RP2040-PICO-PC. They were often not found, and the board could
+  stop.
+- **No more dots or lines in the picture.** On boards with HSTX video, some TVs
+  and monitors showed small dots or short dotted lines in some applications, for
+  example in the Genesis and Super Nintendo emulators, or with Overclock on. The
+  picture is now clean, and the built-in USB port can still be used for
+  controllers and USB drive mode. The **Video Clock Fix** setting of the
+  emulators is no longer needed and has been removed. Thanks to @szuping for the
+  hint that led to this fix.
+- **Diablo** joins the Ports category, as an early test version. It runs on the
+  Adafruit Fruit Jam and on a Pimoroni Pico Plus 2 with the Adafruit DVI and
+  microSD breakouts, and needs 8 MB of PSRAM and 16 MB of flash. updateAll
+  installs the shareware version and the files the game needs in
+  `/roms/devilutionx/`.
+- **Salamander** joins the Arcade category: Konami's *Salamander* and
+  *Lifeforce*. It runs on the same boards as *OutRun*: the Adafruit Fruit Jam, the
+  Adafruit DVI and microSD breakouts, the Murmulator M2, the Adafruit Feather
+  RP2350 and the Olimex RP2040-PICO-PC. PSRAM is optional: without it, such as on
+  a Raspberry Pi Pico 2, the game is copied into flash the first time it starts.
+  The games are not
+  included: copy MAME's `salamand.zip` to `/roms/arcade/SALAMAND` and
+  `lifefrce.zip` to `/roms/arcade/LIFEFRCE`, or let updateAll install them.
+- **Commodore 64 and 128** join the Computer category. The Commodore 64 runs on
+  every board; the Commodore 128 needs HSTX video and PSRAM. The emulator has so
+  far been tried only on the Adafruit Fruit Jam and with the Adafruit DVI and
+  microSD breakouts. Programs, disks, tapes and cartridges go in `/roms/C64`, and
+  updateAll installs the ROM files it needs. See the
+  [pico-c64 README](https://github.com/PicoPlus-devel/pico-c64#readme).
+- **updateAll installs the BIOS files**, as MiSTer's Update All does: for the
+  TI-99/4A, Commodore 64 and 128, Videopac, ColecoVision and PC Engine CD, and
+  for Famicom Disk System games and Sega CD discs. The Windows program shows
+  them as one entry, **BIOS**. As with the ROM sets,
+  holding the rights to them is your responsibility.
+- **updateAll tells you when a new SD-card archive is available**, and installs
+  it on the card. This overwrites files on the card, so the Windows program asks
+  first. Only files that changed are written, and a menu list you edited is first
+  saved as `.bak`. updateAll cannot flash the board, but tells you when
+  a release needs it. The Windows program warns before it installs the archive on
+  a drive with other files but no `/emu` folder; the scripts install it there only
+  if you ask.
+- **You choose the ROM sets and BIOS files in updateAll.** In the Windows program,
+  **SD card files** and the data of the ported games start ticked, so tick the ROM
+  sets and BIOS files you want. The scripts ask.
+  Both remind you that ROM sets and BIOS files are copyrighted.
+- **The updateAll Windows program can update itself.** When a newer version
+  exists, it asks you, and with **Yes** it downloads the new version and restarts.
+  It now has its own version number, shown in its title bar.
+- **The updateAll Windows program is easier to follow.** It lists each file with
+  its own progress bar, and the bar at the bottom now shows the whole run. A
+  **Select all** box ticks or unticks all sets, and the full report is still
+  there under **Show log**.
+
+### Updated applications
+
+The applications have the fixes above where they apply. Those that overclock now
+run at 384 MHz instead of 378 MHz, and in the menus of the emulators and arcade
+games, Enter selects and Esc goes back on a USB keyboard. Also new:
+
+- **Super Nintendo**
+  [v0.9](https://github.com/PicoPlus-devel/pico-snesPlus/releases/tag/v0.9) and
+  [v0.10](https://github.com/PicoPlus-devel/pico-snesPlus/releases/tag/v0.10): an
+  original SNES Mouse can be used in controller port 1, for *Mario Paint* and
+  other mouse games.
+- **PC Engine**
+  [v0.9](https://github.com/PicoPlus-devel/pico-pcePlus/releases/tag/v0.9):
+  SuperGrafx games run at full speed on more boards.
+- **Master System/Game Gear**
+  [v0.33](https://github.com/PicoPlus-devel/pico-smsplus/releases/tag/v0.33): the
+  YM2413 FM setting always matches the speed the board runs at.
+- **OutRun**
+  [v0.6](https://github.com/PicoPlus-devel/pico-outrun/releases/tag/v0.6): the
+  settings menu no longer opens by itself with a controller on the Wii port.
+- **Galagino**
+  [v0.2.1](https://github.com/PicoPlus-devel/pico-galagino/releases/tag/v0.2.1): a
+  screen at start-up shows which games can be played.
+- **Galagino**, **Phoenix**
+  [v0.2.3](https://github.com/PicoPlus-devel/pico-phoenix/releases/tag/v0.2.3),
+  **Moon Cresta**
+  [v0.2.3](https://github.com/PicoPlus-devel/pico-mooncresta/releases/tag/v0.2.3)
+  and **1943**
+  [v0.2](https://github.com/PicoPlus-devel/pico-1943/releases/tag/v0.2): the
+  scanline mode is no longer offered on boards with PicoDVI video.
+- **Duke Nukem 3D**
+  [v0.5](https://github.com/PicoPlus-devel/pico-duke3D/releases/tag/v0.5): USB
+  mouse support, and the SNES Mouse with the Adafruit DVI and microSD breakouts.
+- **Quake II**
+  [v0.3-alpha](https://github.com/PicoPlus-devel/pico-quake2/releases/tag/v0.3-alpha)
+  and
+  [v0.3.1-alpha](https://github.com/PicoPlus-devel/pico-quake2/releases/tag/v0.3.1-alpha):
+  the first load of a level no longer ends with "Loading plaque timed out", and
+  an original SNES Mouse can be used on the Pimoroni Pico Plus 2. On that board,
+  USB devices now go on the Pico's own USB port, not on a USB-A socket on GPIO 20
+  and 21. The game can now also be quit with a controller.
+
+**NES**
+[v0.55](https://github.com/PicoPlus-devel/pico-infonesPlus/releases/tag/v0.55),
+**Genesis**
+[v0.20](https://github.com/PicoPlus-devel/pico-genesisPlus/releases/tag/v0.20),
+**Videopac**
+[v0.6.2](https://github.com/PicoPlus-devel/pico-pacPlus/releases/tag/v0.6.2),
+**Game Boy**
+[v0.15.2](https://github.com/PicoPlus-devel/pico-peanutGB/releases/tag/v0.15.2),
+**TI-99/4A**
+[v0.3.1](https://github.com/PicoPlus-devel/pico-994A/releases/tag/v0.3.1),
+**Dragon's Lair**
+[v0.1.2](https://github.com/PicoPlus-devel/pico-dragonslair/releases/tag/v0.1.2)
+and **Doom**
+[v0.5](https://github.com/PicoPlus-devel/pico-doom/releases/tag/v0.5) have only the
+changes above.
+
 ## v0.8
 
 **updateAll** now also installs the free shareware and demo data of *Doom*,
@@ -234,8 +369,8 @@ now run on the Olimex board, close the controller test by holding SELECT + UP fo
 (SELECT + START clashed with some 8BitDo controllers), and make B work
 straight away on the AliExpress SNES-style USB controller. The NES, Super
 Nintendo, Genesis, PC Engine and Master System emulators also have a new
-**Video Clock Fix** setting, for TVs and monitors that show small dots or lines
-in the picture. Each version below links to its own release notes.
+~~**Video Clock Fix** setting, for TVs and monitors that show small dots or lines
+in the picture~~ (removed in v0.9). Each version below links to its own release notes.
 
 - **Nintendo Entertainment System**
   [v0.53](https://github.com/PicoPlus-devel/pico-infonesPlus/releases/tag/v0.53)
@@ -265,7 +400,7 @@ in the picture. Each version below links to its own release notes.
   [v0.8](https://github.com/PicoPlus-devel/pico-pcePlus/releases/tag/v0.8) and
   **Master System / Game Gear**
   [v0.32](https://github.com/PicoPlus-devel/pico-smsplus/releases/tag/v0.32):
-  the Olimex board, the Video Clock Fix setting and the fixes above.
+  the Olimex board, ~~the Video Clock Fix setting~~ and the fixes above.
 - **Game Boy**
   [v0.15](https://github.com/PicoPlus-devel/pico-peanutGB/releases/tag/v0.15),
   **Videopac**
@@ -336,23 +471,35 @@ for the full list.
 
 ## Getting started
 
-For board-by-board wiring, supported display modes and more refer to the [pico-infonesPlus documentation](https://github.com/PicoPlus-devel/pico-infonesPlus#setup). The set of supported boards and their pinouts is identical between the two projects.
+For board-by-board wiring, supported display modes and more refer to the [pico-infonesPlus documentation](https://github.com/PicoPlus-devel/pico-infonesPlus#setup). The pinouts are the same in both projects, but the loader runs only on the boards listed under [Supported hardware](https://github.com/PicoPlus-devel/pico-bootLoader#supported-hardware).
 
 1. **Flash the bootloader.** Download the loader `.uf2` for your board. Hold
    BOOTSEL, connect the board over USB, and copy the `.uf2` onto the
    `RP2350` drive. See [Supported hardware](https://github.com/PicoPlus-devel/pico-bootLoader#supported-hardware) in the README.
-2. **Prepare the SD card.** Download `pico-bootLoader_sdcard.zip` from the same
-   Releases page and unpack it onto a FAT32- or exFAT-formatted card. The
-   archive contains the emulators, the native ports, the menu artwork, a
-   sample configuration file and the `updateAll` tool for the arcade ROMs.
+2. **Prepare the SD card.** Use a FAT32-formatted card (exFAT also works, but is
+   not advised).
+
+   **On Windows,** download `updateAll-<version>.exe` from the most recent release
+   on the [Releases](https://github.com/PicoPlus-devel/pico-bootLoader/releases)
+   page that holds it, and start it from any folder. If Windows says the program
+   is not signed, select **More info**, then **Run anyway**. Check the **SD card**
+   field. **SD card files** is already ticked, and installs the emulators, the
+   native ports and the menu artwork, and so is the data of the ported games. Tick
+   the arcade ROM sets and BIOS files you want, then select **Install**.
+
+   **By hand,** which is the way on Linux or macOS, download
+   `pico-bootLoader_sdcard.zip` from the Releases page and unpack it onto the card.
+   Then run `updateAll` from the card's `updateAll` folder for the rest:
+   `updateAll.exe` on Windows, or `python3 updateAll.py --sd <path of the card>`.
 3. **Add your games.** The archive contains no games, ROMs or BIOS files. Each
    emulator opens in its own folder: `/roms/NES`, `/roms/SNES`, `/roms/MD`
    (Genesis), `/roms/PCE`, `/roms/GB`, `/roms/SMS` (Master System and Game
-   Gear), `/roms/O2E` (Videopac) or `/roms/TI99`, or at the root of the card
-   when that folder does not exist. The BIOS files and the folders of the other
+   Gear), `/roms/O2E` (Videopac), `/roms/TI99` or `/roms/C64`, or at the root of
+   the card when that folder does not exist. The BIOS files and the folders of the other
    applications are listed in the README under
    [Bootable applications](https://github.com/PicoPlus-devel/pico-bootLoader#bootable-applications);
-   `updateAll` installs the arcade ROM sets.
+   `updateAll` installs the arcade ROM sets, the BIOS files and the game data of
+   the ports.
 4. **Run it.** Insert the card and power on the board. The menu appears.
 
 

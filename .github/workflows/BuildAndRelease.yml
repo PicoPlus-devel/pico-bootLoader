@@ -62,6 +62,17 @@ jobs:
                  fi
                  echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
+          # updateAll.exe has a version of its own, in updateAll/win/VERSION. This stops
+          # the release here, before the long build, when the program changed and that
+          # number did not, and says whether this release attaches the program.
+          - name: Check the version of updateAll.exe
+            id: updateall
+            if: steps.ver.outputs.tag != ''
+            env:
+                TAG: ${{ steps.ver.outputs.tag }}
+                GITHUB_TOKEN: ${{ github.token }}
+            run: python3 .github/scripts/updateall_version.py "$TAG"
+
           - name: Stamp the tag into CMakeLists.txt and pico_shared/menu.h
             if: steps.ver.outputs.tag != ''
             env:
@@ -78,6 +89,17 @@ jobs:
                  export PICO_SDK_PATH=/datalocal/pico/pico-sdk
                  export PICO_PIO_USB_PATH=/datalocal/Pico-PIO-USB
                  ./buildAll.sh
+
+          # updateAll.exe offers users an update of itself when a release holds a higher
+          # version, which the name of this asset gives. It is built after buildAll.sh,
+          # which deletes releases/.
+          - name: Build updateAll.exe, to attach it (needs mingw-w64 on the runner)
+            if: steps.updateall.outputs.attach == 'true'
+            env:
+                PROGRAM_VERSION: ${{ steps.updateall.outputs.version }}
+            run: |
+                 bash updateAll/win/build.sh
+                 cp updateAll/win/build/updateAll.exe "releases/updateAll-$PROGRAM_VERSION.exe"
 
           - name: List release artifacts
             run: |
@@ -152,6 +174,7 @@ jobs:
               # PicoNES v2.6 and v2.8 (HW_CONFIG 2), Mini (6) and Micro (9).
               files: |
                 releases/pico-bootLoader_*.uf2
+                releases/updateAll-*.exe
                 pico_shared/PCB/pico_nesPCB_v2.6.zip
                 pico_shared/PCB/pico_nesPCB_v2.8_SNES_PORTS.zip
                 pico_shared/PCB/Gerber_PicoNES_Mini_PCB_v2.0.zip

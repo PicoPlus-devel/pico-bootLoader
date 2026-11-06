@@ -4,7 +4,7 @@
 
 pico-bootLoader is a bootloader for RP2350 boards. Its primary purpose is to
 host a collection of retro-game emulators and native ports of *Doom*,
-*Duke Nukem 3D* and *Quake II* on a single board and to let the user choose which one to run
+*Duke Nukem 3D*, *Quake II* and *Diablo* on a single board and to let the user choose which one to run
 from an on-screen menu, without reconnecting the board to a computer.
 
 It runs on ten board configurations, each with its own ready-made binary — see
@@ -46,7 +46,7 @@ mode with full-screen artwork per application or a plain text mode. Selecting an
 entry flashes the corresponding application (if it is not already resident) and
 starts it. A hardware reset or power cycle always returns to the menu.
 
-*Doom*, *Duke Nukem 3D* and *Quake II* are included as native RP2350 ports —
+*Doom*, *Duke Nukem 3D*, *Quake II* and *Diablo* are included as native RP2350 ports —
 they are **not** emulated.
 
 ## Getting started
@@ -56,36 +56,66 @@ they are **not** emulated.
    the table under [Supported hardware](#supported-hardware), below, gives the
    file name for each board. Hold BOOTSEL, connect the board over USB, and copy
    the `.uf2` onto the `RP2350` drive.
-2. **Prepare the SD card.** Download `pico-bootLoader_sdcard.zip` from the same
-   Releases page and unpack it onto a FAT32- or exFAT-formatted card. The
-   archive contains the emulators, the native ports, the menu artwork, a
-   sample configuration file and the `updateAll` installer for ROM sets and
-   game data. Alternatively,
-   assemble the layout yourself as described in
+2. **Prepare the SD card.** Use a FAT32-formatted card (exFAT also works, but is
+   not advised), and insert it into the computer.
+
+   **On Windows, `updateAll` prepares the whole card.** Download
+   `updateAll-<version>.exe` from the most recent release on the Releases page
+   that holds it; a release holds it only when the program changed. The program
+   needs no installation and can be started from any folder. Windows may report
+   that the program is not signed: select **More info**, then **Run anyway**.
+   The program selects the first removable drive that holds a pico-bootLoader
+   card, or else the first removable drive, so check the **SD card** field; the
+   program warns when that drive holds files but no pico-bootLoader card. The
+   **SD card files** row starts ticked, and installs
+   `pico-bootLoader_sdcard.zip`: the emulators, the native ports, the menu
+   artwork, a sample configuration file and a copy of `updateAll`. The rows of the
+   shareware or demo data of *Doom*, *Duke Nukem 3D*, *Quake II* and *Diablo* start
+   ticked too; *Doom* does not start without its data. The rows of the arcade ROM
+   sets and the BIOS files of the emulators are unticked at every start. Tick the
+   ones you want, then select **Install**.
+
+   `updateAll` installs each in the folder its application reads, and downloads
+   whatever is not at hand. [updateAll/README.md](updateAll/README.md) describes how to use only zips you
+   already have. Running it again later shows the sets added since, and reports
+   and installs a newer SD-card archive. That overwrites the files on the card
+   that the archive also holds, including custom artwork under the same name;
+   the Windows program asks first, and a menu list you edited is saved as `.bak`.
+   See [SD-card archive](updateAll/README.md#sd-card-archive).
+
+   **Copyright.** The ROM sets and BIOS files are copyright of their
+   manufacturers and are not part of this project. Holding the rights to them is
+   your responsibility. `updateAll` reminds you of this when they are selected.
+
+   **To prepare the card by hand,** which is the way on Linux or macOS, download
+   `pico-bootLoader_sdcard.zip` from the same Releases page and unpack it onto
+   the card. Then run `updateAll` from the card's `updateAll` folder to install
+   the rest: `updateAll.exe` on Windows, which selects that card itself, or
+   `python3 updateAll.py --sd <path of the card>` on Linux or macOS, which asks
+   whether to install the BIOS files, the arcade ROM sets and the game data. A
+   copy of the script in another folder, with its `updateAll.json`, also offers to
+   install the archive on a card without an `emu` folder.
+   Alternatively, assemble the layout yourself as described in
    [SD card layout](#sd-card-layout).
-3. **Run `updateAll`.** With the card still in the computer, start
-   `updateAll.exe` from the card's `updateAll` folder; the program selects that
-   card itself. Windows may report that the program is not signed: select
-   **More info**, then **Run anyway**. On Linux or macOS, run
-   `python3 updateAll.py --sd <path of the card>` from the same folder.
-   `updateAll` installs the arcade ROM sets and the shareware or demo data of
-   *Doom*, *Duke Nukem 3D* and *Quake II*, each in the folder its application
-   reads, and downloads whatever is not at hand. *Doom* does not start without
-   it. The ROM sets are not part of this project, and holding the rights to
-   them is the user's responsibility; [updateAll/README.md](updateAll/README.md)
-   describes how to use only zips you already have. Running it again later
-   installs the sets added since.
-4. **Add your games.** The archive contains no games, ROMs or BIOS files. Each
+3. **Add your games.** The archive contains no games, ROMs or BIOS files. Each
    emulator's file browser opens in its own folder: `/roms/NES`, `/roms/SNES`,
    `/roms/MD` (Genesis / Mega Drive), `/roms/PCE`, `/roms/GB`, `/roms/SMS`
-   (Master System and Game Gear), `/roms/O2E` (Videopac) or `/roms/TI99`, and
-   at the root of the card when that folder does not exist. The BIOS files and
-   the folders of *ColecoVision*, *Doom*, *Duke Nukem 3D*, *Quake II* and the
-   arcade games are given under [Bootable applications](#bootable-applications).
+   (Master System and Game Gear), `/roms/O2E` (Videopac), `/roms/TI99` or
+   `/roms/C64`, and at the root of the card when that folder does not exist.
+   The BIOS files and the folders of *ColecoVision*, *Doom*, *Duke Nukem 3D*,
+   *Quake II*, *Diablo* and the arcade games are given under
+   [Bootable applications](#bootable-applications).
+4. **Add the metadata (optional).** Download the
+   [metadata pack](https://1drv.ms/u/c/db8991463e5b8b0c/IQD1kFD0-j94QoCW3Tw447AaAVq2XdkmUH4T40Bcmtf9ZL0?e=8eNkSe)
+   and unpack it at the root of the card, which creates a `/metadata` folder. It
+   holds box art and game information for many games. With it, an emulator's file
+   browser can show the box art and information of the selected game when
+   **START** is pressed, and the screensaver shows box art.
 5. **Run it.** Insert the card and power on the board. The menu appears.
 
-The Releases page provides two kinds of download: the per-board bootloader
-`.uf2` binaries and the `pico-bootLoader_sdcard.zip` SD-card archive.
+The Releases page provides three kinds of download: the per-board bootloader
+`.uf2` binaries, the `pico-bootLoader_sdcard.zip` SD-card archive and, on
+releases where the program changed, the standalone `updateAll-<version>.exe`.
 
 Release tags say which of the two changed:
 
@@ -93,6 +123,10 @@ Release tags say which of the two changed:
 | --- | --- | --- |
 | `v0.N` | bootloader firmware | re-flash the board **and** refresh the SD card |
 | `v0.N.M` | emulator binaries only | replace `/emu` on the SD card; no re-flash needed |
+
+`updateAll` does the SD-card part: it reports a newer archive and installs it on
+the card. It does not flash the board, and on a card already in use it says so
+when a release needs it.
 
 Every release lists the exact emulator versions its archive ships, and the same
 table is in `/emu/versions.txt` on the card.
@@ -188,23 +222,41 @@ its own repository and identified by the program name embedded in its `.uf2`.
 | Philips Videopac / Magnavox Odyssey² | `picoPacPlus` | [pico-pacPlus](https://github.com/PicoPlus-devel/pico-pacPlus) | <img width="280" alt="Philips Videopac / Magnavox Odyssey II menu artwork" src="https://github.com/user-attachments/assets/838ba7b0-3360-4020-a83c-5113aa0efb4a" />|
 | ColecoVision | `colecojam` | [Adafruit_ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam) | <img width="280" alt="ColecoVision menu artwork" src="emu/assets/themes/0/col.png" /> |
 | Texas Instruments TI-99/4A | `pico994A` | [pico-994A](https://github.com/PicoPlus-devel/pico-994A) | <img width="280" alt="TI-99/4A menu artwork" src="emu/assets/themes/0/ti99.png" /> |
+| Commodore 64/128 | `picoC64` | [pico-c64](https://github.com/PicoPlus-devel/pico-c64) | <img width="280" alt="Commodore 64 menu artwork" src="emu/assets/themes/0/c64.png" /> |
 | **Doom** (native port, not emulated) | `doom_tiny` | [pico-doom](https://github.com/PicoPlus-devel/pico-doom) | <img width="280" alt="Doom menu artwork" src="https://github.com/user-attachments/assets/112fb4f3-a806-4f60-83fb-59f70fbffbff" />|
 | **Duke Nukem 3D** (native port, not emulated) | `duke3d_game` | [pico-duke3D](https://github.com/PicoPlus-devel/pico-duke3D) |<img width="280" alt="Duke Nukem 3D menu artwork" src="https://github.com/user-attachments/assets/79798fb3-5517-41cf-bfcb-62c0aa0dc00e" />  |
 | **Quake II** (native port, not emulated) | `pico-quake2` | [pico-quake2](https://github.com/PicoPlus-devel/pico-quake2) | <img width="280" alt="Quake II menu artwork" src="emu/assets/themes/0/quake2.png" /> |
+| **Diablo** (native port of DevilutionX, not emulated) | `pico-lutionX` | [pico-lutionX](https://github.com/PicoPlus-devel/pico-lutionX) | <img width="280" alt="Diablo menu artwork" src="emu/assets/themes/0/diablo.png" /> |
 | **OutRun** (native port, not emulated) | `picoOutRun` | [pico-outrun](https://github.com/PicoPlus-devel/pico-outrun) | <img width="280" alt="OutRun menu artwork" src="emu/assets/themes/0/outrun.png" /> |
 | **Phoenix** (arcade) | `picoPhoenix` | [pico-phoenix](https://github.com/PicoPlus-devel/pico-phoenix) | <img width="280" alt="Phoenix menu artwork" src="emu/assets/themes/0/phoenix.png" /> |
 | **Moon Cresta** (arcade) | `picoMoonCresta` | [pico-mooncresta](https://github.com/PicoPlus-devel/pico-mooncresta) | <img width="280" alt="Moon Cresta menu artwork" src="emu/assets/themes/0/mooncresta.png" /> |
 | **Galagino** (arcade: 47 games, among them Pac-Man, Galaga, Donkey Kong and Xevious) | `picoGalagino` | [pico-galagino](https://github.com/PicoPlus-devel/pico-galagino) | <img width="280" alt="Galagino menu artwork" src="emu/assets/themes/0/galagino.png" /> |
 | **Dragon's Lair** (arcade, laserdisc) | `picoDragonsLair` | [pico-dragonslair](https://github.com/PicoPlus-devel/pico-dragonslair) | <img width="280" alt="Dragon's Lair menu artwork" src="emu/assets/themes/0/dragonslair.png" /> |
 | **1943** (arcade: 1943 and 1943 Kai) | `pico1943` | [pico-1943](https://github.com/PicoPlus-devel/pico-1943) | <img width="280" alt="1943 menu artwork" src="emu/assets/themes/0/1943.png" /> |
+| **Salamander** (arcade: Salamander and Lifeforce) | `picoSalamander` | [pico-salamander](https://github.com/PicoPlus-devel/pico-salamander) | <img width="280" alt="Salamander menu artwork" src="emu/assets/themes/0/salamander.png" /> |
 
-The following emulators need a bios in `/bios` on SD:
-- *Nintendo Entertainment System* : For Famicom Disk System games `fds-bios.rom`
-- *Philips Videopac / Magnavox Odyssey²*: `o2rom.bin`
-- *PCEngine CD* : `Super CD-ROM System (Japan) (v3.0).pce` or another variant.
-- *Texas Instruments TI-99/4A*: `994aROM.bin` and `994aGROM.bin`, both required —
-  nothing runs without them. `994aDISK.bin` (disk controller) and `spchrom.bin`
-  (speech vocabulary) are optional.
+The following emulators need a BIOS. `updateAll` installs all of them; see
+[BIOS files](updateAll/README.md#bios-files) in its README. To supply them
+yourself, copy them to the folders given:
+- *Nintendo Entertainment System*: for Famicom Disk System games,
+  `/bios/fds-bios.rom`.
+- *Philips Videopac / Magnavox Odyssey²*: the Odyssey² BIOS in `/bios`, for
+  example as `o2rom.bin`. The emulator recognises it by its contents, not by
+  its name.
+- *PCEngine CD*: a System Card BIOS in `/bios`, as a `.pce` file, for example
+  `Super CD-ROM System (Japan) (v3.0).pce`.
+- *Sega Genesis / Mega Drive*: for Sega CD discs, a Sega CD or Mega-CD BIOS of
+  the disc's region in `/bios`, for example `Sega CD 2 (USA) (v2.00).md`.
+- *Texas Instruments TI-99/4A*: `994aROM.bin` and `994aGROM.bin` in `/bios`,
+  both required — nothing runs without them. `994aDISK.bin` (disk controller)
+  and `spchrom.bin` (speech vocabulary) are optional.
+- *Commodore 64/128*: the BASIC, KERNAL and character ROMs in
+  `/bios`, as `c64basic.rom`, `c64kernal.rom` and `c64chargen.rom`,
+  and the 1541 drive ROM as `1541.rom`; for the C128, `c128basic.rom`,
+  `c128kernal.rom`, `c128chargen.rom`, `c128c64.rom` and `1571.rom`. The
+  [pico-c64 README](https://github.com/PicoPlus-devel/pico-c64#rom-files)
+  lists the other names and folders it accepts.
+- *ColecoVision*: `/coleco/COLECO.BIN`; see below.
 
 *TI-99/4A* is built for every board the loader supports. Cartridges go in
 `/roms/TI99` as `.rpk` Rom PacKs (preferred — one file per cartridge) or as the
@@ -214,12 +266,27 @@ keyboard, and joysticks come from USB gamepads, NES/SNES pads or Wii
 controllers. **PSRAM** is not required, but without it the disk drives are
 unavailable and cartridge ROM is capped at 32 KB.
 
+*Commodore 64/128* is built for every board the loader supports. Programs
+(`.prg`, `.t64`), disk images (`.d64`, `.g64`, and `.d71` for the Commodore 128),
+tapes (`.tap`) and cartridges (`.crt`) go in `/roms/C64`. The file
+`C64 BASIC.c64`, created in that folder at start-up, starts BASIC with nothing
+loaded. A USB keyboard acts as the Commodore keyboard, and joysticks come from
+USB gamepads, NES/SNES pads, Wii controllers or the numeric keypad. **PSRAM** is
+not required for the Commodore 64: without it, the ROM files are copied from the
+SD card into flash at the first start, and a cartridge is written to flash before
+it starts. The Commodore 128 needs both **HSTX** video and **PSRAM**; on other
+boards its entries and `.d71` files are not offered. The emulation is PAL only.
+Only the Adafruit Fruit Jam (HW_CONFIG 8) and the Adafruit DVI + MicroSD breakout
+combination (2) have been tried on real hardware; the
+[pico-c64 README](https://github.com/PicoPlus-devel/pico-c64#supported-boards)
+gives the state of each board.
+
 *ColecoVision* runs on the Adafruit Fruit Jam (HW_CONFIG 8) only. The emulator,
 [Adafruit_ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam), is
 written and maintained by Dan Cogliano ([@cogliano](https://github.com/cogliano))
 outside this project. It expects everything in `/coleco/` on the SD
 card: the 8 KB ColecoVision BIOS as `COLECO.BIN`, and the games as `.ROM` files.
-Neither the BIOS nor any game is included.
+Neither the BIOS nor any game is included; `updateAll` installs the BIOS.
 
 *Doom* runs on five boards: Adafruit Fruit Jam (HW_CONFIG 8), the Adafruit DVI +
 MicroSD breakout combination (2), Murmulator M2 (13), Adafruit Feather RP2350
@@ -256,12 +323,30 @@ place. Savegames and settings are written there too. The first load of each
 level copies its textures, models and sounds from the card into flash, above the
 application, and takes considerably longer than later loads. Other applications
 may overwrite that copy; it is then refreshed on the next load. On HW_CONFIG 2,
-*Quake II* reads USB controllers only from a USB-A socket on GPIO 20 (D+) and
-21 (D−), not from the Pico's own USB port that the loader and the emulators
-use; NES and SNES controllers in the controller ports work as usual. *Quake II*
+*Quake II* uses the Pico's own USB port, like the loader and the emulators; NES
+and SNES controllers in the controller ports work as usual. *Quake II*
 is an early pre-release; its
 [README](https://github.com/PicoPlus-devel/pico-quake2#status-and-limitations)
 lists the known limitations.
+
+*Diablo* is a port of DevilutionX, the open-source engine for Diablo. It runs on
+two boards: Adafruit Fruit Jam (HW_CONFIG 8) and the Adafruit DVI + MicroSD
+breakout combination (2, on a Pimoroni Pico Plus 2). It needs 8 MB of **PSRAM**
+and 16 MB of flash. Everything goes in `/roms/devilutionx/`: DevilutionX's own
+assets, from `pico-lutionX_sdcard.zip` on the
+[pico-lutionX releases](https://github.com/PicoPlus-devel/pico-lutionX/releases)
+page, and the game data, either `spawn.mpq` (the shareware version) or
+`DIABDAT.MPQ` (the full game, from the CD or a digital copy). `updateAll`
+installs the assets and `spawn.mpq`. Saved games and `diablo.ini` are written to
+the same folder. The first time each area of the game is loaded, its graphics and
+sounds are copied from the card into flash, above the application, which takes
+10 to 20 seconds. Other applications may overwrite that copy; it is then copied
+again. On HW_CONFIG 2, *Diablo* uses the Pico's own USB port, like the loader
+and the emulators. Quit Game or Exit Diablo returns to the menu; on the Pico
+Plus 2, the reset button can leave the board in BOOTSEL mode instead, until it
+is disconnected from the power. *Diablo* is an early pre-release; its
+[README](https://github.com/PicoPlus-devel/pico-lutionX#known-limitations) lists
+the known limitations.
 
 *OutRun* is a port of the Cannonball engine and the first entry in the
 **Arcade** category. It is built for five boards: Adafruit Fruit Jam (HW_CONFIG 8),
@@ -343,6 +428,26 @@ written another application over that flash, the copy is made again, which
 takes a few seconds. Missing files are named on screen. It has the same *Tate
 mode* setting as Phoenix.
 
+*Salamander* is the seventh **Arcade** entry: an emulation of Konami's 1986
+arcade board, which plays *Salamander* and *Lifeforce*. Like OutRun, it is built
+for five boards: Adafruit Fruit Jam (HW_CONFIG 8), the Adafruit DVI + MicroSD
+breakout combination (2, on a Pimoroni Pico Plus 2 or a Raspberry Pi Pico 2),
+Murmulator M2 (13), Adafruit Feather RP2350 with a TLV320DAC3100 (14) and the
+Olimex RP2040-PICO-PC with a Pico 2 (15). It runs at a fixed 384 MHz, which only
+the **HSTX** boards allow. **PSRAM** is optional: on a board without it, the game
+is copied into flash the first time it is started, which takes a few seconds and
+uses 704 KB of flash. An application started from the loader can overwrite that
+copy, which is then made again at the next start. The games are
+copyright Konami and are not distributed with the bundle: copy MAME's
+`salamand.zip` to `/roms/arcade/SALAMAND` and `lifefrce.zip` to
+`/roms/arcade/LIFEFRCE` on the SD card, either as they are or unzipped. Of
+Salamander, versions D and J and the Tecfri licence are accepted; of Lifeforce,
+the US and Japanese versions. In MAME, Lifeforce is a clone of Salamander: a
+split `lifefrce.zip` needs `salamand.zip` in the same folder, and a merged
+`salamand.zip` holds both games, so it can be copied to both folders. When both
+games are on the card, a menu chooses one at start-up, and *Quit game* in the
+settings menu returns to it. Missing files are named on screen.
+
 The ROM sets of the Arcade entries can also be installed with `updateAll`, which
 the SD-card archive holds in its `updateAll` folder: `updateAll.exe` for
 Windows, and equivalent Python and PowerShell scripts. It extracts each set from
@@ -352,14 +457,15 @@ downloaded from a third-party ROM database
 configured by default; switch downloads off to use only zips you supply. The ROM
 sets are not part of this project, and holding the rights to them is the user's
 responsibility. `updateAll` also installs the freely distributed shareware and
-demo data of *Doom*, *Duke Nukem 3D* and *Quake II*. See
+demo data of *Doom*, *Duke Nukem 3D*, *Quake II* and *Diablo*, and the BIOS
+files of the emulators, which it downloads from third-party sources as well. See
 [updateAll/README.md](updateAll/README.md).
 
 *PCEngine CD* needs PSRAM.
 
 Additional emulators may be added over time.
 
-For board-by-board wiring, supported display modes and more refer to the [pico-infonesPlus documentation](https://github.com/PicoPlus-devel/pico-infonesPlus#setup). The set of supported boards and their pinouts is identical between the two projects.
+For board-by-board wiring, supported display modes and more refer to the [pico-infonesPlus documentation](https://github.com/PicoPlus-devel/pico-infonesPlus#setup). The pinouts are the same in both projects, but the loader runs only on the boards listed under [Supported hardware](#supported-hardware).
 
 ## How it works
 
@@ -437,7 +543,7 @@ XInput pad, and as ○ and ✕ on a DualShock or DualSense.
 
 The chosen menu mode and artwork theme are remembered across boots. Inside a running emulator built
 on the shared framework, **SELECT + START** opens its menu, which offers *Return
-to emulator selection* to reboot back into this menu.
+to boot loader* to reboot back into this menu.
 
 ### The options menu
 
@@ -583,8 +689,9 @@ change what the menu can offer:
   An application that does not fit is simply **not listed** in the menu rather
   than reported as an error, so on a Pico 2 some entries are missing.
 - **PSRAM.** The entries that require it — *Duke Nukem 3D*, *Quake II*,
-  *PCEngine CD* and `doom_tiny_full` — are the Pimoroni Pico Plus 2's alone;
-  neither Pico 2 has PSRAM. *Quake II* also needs the 16 MB of flash. See
+  *Diablo*, *PCEngine CD* and `doom_tiny_full` — are the Pimoroni Pico Plus 2's
+  alone; neither Pico 2 has PSRAM. *Quake II* and *Diablo* also need the 16 MB
+  of flash. See
   [Bootable applications](#bootable-applications).
 
 #### 3D printed case
@@ -709,12 +816,14 @@ project.
 /emu/categories.txt                        optional category list (see Categories)
 /emu/<category>.txt                        one index file per category, named by categories.txt
 /emu/versions.txt                          which version each application was built from (informational)
+/emu/release.txt                           the release the archive on the card comes from (read by updateAll)
 /emu/assets/themes/0/<image_key>.png|.jpg  default artwork theme, converted on first use
 /emu/assets/themes/0/Categories/*.png|.jpg category artwork (with categories.txt)
 /emu/assets/themes/1..9/                   optional extra themes (UP/DOWN to switch)
 /emu/assets/screensaver/*.png|.jpg         screensaver images (optional, not themed)
 /roms/doom/doom1-whx-bootloader.uf2        Doom!'s WAD data image, flashed by the loader (from updateAll)
-/updateAll/                                ROM set and game data installer, run on a computer (optional)
+/bios/                                     BIOS files of the emulators (from updateAll, or your own)
+/updateAll/                                ROM set, BIOS and game data installer, run on a computer (optional)
 /ld2pico/                                  Dragon's Lair laserdisc converter, run on a computer (optional)
 ```
 
@@ -1063,7 +1172,7 @@ which survive `watchdog_reboot()` but are cleared on power cycle:
 With `pico_shared` these are `Frens::isLaunchedFromBootloader()` and
 `Frens::rebootToBootloader()`
 ([`pico_shared/FrensHelpers.h`](pico_shared/FrensHelpers.h)); its SELECT + START
-menu shows *Return to emulator selection* automatically. Without `pico_shared`,
+menu shows *Return to boot loader* automatically. Without `pico_shared`,
 the raw equivalent is:
 
 ```c
@@ -1137,30 +1246,33 @@ stamps a version.
 The native ports and *ColecoVision* are the exception to all of the above.
 [pico-doom](https://github.com/PicoPlus-devel/pico-doom),
 [pico-duke3D](https://github.com/PicoPlus-devel/pico-duke3D),
-[pico-quake2](https://github.com/PicoPlus-devel/pico-quake2) and
+[pico-quake2](https://github.com/PicoPlus-devel/pico-quake2),
+[pico-lutionX](https://github.com/PicoPlus-devel/pico-lutionX) and
 [Adafruit_ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam) have no
-`pico_shared`, so there is no `SWVERSION` to stamp, and all four build through
+`pico_shared`, so there is no `SWVERSION` to stamp, and all five build through
 their own per-board `<board>-build-forbootloader.sh` scripts rather than
 `bld.sh`. Each targets only the boards it has a script for — *Doom* 2, 8, 13, 14
-and 15, *Duke Nukem 3D* 2, 8, 13 and 15, *Quake II* 2 and 8, *ColecoVision* 8 —
-and is reported as `SKIP` for every other configuration. The *ColecoVision*
-build downloads its own dependencies, so it needs network access. The *Quake II*
-build produces `quake2.uf2`, which is installed as `pico-quake2.uf2` (the
-`SCRIPTED_UF2_OF` table), and needs `PICO_PIO_USB_PATH` on both of its boards;
-without it, it is skipped on HW_CONFIG 2 as well.
+and 15, *Duke Nukem 3D* 2, 8, 13 and 15, *Quake II* and *Diablo* 2 and 8,
+*ColecoVision* 8 — and is reported as `SKIP` for every other configuration. The
+*ColecoVision* build downloads its own dependencies, so it needs network access.
+The *Quake II* and *Diablo* builds produce `quake2.uf2` and `pico_lutionx.uf2`,
+which are installed as `pico-quake2.uf2` and `pico-lutionX.uf2` (the
+`SCRIPTED_UF2_OF` table). Both need `PICO_PIO_USB_PATH` on both of their boards;
+without it, they are skipped on HW_CONFIG 2 as well.
 
-All four repositories are tagged and are built from their latest tag like the
-emulators, so `versions.txt` records a real version for `doom_tiny`,
-`doom_tiny_full`, `duke3d_game`, `pico-quake2` and `colecojam`. The tag is simply the newest by
-version order, whether or not it carries a `v` prefix (Adafruit_ColecoJam's
+All of these repositories are tagged and are built from their latest tag like
+the emulators, so `versions.txt` records a real version for `doom_tiny`,
+`doom_tiny_full`, `duke3d_game`, `pico-quake2`, `pico-lutionX` and `colecojam`.
+The tag is simply the newest by version order, whether or not it carries a `v`
+prefix (Adafruit_ColecoJam's
 tags do not), so later tags are picked up with no change here. This applies to
 the emulators as well: a tag whose GitHub release is marked as a pre-release,
 such as Adafruit_ColecoJam's beta `2.0b1`, is skipped in favour of the newest
 full release. `build_emulators.sh` asks the GitHub API through `gh` for this,
 and warns when it cannot, in which case every tag is a candidate. The
 `SCRIPTED_BRANCH` table in [`build_emulators.sh`](build_emulators.sh) — `main`
-for *Doom*, *Quake II* and *ColecoVision*, `fix/audio-production-rate` for *Duke Nukem 3D* —
-is now only the fallback for a repository that has no tag at all.
+for *Doom*, *Quake II*, *Diablo* and *ColecoVision*, `fix/audio-production-rate` for *Duke Nukem 3D* —
+is only the fallback for a repository that has no tag at all.
 
 Repositories are cloned from the `PicoPlus-devel` organisation by default. An
 entry in the `REPO_OF` table of [`build_emulators.sh`](build_emulators.sh) may
@@ -1171,8 +1283,8 @@ form.
 *Doom* additionally needs `PICO_EXTRAS_PATH` pointing at a
 [pico-extras](https://github.com/raspberrypi/pico-extras) checkout, since it
 resolves its whole toolchain from the environment. Without it the two Doom
-variants are skipped with that reason and everything else — *Duke Nukem 3D*
-and *Quake II* included — still builds.
+variants are skipped with that reason and everything else — *Duke Nukem 3D*,
+*Quake II* and *Diablo* included — still builds.
 
 ```bash
 ./build_emulators.sh -c 8            # one board, latest tags
@@ -1189,7 +1301,9 @@ shipped emulator — and packs
 takes the `emu/` tree as its only source of truth and refuses to build an archive
 containing an empty `.uf2`, so a half-finished build cannot ship. It requires
 `-c all`, since an archive built from one board would be missing the others.
-Besides `emu/`, the archive holds `updateAll/`, with `updateAll.exe` built by
+`-r <tag>` records the release in the archive as `emu/release.txt`, which is what
+`updateAll` compares with the newest release. Besides `emu/`, the archive holds
+`updateAll/`, with `updateAll.exe` built by
 `-z` (mingw-w64), and `ld2pico/`, with the `ld2pico.exe` that `-z` downloads
 with `curl` from the pico-dragonslair release it bundled. Doom's WAD data image
 is not packed, although `build_emulators.sh` still installs it in
@@ -1206,7 +1320,7 @@ The full maintainer checklist — per-scenario steps, dry runs, verification and
 rollback — is in [`RELEASING.md`](RELEASING.md). The short version:
 
 ```bash
-./build_emulators.sh -c all -j 3 -z            # emulators + archive (local)
+./build_emulators.sh -c all -j 3 -z -r v0.2.1  # emulators + archive (local)
 git add emu/versions.txt && git commit -m "Refresh emulator bundle" && git push
 gh workflow run BuildAndRelease.yml -f tag=v0.2.1   # builds loader, creates tag, publishes
 gh release upload v0.2.1 releases/pico-bootLoader_sdcard.zip
@@ -1233,12 +1347,23 @@ gh release upload v0.2.1 releases/pico-bootLoader_sdcard.zip
   [Liu Szuping](https://github.com/szuping) for an earlier RP2350 port of the
   game served as a reference; see the
   [pico-1943 README](https://github.com/PicoPlus-devel/pico-1943#credits-and-licence).
+- *Salamander* follows MAME's nemesis driver, with the Musashi 68000 core, and
+  the research of [Liu Szuping](https://github.com/szuping) for an earlier
+  RP2350 port of the game served as a reference; see the
+  [pico-salamander README](https://github.com/PicoPlus-devel/pico-salamander#credits-and-licence).
 - [updateAll](updateAll/README.md) downloads missing ROM zips from
   [ArcadeROMsDB_MiSTer](https://github.com/zakk4223/ArcadeROMsDB_MiSTer), a
   database maintained by [zakk4223](https://github.com/zakk4223) for the MiSTer
   FPGA project, and reads databases in the format of the
   [MiSTer Downloader](https://github.com/MiSTer-devel/Downloader_MiSTer).
-  Neither is part of this project.
+  It downloads the BIOS files from the files of
+  [BiosDB_MiSTer](https://github.com/ajgowans/BiosDB_MiSTer), maintained by
+  [ajgowans](https://github.com/ajgowans), from the
+  [RetroPieBIOS](https://github.com/archtaurus/RetroPieBIOS) and
+  [retrobios](https://github.com/Abdess/retrobios) collections, from the
+  RetroPie BIOS pack on the Internet Archive, and from
+  [zimmers.net](https://www.zimmers.net/). None of these is part of this
+  project.
 - The [PicoNES PCB](#picones-pcb-hw_config-2) was designed by [John Edgar
   Park](https://twitter.com/johnedgarpark).
 - The [PicoNES Mini](#picones-mini-pcb-hw_config-6),

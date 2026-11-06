@@ -5,3 +5,4 @@
 # Only .uf2 files whose embedded program name matches a row below appear in
 # this category, in the order the rows are written. Max 32 rows.
 pico994A;ti99;TI99/4A
+picoC64;c64;Commodore 64/128

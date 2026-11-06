@@ -204,15 +204,52 @@ int ua_mkdirs(const char *path)
     return 0;
 }
 
+/* Whether path is the file of this very program. */
+static int is_running_program(const wchar_t *path)
+{
+    wchar_t exe[MAX_PATH * 2], a[MAX_PATH * 2], b[MAX_PATH * 2];
+    DWORD n = GetModuleFileNameW(NULL, exe, MAX_PATH * 2);
+    if (!n || n >= MAX_PATH * 2 || !GetLongPathNameW(exe, a, MAX_PATH * 2) ||
+        !GetLongPathNameW(path, b, MAX_PATH * 2))
+        return 0;
+    return !_wcsicmp(a, b);
+}
+
 int ua_replace(const char *from, const char *to)
 {
     wchar_t *f = wpath(from), *t = wpath(to);
-    BOOL ok = MoveFileExW(f, t, MOVEFILE_REPLACE_EXISTING);
+    BOOL ok = MoveFileExW(f, t, MOVEFILE_REPLACE_EXISTING), moved_back = FALSE, lost = FALSE;
     DWORD err = GetLastError();
+    /* The SD-card archive holds this program, which may run from that card.
+       Its file cannot be replaced, but it can move aside; the next start
+       removes it. */
+    if (!ok && (err == ERROR_ACCESS_DENIED || err == ERROR_SHARING_VIOLATION) &&
+        is_running_program(t)) {
+        size_t n = wcslen(t) + 5;
+        wchar_t *old = malloc(n * sizeof *old);
+        swprintf(old, n, L"%ls.old", t);
+        /* It inherits a read-only attribute, which would block the next update. */
+        SetFileAttributesW(old, FILE_ATTRIBUTE_NORMAL);
+        DeleteFileW(old);
+        if (MoveFileW(t, old)) {
+            ok = MoveFileExW(f, t, MOVEFILE_REPLACE_EXISTING);
+            err = GetLastError();
+            for (int i = 0; !ok && !moved_back && i < 5; i++) {
+                if (i)
+                    Sleep(100);
+                moved_back = MoveFileW(old, t);
+            }
+            lost = !ok && !moved_back;
+        }
+        free(old);
+    }
     free(f);
     free(t);
     if (!ok) {
         win_error(err, from, to);
+        if (lost)
+            snprintf(last_error + strlen(last_error), sizeof last_error - strlen(last_error),
+                     "; the program is now named '%s.old'", to);
         return -1;
     }
     return 0;

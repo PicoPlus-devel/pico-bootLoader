@@ -17,6 +17,8 @@
 #   emu/categories.txt                   (if present, with the config files it names)
 #   emu/boot.example.txt
 #   emu/versions.txt                     (if present; written by build_emulators.sh -z)
+#   emu/release.txt                      the release tag, when one is given: what
+#                                        updateAll compares with the newest release
 #   emu/assets/themes/<0-9>/<image_key>.{444,555}   (or the .png/.jpg source,
 #                                        for a key that has no cache to ship)
 #   emu/assets/themes/<0-9>/Categories/<image_key>.{444,555}
@@ -30,16 +32,17 @@
 #                                        from the pico-dragonslair release
 #   ld2pico/README.md
 #
-# Usage: pack_sdcard.sh <loader_dir> <output_zip>
+# Usage: pack_sdcard.sh <loader_dir> <output_zip> [release_tag]
 set -euo pipefail
 
-if [ $# -ne 2 ]; then
-    echo "Usage: $0 <loader_dir> <output_zip>" >&2
+if [ $# -lt 2 ] || [ $# -gt 3 ]; then
+    echo "Usage: $0 <loader_dir> <output_zip> [release_tag]" >&2
     exit 1
 fi
 
 LOADER="$1"
 OUT_ZIP="$2"
+RELEASE_TAG="${3:-}"
 
 [ -f "$LOADER/emu/emulators.txt" ] || { echo "emulators.txt not found at $LOADER/emu/emulators.txt" >&2; exit 1; }
 
@@ -118,6 +121,14 @@ if [ -f "$LOADER/emu/versions.txt" ]; then
     cp "$LOADER/emu/versions.txt" "$DEST/versions.txt"
 else
     warn "emu/versions.txt not found — the archive will not record emulator versions"
+fi
+
+# Without it a card unpacked by hand counts as older than any release, so its
+# first updateAll run downloads the archive once more and writes nothing.
+if [ -n "$RELEASE_TAG" ]; then
+    printf '%s\n' "$RELEASE_TAG" > "$DEST/release.txt"
+else
+    warn "no release tag given — updateAll will download this archive again on a card unpacked by hand"
 fi
 
 # --- Parse the index: program names, plus the artwork keys -------------------
