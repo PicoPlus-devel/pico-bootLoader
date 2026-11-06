@@ -105,7 +105,13 @@ they are **not** emulated.
    The BIOS files and the folders of *ColecoVision*, *Doom*, *Duke Nukem 3D*,
    *Quake II*, *Diablo* and the arcade games are given under
    [Bootable applications](#bootable-applications).
-4. **Run it.** Insert the card and power on the board. The menu appears.
+4. **Add the metadata (optional).** Download the
+   [metadata pack](https://1drv.ms/u/c/db8991463e5b8b0c/IQD1kFD0-j94QoCW3Tw447AaAVq2XdkmUH4T40Bcmtf9ZL0?e=8eNkSe)
+   and unpack it at the root of the card, which creates a `/metadata` folder. It
+   holds box art and game information for many games. With it, an emulator's file
+   browser can show the box art and information of the selected game when
+   **START** is pressed, and the screensaver shows box art.
+5. **Run it.** Insert the card and power on the board. The menu appears.
 
 The Releases page provides three kinds of download: the per-board bootloader
 `.uf2` binaries, the `pico-bootLoader_sdcard.zip` SD-card archive and, on
@@ -537,7 +543,7 @@ XInput pad, and as ○ and ✕ on a DualShock or DualSense.
 
 The chosen menu mode and artwork theme are remembered across boots. Inside a running emulator built
 on the shared framework, **SELECT + START** opens its menu, which offers *Return
-to emulator selection* to reboot back into this menu.
+to boot loader* to reboot back into this menu.
 
 ### The options menu
 
@@ -1166,7 +1172,7 @@ which survive `watchdog_reboot()` but are cleared on power cycle:
 With `pico_shared` these are `Frens::isLaunchedFromBootloader()` and
 `Frens::rebootToBootloader()`
 ([`pico_shared/FrensHelpers.h`](pico_shared/FrensHelpers.h)); its SELECT + START
-menu shows *Return to emulator selection* automatically. Without `pico_shared`,
+menu shows *Return to boot loader* automatically. Without `pico_shared`,
 the raw equivalent is:
 
 ```c

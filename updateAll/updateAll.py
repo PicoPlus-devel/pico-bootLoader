@@ -902,8 +902,8 @@ def main(argv=None):
     ap.add_argument("--core", metavar="ID", action="append",
                     help="install only this core; repeat or separate with commas; "
                          "bios selects every BIOS file and sdcard the SD-card archive "
-                         "(default: every core in the configuration, and the archive "
-                         "on a card with an emu folder)")
+                         "(default: ask, as without this option; a card with an emu "
+                         "folder also gets a newer archive)")
     ap.add_argument("--all", action="store_true",
                     help="install every configured set, without asking")
     ap.add_argument("--db", metavar="URL|FILE", action="append", default=[],

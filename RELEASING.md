@@ -253,10 +253,10 @@ from `github.sha`, so it will point at whatever is current.
   (`BUILD_FOR_BOOTLOADER`) only in `pico_shared` `f2c8be9`, and the emulator tags
   of the time predated it, so their pinned revision rejected `-b` outright.
   That reason no longer applies — every current tag pins a descendant of
-  `f2c8be9` — but the substitution is not a no-op. For v0.9 Salamander v0.2 pins
-  `cd147e0`, which is `main`, and every other emulator tag pins `8b93b28`. The
-  whole bundle is built against the one `pico_shared` `main` that
-  `emu/versions.txt` records.
+  `f2c8be9` — but the substitution is not a no-op. For v0.9 Salamander v0.2 and
+  Commodore 64 v0.2 pin `cd147e0`, every other emulator tag pins `8b93b28`, and
+  the bundle is built against `main`, `f16f692`. The whole bundle is built against
+  the one `pico_shared` `main` that `emu/versions.txt` records.
   An older tag that no longer builds against `main` shows up as a `FAIL` in the
   grand summary.
 - **A tag pushed from CI would not trigger this workflow** — GitHub does not fire

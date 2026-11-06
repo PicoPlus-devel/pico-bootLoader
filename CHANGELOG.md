@@ -117,11 +117,13 @@ games, Enter selects and Esc goes back on a USB keyboard. Also new:
   [v0.5](https://github.com/PicoPlus-devel/pico-duke3D/releases/tag/v0.5): USB
   mouse support, and the SNES Mouse with the Adafruit DVI and microSD breakouts.
 - **Quake II**
-  [v0.3-alpha](https://github.com/PicoPlus-devel/pico-quake2/releases/tag/v0.3-alpha):
+  [v0.3-alpha](https://github.com/PicoPlus-devel/pico-quake2/releases/tag/v0.3-alpha)
+  and
+  [v0.3.1-alpha](https://github.com/PicoPlus-devel/pico-quake2/releases/tag/v0.3.1-alpha):
   the first load of a level no longer ends with "Loading plaque timed out", and
   an original SNES Mouse can be used on the Pimoroni Pico Plus 2. On that board,
   USB devices now go on the Pico's own USB port, not on a USB-A socket on GPIO 20
-  and 21.
+  and 21. The game can now also be quit with a controller.
 
 **NES**
 [v0.55](https://github.com/PicoPlus-devel/pico-infonesPlus/releases/tag/v0.55),
