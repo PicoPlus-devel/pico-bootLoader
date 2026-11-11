@@ -12,6 +12,7 @@
  *   VIEW=APPS                     (CATEGORIES or APPS; default CATEGORIES)
  *   CATEGORY=Console              (last category; omitted when none)
  *   APP=picogenesisPlus           (last application; omitted when none)
+ *   DISPLAY=DVI                   (HDMI or DVI; omitted = the board's default)
  *
  * BASEDIR is the SD-root folder under which the bootloader looks for the
  * per-HW_CONFIG subdir, the allow-list, and the assets folder.
@@ -19,8 +20,13 @@
  * when BASEDIR holds no categories.txt; with categories each one names its own
  * config file (see categories.h).
  * SCREENSAVER selects the idle visual mode.
- * GUI, THEME, VIEW, CATEGORY and APP are written back by the firmware --
- * see sd_boot_ini_save().
+ * DISPLAY selects the video signal on boards with HSTX video. It is parsed on
+ * every board, so a card written on one board loads on any other; boards
+ * without HSTX ignore it. Which mode an absent key means is the caller's
+ * decision (it differs per board), so the parser only reports whether the
+ * key was there.
+ * GUI, THEME, VIEW, CATEGORY, APP and DISPLAY are written back by the
+ * firmware -- see sd_boot_ini_save().
  *
  * Screensaver default is asymmetric:
  *   - When /boot.txt is absent altogether -> STARFIELD (historical default).
@@ -68,6 +74,13 @@ typedef struct {
     char      category[32];    /* CATEGORY=<category_name> */
     char      app[32];         /* APP=<program_name> */
 
+    /* DISPLAY=HDMI|DVI. display_set is false while the key is absent: the
+     * board's default applies then, and the writer leaves the key out, so a
+     * card moved between boards keeps each board's default until the user
+     * picks a mode. Set display_set together with display_dvi to write it. */
+    bool      display_dvi;     /* true = DVI, false = HDMI; valid if display_set */
+    bool      display_set;
+
     /* Provenance, filled in by the loader. Not user-visible configuration --
      * the writer and the .guimode migration both need to know what was
      * actually present in the file as opposed to defaulted. */
@@ -89,13 +102,15 @@ sd_boot_ini_status_t sd_boot_ini_load(const char *path,
                                       sd_boot_ini_t *out,
                                       char *err, size_t err_sz);
 
-/* Rewrite `path` so GUI=, THEME=, VIEW=, CATEGORY= and APP= reflect *ini.
+/* Rewrite `path` so GUI=, THEME=, VIEW=, CATEGORY=, APP= and DISPLAY= reflect
+ * *ini.
  *
- * File present: only those five lines are rewritten, and keys that are absent
+ * File present: only those six lines are rewritten, and keys that are absent
  *   get appended. Everything else -- comments, blank lines, ordering, spacing,
  *   CRLF, BASEDIR/INDEX/SCREENSAVER -- is copied through byte for byte.
  *   CATEGORY / APP with an empty value are dropped rather than written empty:
- *   the parser rejects an empty value.
+ *   the parser rejects an empty value. DISPLAY is dropped likewise while
+ *   display_set is false.
  * File absent: the file is created carrying the EFFECTIVE value of every key,
  *   SCREENSAVER included (see the asymmetry note at the top of this header).
  *

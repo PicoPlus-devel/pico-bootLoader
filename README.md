@@ -541,7 +541,7 @@ controllers. On controllers whose face buttons are labelled differently, the
 on-screen prompts follow the attached device: A and B appear as B and A on an
 XInput pad, and as ○ and ✕ on a DualShock or DualSense.
 
-The chosen menu mode and artwork theme are remembered across boots. Inside a running emulator built
+The chosen menu mode, artwork theme and display mode are remembered across boots. Inside a running emulator built
 on the shared framework, **SELECT + START** opens its menu, which offers *Return
 to boot loader* to reboot back into this menu.
 
@@ -554,6 +554,7 @@ with UP / DOWN, confirm with A, and return with B.
 |---|---|
 | Help | Opens the help screen described under [On-screen help](#on-screen-help). |
 | Menu mode | Switches between the text list and the full-screen artwork view. The choice is written to `/boot.txt` and restored on the next boot. |
+| Display mode | Boards with HSTX video only. Switches the video signal between HDMI, which carries picture and sound, and DVI, which carries the picture only and suits monitors and TVs that do not accept an HDMI signal. The change takes effect at once; the choice is written to `/boot.txt` as `DISPLAY=` and restored on the next boot. Until a mode is chosen, the Murmulator M2 (HW_CONFIG 13) uses DVI and all other boards use HDMI. If the screen stays black, switch to DVI without a picture: in the menu, press SELECT and keep it held, then press A. The order matters: if A is pressed first, the selected application starts instead. The setting applies to this menu only; each application keeps its own display mode setting. |
 | Enter BOOTSEL mode | Restarts the board into the RP2350 ROM bootloader, where it appears on a computer as a drive named `RP2350`. Copy a `.uf2` onto it to update the bootloader itself, or reset the board to return to the menu. |
 | USB drive mode | Presents the SD card to a computer as a USB mass-storage device, so applications, the index file and artwork can be changed without removing the card. |
 
@@ -837,8 +838,9 @@ apply. A commented sample ships in the repository root: [`boot.txt`](boot.txt).
 
 - One `KEY=VALUE` per line; whitespace around `=` and the value is trimmed.
 - Lines starting with `#` or `;` are comments; blank lines are ignored.
-- Keys are case-insensitive. `SCREENSAVER` values are case-insensitive;
-  `BASEDIR`/`INDEX` values are filesystem paths and case-sensitive.
+- Keys are case-insensitive. `SCREENSAVER`, `VIEW` and `DISPLAY` values are
+  case-insensitive; `BASEDIR`/`INDEX` values are filesystem paths and
+  case-sensitive.
 - A malformed file (unknown key, duplicate key, missing `=` or value) produces
   an on-screen error at boot — correct the file and reset.
 
@@ -852,6 +854,7 @@ apply. A commented sample ships in the repository root: [`boot.txt`](boot.txt).
 | `VIEW` | `CATEGORIES` | Which level the menu was left on: `CATEGORIES` or `APPS`. Ignored without a `categories.txt`. |
 | `CATEGORY` | — | `category_name` of the category last opened. |
 | `APP` | — | `program_name` of the application last selected. |
+| `DISPLAY` | see meaning | Video signal of the menu on boards with HSTX video: `HDMI` (picture and sound) or `DVI` (picture only). Written by the *Display mode* entry of the [options menu](#the-options-menu). Without the key, the Murmulator M2 (HW_CONFIG 13) uses `DVI` and all other boards `HDMI`. Accepted and ignored on boards without HSTX, so one card can serve several boards. |
 
 `VIEW`, `CATEGORY` and `APP` record where you were so the menu returns there on
 the next boot. The bootloader maintains them; there is normally no reason to
@@ -865,13 +868,16 @@ empty value (`CATEGORY=` with nothing after it) is a syntax error.
 > `BLOCKS`. Set the key explicitly if the choice matters.
 
 **The bootloader writes this file.** Changing the menu mode or the artwork
-theme rewrites the corresponding `GUI=` / `THEME=` line, and moving around the
-menu rewrites `VIEW=`, `CATEGORY=` and `APP=`. Nothing else is
+theme rewrites the corresponding `GUI=` / `THEME=` line, choosing a display
+mode rewrites `DISPLAY=`, and moving around the menu rewrites `VIEW=`,
+`CATEGORY=` and `APP=`. Nothing else is
 touched: comments, blank lines, key order, spacing and any other keys are
 copied through unchanged, so the file stays yours to edit. If `/boot.txt` does
 not exist, the first such change creates it with the current effective value of
 *every* key — `SCREENSAVER` included, so that materialising the file cannot
-quietly change the screensaver through the asymmetry noted above.
+quietly change the screensaver through the asymmetry noted above. `DISPLAY` is
+the exception: it is written only once a display mode has been chosen, so that
+each board keeps its own default until then.
 
 Updates are written to `/boot.txt.tmp`, re-parsed to confirm they are valid,
 and only then renamed into place; if a power cut interrupts the rename, the

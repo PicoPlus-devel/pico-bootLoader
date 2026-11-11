@@ -1119,40 +1119,71 @@ void showUsbDriveScreen()
 }
 #endif // FRENS_USB_MSC
 
+// --- Display mode (DISPLAY= in /boot.txt) ------------------------------------
+//
+// HDMI or DVI on boards with HSTX video, the choice the emulators offer as
+// "Display Mode". Without a DISPLAY= key the board's default applies: DVI on
+// the Murmulator M2 (HW_CONFIG 13), HDMI everywhere else -- the same default
+// pico_shared's resetsettings() gives the emulators.
+static bool displayIsDvi(const sd_boot_ini_t *ini)
+{
+    return ini->display_set ? ini->display_dvi : (HW_CONFIG == 13);
+}
+
+#if HSTX
+// Switch the running signal. hstx_init() read the flag at boot; dvi_mode is
+// only a flag the HSTX DMA IRQ checks on every scanline, so changing it while
+// the picture runs is safe (pico_shared's savesettings() does the same).
+static void applyDisplayMode(bool dvi)
+{
+    settings.flags.useDVIModeForHDMI = dvi;
+    video_output_set_dvi_mode(dvi);
+}
+#endif
+
 // --- Options menu (SELECT) --------------------------------------------------
 //
-// The picker's secondary screen: help, the text/graphical toggle, BOOTSEL mode
-// and (where it is built in) USB drive mode, with a SYSTEM block below them
-// describing the board, its flash, SRAM, PSRAM and SD card. Same charcell chrome and
-// the same pump as showHelpScreen(); A applies the highlighted entry, B or
-// SELECT returns.
+// The picker's secondary screen: help, the text/graphical toggle, the display
+// mode (HSTX boards), BOOTSEL mode and (where it is built in) USB drive mode,
+// with a SYSTEM block below them describing the board, its flash, SRAM, PSRAM
+// and SD card. Same charcell chrome and the same pump as showHelpScreen(); A
+// applies the highlighted entry, B or SELECT returns.
 
 enum OptionsResult {
     OPT_BACK,           // nothing the caller has to act on
     OPT_MODE_CHANGED,   // ini->gui_graphical was flipped
 };
 
-// Entry ids rather than array indices: the USB row is compiled out on builds
-// without FRENS_USB_MSC and the rows must close up behind it.
+// Entry ids rather than array indices: the display-mode row exists only on
+// HSTX builds and the USB row only with FRENS_USB_MSC, and the rows must close
+// up behind them.
 enum OptionId {
     OPTID_HELP,
     OPTID_MENU_MODE,
+    OPTID_DISPLAY_MODE,
     OPTID_BOOTSEL,
     OPTID_USB_DRIVE,
 };
+
+// Help, Menu mode, [Display mode], BOOTSEL, USB drive. Everything below the
+// entries is placed from this count, so builds without the display-mode row
+// keep the rows they always had (hint 11, SYSTEM 13) and HSTX builds move
+// down by one entry (hint 13, SYSTEM 15).
+#define OPT_MAX_ENTRIES (4 + HSTX)
 
 #define OPT_FIRST_ROW  3    // first entry row; entries are two rows apart
 #define OPT_ROW_STEP   2
 #define OPT_LABEL_COL  6
 #define OPT_VALUE_COL  24
-#define OPT_HINT_ROW   11   // below the last of at most four entries (row 9)
+#define OPT_HINT_ROW   (OPT_FIRST_ROW + OPT_MAX_ENTRIES * OPT_ROW_STEP)   // below the last entry
 
 // SYSTEM block. The three value columns are right-aligned SYS_COL_W cells
 // apart against the right edge; fmtBytes() never exceeds 8 characters, so
 // neighbouring values always keep a space between them.
-#define SYS_HDR_ROW    13
-#define SYS_BOARD_ROW  14
-#define SYS_TABLE_ROW  16   // column headings; Flash, SRAM, PSRAM, SD rows follow
+#define SYS_HDR_ROW    (OPT_HINT_ROW + 2)
+#define SYS_BOARD_ROW  (SYS_HDR_ROW + 1)
+#define SYS_TABLE_ROW  (SYS_HDR_ROW + 3)   // column headings; Flash, SRAM, PSRAM, SD rows follow
+#define OPT_SAVEFAIL_ROW (SYS_TABLE_ROW + 6)   // one blank row below the SD row (22, or 24 with HSTX)
 #define SYS_LABEL_COL  3
 #define SYS_BOARD_COL  12
 #define SYS_COL_W      9
@@ -1374,6 +1405,9 @@ void drawOptionsScreen(const OptionId *ids, int count, int sel,
         case OPTID_MENU_MODE:  label = "Menu mode";
                                value = ini->gui_graphical ? "graphical" : "text";
                                break;
+        case OPTID_DISPLAY_MODE: label = "Display mode";
+                               value = displayIsDvi(ini) ? "DVI" : "HDMI";
+                               break;
         case OPTID_BOOTSEL:    label = "Enter BOOTSEL mode"; break;
         case OPTID_USB_DRIVE:  label = "USB drive mode";     break;
         }
@@ -1388,6 +1422,7 @@ void drawOptionsScreen(const OptionId *ids, int count, int sel,
     switch (ids[sel]) {
     case OPTID_HELP:      hint = "Show the controls and current settings"; break;
     case OPTID_MENU_MODE: hint = "Application list, or full-screen artwork"; break;
+    case OPTID_DISPLAY_MODE: hint = "Video signal: HDMI, or plain DVI"; break;
     case OPTID_BOOTSEL:   hint = "Restart for flashing over USB"; break;
     case OPTID_USB_DRIVE: hint = "Show the SD card on your computer"; break;
     }
@@ -1396,7 +1431,7 @@ void drawOptionsScreen(const OptionId *ids, int count, int sel,
     drawSysInfo(si);
 
     if (cfg_save_failed) {
-        centerText(22, "Settings not saved - SD write failed",
+        centerText(OPT_SAVEFAIL_ROW, "Settings not saved - SD write failed",
                    COL_ERR_FG, COL_ERR_BG);
     }
 
@@ -1406,15 +1441,38 @@ void drawOptionsScreen(const OptionId *ids, int count, int sel,
     centerText(28, foot, COL_BAR_FG, COL_BAR_BG);
 }
 
+#if HSTX
+// Choose a display mode from the options screen: switch the picture now and
+// write DISPLAY= to /boot.txt. A failed write is non-fatal, exactly like the
+// menu-mode toggle: the mode stays for this session and the screen says it
+// wasn't saved.
+static void setDisplayMode(sd_boot_ini_t *ini, bool dvi, bool *cfg_save_failed)
+{
+    ini->display_dvi = dvi;
+    ini->display_set = true;
+    applyDisplayMode(dvi);
+    LOG("Options -> display=%s", dvi ? "DVI" : "HDMI");
+    if (!sd_boot_ini_save("/boot.txt", ini)) {
+        LOG("boot.txt write FAILED; display mode kept in RAM only");
+        *cfg_save_failed = true;
+    } else {
+        *cfg_save_failed = false;
+    }
+}
+#endif
+
 OptionsResult showOptionsScreen(sd_boot_ini_t *ini, bool *cfg_save_failed,
                                 bool graphical_mode)
 {
     using Btn = io::GamePadState::Button;
 
-    OptionId ids[4];
+    OptionId ids[OPT_MAX_ENTRIES];
     int count = 0;
     ids[count++] = OPTID_HELP;
     ids[count++] = OPTID_MENU_MODE;
+#if HSTX
+    ids[count++] = OPTID_DISPLAY_MODE;
+#endif
     ids[count++] = OPTID_BOOTSEL;
 #if FRENS_USB_MSC
     ids[count++] = OPTID_USB_DRIVE;
@@ -1454,6 +1512,24 @@ OptionsResult showOptionsScreen(sd_boot_ini_t *ini, bool *cfg_save_failed,
         if (pushed & Btn::UP)   { if (sel > 0)         { sel--; dirty = true; } }
         if (pushed & Btn::DOWN) { if (sel < count - 1) { sel++; dirty = true; } }
 
+#if HSTX
+        // SELECT + A: back to DVI without having to see the screen, the same
+        // combination the emulators' menu uses. SELECT opened this screen on
+        // its press and prev swallowed it, so a SELECT still held is in btns
+        // but not in pushed and does not count as "back". A screen that shows
+        // no picture in HDMI mode is the case this is for. Only in this order:
+        // an A that reaches the picker before SELECT starts the selected
+        // application, as in the emulators' menu (README and boot.txt say so).
+        if ((btns & Btn::SELECT) && (pushed & Btn::A)) {
+            if (!displayIsDvi(ini)) {
+                LOG("Options -> SELECT + A: forcing DVI.");
+                setDisplayMode(ini, true, cfg_save_failed);
+            }
+            dirty = true;
+            continue;
+        }
+#endif
+
         if (pushed & Btn::A) {
             switch (ids[sel]) {
             case OPTID_HELP:
@@ -1478,6 +1554,13 @@ OptionsResult showOptionsScreen(sd_boot_ini_t *ini, bool *cfg_save_failed,
                     *cfg_save_failed = false;
                 }
                 dirty = true;
+                break;
+
+            case OPTID_DISPLAY_MODE:
+#if HSTX
+                setDisplayMode(ini, !displayIsDvi(ini), cfg_save_failed);
+                dirty = true;
+#endif
                 break;
 
             case OPTID_BOOTSEL:
@@ -2394,6 +2477,31 @@ void flashAndLaunch(int idx, bool flashEmu, bool flashAux, const uf2_fingerprint
     for (;;) tight_loop_contents();
 }
 
+// /boot.txt, loaded inside Frens::initAll() by the pre-video task below so that
+// DISPLAY= can pick the video signal before the display starts. main() reports
+// a parse error later, once there is a screen to show it on.
+sd_boot_ini_t        g_boot_ini;
+sd_boot_ini_status_t g_boot_ini_status = SD_BOOT_INI_ERROR;
+char                 g_boot_ini_err[64];
+bool                 g_boot_ini_loaded = false;
+
+// Runs once the SD card is mounted and right before initDVandAudio(), which
+// hands settings.flags.useDVIModeForHDMI to hstx_init(). Not called at all when
+// the card fails to mount; main() then stops at "SD CARD NOT FOUND" and the
+// board's default display mode (resetsettings()) applies.
+void loadBootIniBeforeVideo()
+{
+    g_boot_ini_status = sd_boot_ini_load("/boot.txt", &g_boot_ini,
+                                         g_boot_ini_err, sizeof(g_boot_ini_err));
+    g_boot_ini_loaded = true;
+#if HSTX
+    // On a parse error the parser has stopped at the bad line: a DISPLAY= above
+    // it is still honoured, otherwise the board's default applies. Either way
+    // the BOOT.TXT INVALID screen appears in the mode the user most likely has.
+    settings.flags.useDVIModeForHDMI = displayIsDvi(&g_boot_ini);
+#endif
+}
+
 } // namespace
 
 int main()
@@ -2469,6 +2577,11 @@ int main()
     // could miss its control-block reload deadline, silently killing the
     // DMA chain. Fixed in pico_lib (SpinLockGuard etc.); the buffer size
     // only shifted the timing.)
+    //
+    // /boot.txt is read inside initAll(), between mounting the card and
+    // starting the display, so its DISPLAY= key decides HDMI or DVI from the
+    // first frame on.
+    Frens::setPreVideoInitTask(loadBootIniBeforeVideo);
     bool sdOk = Frens::initAll(dummyRom, CPUFREQ_KHZ, 0, 0, 1024, false, true);
     LOG("initAll done. SD mounted=%d  PSRAM=%d  framebufferUsed=%d",
         (int)sdOk, (int)Frens::isPsramEnabled(), (int)Frens::isFrameBufferUsed());
@@ -2505,22 +2618,29 @@ int main()
                          nullptr);
     }
 
-    // Load /boot.txt. Missing file -> defaults ("/emu", "emulators.txt",
+    // /boot.txt. Missing file -> defaults ("/emu", "emulators.txt",
     // STARFIELD). Present but malformed -> fatal, so the user knows the
     // config didn't take effect instead of silently reverting to defaults.
-    sd_boot_ini_t ini;
-    char ini_err[64] = {0};
-    LOG("Loading /boot.txt (optional)...");
-    if (sd_boot_ini_load("/boot.txt", &ini, ini_err, sizeof(ini_err)) != SD_BOOT_INI_OK) {
+    // Normally loadBootIniBeforeVideo() has already read it inside initAll();
+    // load it here only if that did not happen.
+    sd_boot_ini_t &ini = g_boot_ini;
+    if (!g_boot_ini_loaded) {
+        LOG("Loading /boot.txt (optional)...");
+        g_boot_ini_status = sd_boot_ini_load("/boot.txt", &ini, g_boot_ini_err,
+                                             sizeof(g_boot_ini_err));
+        g_boot_ini_loaded = true;
+    }
+    if (g_boot_ini_status != SD_BOOT_INI_OK) {
         fatalErrorScreen("BOOT.TXT INVALID",
-                         ini_err,
+                         g_boot_ini_err,
                          "Fix /boot.txt and reset.",
                          nullptr);
     }
-    LOG("boot_ini: BASEDIR=%s INDEX=%s SCREENSAVER=%s GUI=%d THEME=%u",
+    LOG("boot_ini: BASEDIR=%s INDEX=%s SCREENSAVER=%s GUI=%d THEME=%u DISPLAY=%s%s",
         ini.base_dir, ini.index_file,
         ini.screensaver == SS_MODE_STARFIELD ? "STARFIELD" : "BLOCKS",
-        (int)ini.gui_graphical, (unsigned)ini.theme);
+        (int)ini.gui_graphical, (unsigned)ini.theme,
+        displayIsDvi(&ini) ? "DVI" : "HDMI", ini.display_set ? "" : " (board default)");
 
     snprintf(g_emuDir,       sizeof(g_emuDir),       "%s/%d",      ini.base_dir, HW_CONFIG);
     snprintf(g_index_path,   sizeof(g_index_path),   "%s/%s",      ini.base_dir, ini.index_file);

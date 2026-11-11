@@ -8,8 +8,9 @@
 # to the values shown below, EXCEPT for SCREENSAVER -- see its note).
 #
 # THE BOOTLOADER WRITES THIS FILE. Changing the menu mode (SELECT) or the
-# artwork theme (UP/DOWN) rewrites the GUI= and THEME= lines, and moving around
-# the menu rewrites VIEW=, CATEGORY= and APP=. Everything else -- your comments,
+# artwork theme (UP/DOWN) rewrites the GUI= and THEME= lines, choosing a display
+# mode in the options menu rewrites DISPLAY=, and moving around the menu
+# rewrites VIEW=, CATEGORY= and APP=. Everything else -- your comments,
 # your ordering, your spacing -- is preserved exactly. If the file does not
 # exist yet it is created on the first such change. The update is written to
 # /boot.txt.tmp, verified, and only then renamed into place, so a power cut
@@ -164,3 +165,26 @@ THEME=0
 # (CATEGORY= with nothing after it) is a syntax error, not "no value".
 #
 VIEW=CATEGORIES
+
+
+# --- DISPLAY -----------------------------------------------------------------
+# Video signal of the menu on boards with HSTX video. Other boards accept the
+# key and ignore it.
+#
+# Values (case-insensitive):
+#   HDMI   Picture and sound. Required for sound over the HDMI cable.
+#   DVI    Picture only, for monitors and TVs that do not accept an HDMI
+#          signal.
+#
+# The Display mode entry of the options menu (SELECT) writes this line. If the
+# screen stays black, switch to DVI without a picture: in the menu, press SELECT
+# and keep it held, then press A. The order matters: if A is pressed first,
+# the selected application starts instead.
+#
+# Each application keeps its own display mode setting.
+#
+# Default (key absent): DVI on the Murmulator M2 (HW_CONFIG 13), HDMI on all
+# other boards. Leave the key out to keep each board's default; this sample
+# does so, because the same card may be used in several boards.
+#
+#DISPLAY=HDMI
