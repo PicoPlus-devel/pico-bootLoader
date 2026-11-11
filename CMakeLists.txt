@@ -108,6 +108,7 @@ add_executable(${projectname}
     src/emulators_txt.c
     src/categories.c
     src/sd_boot_ini.c
+    src/app_display_sync.cpp
     src/uf2_crc.cpp
     src/uf2_stream.c
     src/flash_record.c

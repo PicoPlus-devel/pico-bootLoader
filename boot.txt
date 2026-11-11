@@ -168,8 +168,8 @@ VIEW=CATEGORIES
 
 
 # --- DISPLAY -----------------------------------------------------------------
-# Video signal of the menu on boards with HSTX video. Other boards accept the
-# key and ignore it.
+# Video signal of the menu, and of the applications it starts, on boards with
+# HSTX video. Other boards accept the key and ignore it.
 #
 # Values (case-insensitive):
 #   HDMI   Picture and sound. Required for sound over the HDMI cable.
@@ -181,7 +181,10 @@ VIEW=CATEGORIES
 # and keep it held, then press A. The order matters: if A is pressed first,
 # the selected application starts instead.
 #
-# Each application keeps its own display mode setting.
+# Applications started from the menu use the same mode: before an emulator or
+# arcade game starts, the menu sets the Display Mode in that application's own
+# settings file to match, and Doom, Duke Nukem 3D, Quake II and Diablo read
+# this key. ColecoVision keeps the mode it was built with.
 #
 # Default (key absent): DVI on the Murmulator M2 (HW_CONFIG 13), HDMI on all
 # other boards. Leave the key out to keep each board's default; this sample

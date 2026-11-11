@@ -76,6 +76,7 @@ extern "C" {
 #include "screensaver.h"
 #include "progress_bar.h"
 #include "sd_boot_ini.h"
+#include "app_display_sync.h"
 #include "stdio_buffered.h"
 #include <hardware/divider.h>
 }
@@ -3226,10 +3227,19 @@ int main()
                 uf2_diag_t d = {};
                 d.reason = UF2_DIAG_NOT_FOUND;
                 showUf2ErrorScreen(auxFull, &d, true);
-            } else if (emuDrift || flashAux) {
-                flashAndLaunch(sel, emuDrift, flashAux, flashAux ? &auxFp : nullptr);
             } else {
-                launchInFlash();
+#if HSTX
+                // An emulator starts in its own display mode: set it to ours
+                // first (app_display_sync.cpp). Here, after the aux check, so
+                // a refused launch changes nothing. The native ports read
+                // DISPLAY= from /boot.txt, which persist_cfg() just wrote.
+                appDisplaySync(g_emus[sel].prog_name, displayIsDvi(&ini));
+#endif
+                if (emuDrift || flashAux) {
+                    flashAndLaunch(sel, emuDrift, flashAux, flashAux ? &auxFp : nullptr);
+                } else {
+                    launchInFlash();
+                }
             }
             // If we get here, the launch was refused (a rejected file, or
             // missing data) and the user dismissed the page saying so; a

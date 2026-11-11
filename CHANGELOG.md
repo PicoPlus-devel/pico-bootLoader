@@ -10,6 +10,25 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 copyright of their manufacturers and are not part of this project. Holding the
 rights to them is your responsibility.
 
+## v0.10
+
+On boards with HSTX video, the menu can switch between HDMI and DVI, and the
+applications it starts use the same mode.
+
+> **Do you need to update?** Only if your monitor or TV does not accept an HDMI
+> signal. Re-flash the board and replace the `/emu` folder on the card with the
+> one in the new `pico-bootLoader_sdcard.zip`.
+
+### Changes
+
+- **Display mode** in the options menu (SELECT): HDMI, which carries picture and
+  sound, or DVI, for monitors and TVs that do not accept an HDMI signal. If the
+  screen stays black, hold SELECT and press A to switch to DVI.
+- **Applications start in the menu's display mode.** Before an emulator, arcade
+  game or computer emulator starts, its own *Display Mode* setting is set to
+  match. Doom, Duke Nukem 3D, Quake II and Diablo follow it too, from their new
+  versions on. In DVI mode the sound plays on the board's own audio output.
+
 ## v0.9
 
 USB controllers on the Adafruit Fruit Jam and the other boards with PIO-USB
