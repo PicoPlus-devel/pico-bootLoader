@@ -7,7 +7,7 @@ host a collection of retro-game emulators and native ports of *Doom*,
 *Duke Nukem 3D*, *Quake II* and *Diablo* on a single board and to let the user choose which one to run
 from an on-screen menu, without reconnecting the board to a computer.
 
-It runs on ten board configurations, each with its own ready-made binary — see
+It runs on eleven board configurations, each with its own ready-made binary — see
 [Supported hardware](#supported-hardware) for the file names:
 
 - Raspberry Pi Pico 2 / Pico 2 W, or a Pimoroni Pico Plus 2, with an Adafruit DVI
@@ -25,6 +25,8 @@ It runs on ten board configurations, each with its own ready-made binary — see
   [PicoSNES PCB](#picosnes-pcb-hw_config-13), which uses the same pin map
 - [Olimex RP2040-PICO-PC](#olimex-rp2040-pico-pc-hw_config-15) with a Raspberry
   Pi Pico 2
+- Waveshare RP2350-PiZero on the
+  [PCB by Liu Szuping](#pcb-for-the-waveshare-rp2350-pizero-hw_config-18)
 
 Every one of them outputs video over DVI/HDMI and reads its applications from an
 SD card. RP2040 boards are not supported: the flash layout and the UF2 checks are
@@ -152,9 +154,10 @@ number names the SD-card folder the loader reads applications from
 | 13 | Murmulator M2, or an RP2350 Plus on the [PicoSNES PCB](#picosnes-pcb-hw_config-13) | `pico-bootLoader_MurmulatorM2_arm.uf2` |
 | 14 | Adafruit Feather RP2350 (TLV320DAC3100 audio) | `pico-bootLoader_AdafruitFeatherRP2350_TLV320DAC3100_arm_piousb.uf2` |
 | 15 | Olimex RP2040-PICO-PC with a Raspberry Pi Pico 2 | `pico-bootLoader_OlimexPicoPC_arm.uf2` |
+| 18 | Waveshare RP2350-PiZero on the [PCB by Liu Szuping](#pcb-for-the-waveshare-rp2350-pizero-hw_config-18) | `pico-bootLoader_WaveShareRP2350PiZeroLiuPCB_arm_piousb.uf2` |
 
 Video output is DVI/HDMI on all boards. Boards whose video connector is wired
-to the RP2350 HSTX pins — HW_CONFIG 2, 5, 8, 13, 14 and 15 — drive it through the
+to the RP2350 HSTX pins — HW_CONFIG 2, 5, 8, 13, 14, 15 and 18 — drive it through the
 HSTX peripheral; the others use PicoDVI. A single SD card
 serves both kinds — artwork is cached in both pixel formats (see
 [Artwork](#artwork)).
@@ -184,6 +187,38 @@ Flash `pico-bootLoader_OlimexPicoPC_arm.uf2` and put the applications in
 
 Support for this board was contributed by
 [DnCraptor](https://github.com/DnCraptor).
+
+### PCB for the Waveshare RP2350-PiZero (HW_CONFIG 18)
+
+This PCB, designed by Liu Szuping ([szuping](https://github.com/szuping)),
+carries a [Waveshare RP2350-PiZero](https://www.waveshare.com/rp2350-pizero.htm)
+and adds an HDMI port, an audio jack, two NES/SNES controller ports and a socket
+for an ESP32 module. The PCB design is not yet available. Flash
+`pico-bootLoader_WaveShareRP2350PiZeroLiuPCB_arm_piousb.uf2` and put the
+applications in `/emu/18/`. The binary for the RP2350-PiZero on its own
+(HW_CONFIG 7) does not work on this PCB.
+
+- **Video and sound.** HDMI is driven through HSTX, on the HDMI port of the PCB;
+  the mini HDMI port of the RP2350-PiZero is not used. Sound plays on HDMI and on
+  the audio jack at the same time.
+- **Controllers.** A USB controller or keyboard goes in the PIO-USB port of the
+  RP2350-PiZero, and NES or SNES controllers in the controller ports of the PCB.
+  A USB hub on the PIO-USB port does not work. With an ESP32 module running
+  [BlueRetro](https://github.com/darthcloud/blueretro) in the socket, Bluetooth
+  controllers are used instead of the controller ports; remove the module to use
+  the controller ports.
+- **Flash.** The RP2350-PiZero has 16 MB of flash, so *Quake II* and *Diablo*
+  run on it as well.
+- **PSRAM.** The RP2350-PiZero has no PSRAM unless a chip is soldered on, with
+  its chip-select pin on GPIO 47. Without it, the entries that require PSRAM —
+  the Super Nintendo emulator, *PCEngine CD*, *OutRun*, *Duke Nukem 3D*,
+  *Quake II*, *Diablo* and `doom_tiny_full` — still appear in the menu but do
+  not run. A board with PSRAM and a flash chip from a manufacturer other than
+  Winbond, such as Puya, locks up when overclocked until the flash chip has had a
+  one-time fix; see
+  [PSRAM with a non-Winbond flash chip](https://github.com/PicoPlus-devel/pico-infonesPlus#psram-with-a-non-winbond-flash-chip).
+
+The native ports have not been tested on this board yet.
 
 ### Pico 2 W
 
@@ -288,9 +323,10 @@ outside this project. It expects everything in `/coleco/` on the SD
 card: the 8 KB ColecoVision BIOS as `COLECO.BIN`, and the games as `.ROM` files.
 Neither the BIOS nor any game is included; `updateAll` installs the BIOS.
 
-*Doom* runs on five boards: Adafruit Fruit Jam (HW_CONFIG 8), the Adafruit DVI +
+*Doom* runs on six boards: Adafruit Fruit Jam (HW_CONFIG 8), the Adafruit DVI +
 MicroSD breakout combination (2), Murmulator M2 (13), Adafruit Feather RP2350
-with a TLV320DAC3100 (14) and the Olimex RP2040-PICO-PC with a Pico 2 (15). It
+with a TLV320DAC3100 (14), the Olimex RP2040-PICO-PC with a Pico 2 (15) and the
+Waveshare RP2350-PiZero on the PCB by Liu Szuping (18). It
 ships in two variants: `doom_tiny`, the shareware
 episode, whose WAD the loader flashes together with the engine from a data
 image, `/roms/doom/doom1-whx-bootloader.uf2` (see
@@ -303,18 +339,20 @@ from the shareware WAD in the
 installs it in `/roms/doom/`. It is the same file for every board. Without it,
 the menu names the missing file instead of starting the game.
 
-*Duke Nukem 3D* runs on four boards: Adafruit Fruit Jam (HW_CONFIG 8), the
+*Duke Nukem 3D* runs on five boards: Adafruit Fruit Jam (HW_CONFIG 8), the
 Adafruit DVI + MicroSD breakout combination (2, on a Pimoroni Pico Plus 2),
-Murmulator M2 (13) and the Olimex RP2040-PICO-PC with a Pico 2 (15, with a PSRAM
-chip fitted on GPIO 8). It needs **PSRAM** on all four. There is no companion data
-image: `DUKE3D.GRP` — shareware or registered/Atomic — is streamed from
-`/roms/duke3d/` on the SD card, with savegames and `duke3d.cfg` written next to
-it. `updateAll` installs the shareware version 1.3d there. All four have been
-tested on hardware.
+Murmulator M2 (13), the Olimex RP2040-PICO-PC with a Pico 2 (15, with a PSRAM
+chip fitted on GPIO 8) and the Waveshare RP2350-PiZero on the PCB by Liu Szuping
+(18, with a PSRAM chip soldered on). It needs **PSRAM** on all five. There is no
+companion data image: `DUKE3D.GRP` — shareware or registered/Atomic — is
+streamed from `/roms/duke3d/` on the SD card, with savegames and `duke3d.cfg`
+written next to it. `updateAll` installs the shareware version 1.3d there. The
+first four have been tested on hardware.
 
-*Quake II* runs on two boards: Adafruit Fruit Jam (HW_CONFIG 8) and the Adafruit
-DVI + MicroSD breakout combination (2, on a Pimoroni Pico Plus 2). It needs 8 MB
-of **PSRAM** and 16 MB of flash. The game data is not included: `updateAll`
+*Quake II* runs on three boards: Adafruit Fruit Jam (HW_CONFIG 8), the Adafruit
+DVI + MicroSD breakout combination (2, on a Pimoroni Pico Plus 2) and the
+Waveshare RP2350-PiZero on the PCB by Liu Szuping (18, with a PSRAM chip soldered
+on). It needs 8 MB of **PSRAM** and 16 MB of flash. The game data is not included: `updateAll`
 installs the demo, or download `pico-quake2_demo_sdcard.zip` from the
 [pico-quake2 releases](https://github.com/PicoPlus-devel/pico-quake2/releases)
 and unpack it to the root of the card, which puts `pak0.pak` in
@@ -330,9 +368,10 @@ is an early pre-release; its
 lists the known limitations.
 
 *Diablo* is a port of DevilutionX, the open-source engine for Diablo. It runs on
-two boards: Adafruit Fruit Jam (HW_CONFIG 8) and the Adafruit DVI + MicroSD
-breakout combination (2, on a Pimoroni Pico Plus 2). It needs 8 MB of **PSRAM**
-and 16 MB of flash. Everything goes in `/roms/devilutionx/`: DevilutionX's own
+three boards: Adafruit Fruit Jam (HW_CONFIG 8), the Adafruit DVI + MicroSD
+breakout combination (2, on a Pimoroni Pico Plus 2) and the Waveshare
+RP2350-PiZero on the PCB by Liu Szuping (18, with a PSRAM chip soldered on). It
+needs 8 MB of **PSRAM** and 16 MB of flash. Everything goes in `/roms/devilutionx/`: DevilutionX's own
 assets, from `pico-lutionX_sdcard.zip` on the
 [pico-lutionX releases](https://github.com/PicoPlus-devel/pico-lutionX/releases)
 page, and the game data, either `spawn.mpq` (the shareware version) or
@@ -349,11 +388,12 @@ is disconnected from the power. *Diablo* is an early pre-release; its
 the known limitations.
 
 *OutRun* is a port of the Cannonball engine and the first entry in the
-**Arcade** category. It is built for five boards: Adafruit Fruit Jam (HW_CONFIG 8),
+**Arcade** category. It is built for six boards: Adafruit Fruit Jam (HW_CONFIG 8),
 the Adafruit DVI + MicroSD breakout combination (2, on a Pimoroni Pico Plus 2),
-Murmulator M2 (13), Adafruit Feather RP2350 with a TLV320DAC3100 (14) and the
-Olimex RP2040-PICO-PC with a Pico 2 (15, with a PSRAM chip fitted on GPIO 8). It
-needs **PSRAM** on all five, and an **HSTX** board: on the bit-banged PicoDVI
+Murmulator M2 (13), Adafruit Feather RP2350 with a TLV320DAC3100 (14), the
+Olimex RP2040-PICO-PC with a Pico 2 (15, with a PSRAM chip fitted on GPIO 8) and
+the Waveshare RP2350-PiZero on the PCB by Liu Szuping (18, with a PSRAM chip
+soldered on). It needs **PSRAM** on all six, and an **HSTX** board: on the bit-banged PicoDVI
 configurations the system clock is tied to the pixel clock and the engine is too
 slow, so those boards are not built. There is no companion data image. The
 OutRun ROM set is copyright SEGA and is not distributed with the bundle: copy
@@ -430,10 +470,11 @@ mode* setting as Phoenix.
 
 *Salamander* is the seventh **Arcade** entry: an emulation of Konami's 1986
 arcade board, which plays *Salamander* and *Lifeforce*. Like OutRun, it is built
-for five boards: Adafruit Fruit Jam (HW_CONFIG 8), the Adafruit DVI + MicroSD
+for six boards: Adafruit Fruit Jam (HW_CONFIG 8), the Adafruit DVI + MicroSD
 breakout combination (2, on a Pimoroni Pico Plus 2 or a Raspberry Pi Pico 2),
-Murmulator M2 (13), Adafruit Feather RP2350 with a TLV320DAC3100 (14) and the
-Olimex RP2040-PICO-PC with a Pico 2 (15). It runs at a fixed 384 MHz, which only
+Murmulator M2 (13), Adafruit Feather RP2350 with a TLV320DAC3100 (14), the
+Olimex RP2040-PICO-PC with a Pico 2 (15) and the Waveshare RP2350-PiZero on the
+PCB by Liu Szuping (18). It runs at a fixed 384 MHz, which only
 the **HSTX** boards allow. **PSRAM** is optional: on a board without it, the game
 is copied into flash the first time it is started, which takes a few seconds and
 uses 704 KB of flash. An application started from the loader can overwrite that
@@ -627,7 +668,9 @@ project. The PicoSNES archive is published on its own
 The Waveshare RP2350-PiZero (HW_CONFIG 7) needs no PCB, since it already carries
 its own HDMI and microSD connectors, but it has a matching NES-like case:
 [thingiverse.com/thing:6758682](https://www.thingiverse.com/thing:6758682),
-designed for two NES controller ports.
+designed for two NES controller ports. On the
+[PCB by Liu Szuping](#pcb-for-the-waveshare-rp2350-pizero-hw_config-18) it is a
+separate configuration, HW_CONFIG 18, with its own loader binary.
 
 > [!NOTE]
 > Sellers on AliExpress have copied the PicoNES design and sell pre-populated
@@ -1257,8 +1300,8 @@ The native ports and *ColecoVision* are the exception to all of the above.
 [Adafruit_ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam) have no
 `pico_shared`, so there is no `SWVERSION` to stamp, and all five build through
 their own per-board `<board>-build-forbootloader.sh` scripts rather than
-`bld.sh`. Each targets only the boards it has a script for — *Doom* 2, 8, 13, 14
-and 15, *Duke Nukem 3D* 2, 8, 13 and 15, *Quake II* and *Diablo* 2 and 8,
+`bld.sh`. Each targets only the boards it has a script for — *Doom* 2, 8, 13, 14,
+15 and 18, *Duke Nukem 3D* 2, 8, 13, 15 and 18, *Quake II* and *Diablo* 2, 8 and 18,
 *ColecoVision* 8 — and is reported as `SKIP` for every other configuration. The
 *ColecoVision* build downloads its own dependencies, so it needs network access.
 The *Quake II* and *Diablo* builds produce `quake2.uf2` and `pico_lutionx.uf2`,
@@ -1379,6 +1422,8 @@ gh release upload v0.2.1 releases/pico-bootLoader_sdcard.zip
   [Gavin Knight](https://github.com/DynaMight1124).
 - Support for the [Olimex RP2040-PICO-PC](#olimex-rp2040-pico-pc-hw_config-15)
   was contributed by [DnCraptor](https://github.com/DnCraptor).
+- The [PCB for the Waveshare RP2350-PiZero](#pcb-for-the-waveshare-rp2350-pizero-hw_config-18)
+  was designed by Liu Szuping ([szuping](https://github.com/szuping)).
 - This project was developed with the assistance of AI
   (Anthropic Claude / Claude Code).
 

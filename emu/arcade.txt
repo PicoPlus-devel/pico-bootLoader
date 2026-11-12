@@ -5,8 +5,8 @@
 # Only .uf2 files whose embedded program name matches a row below appear in
 # this category, in the order the rows are written. Max 32 rows.
 #
-# picoOutRun needs PSRAM and HSTX, so it is built for HW_CONFIG 2, 8, 13, 14 and
-# 15 only. The OutRun ROM set is copyright SEGA and is not distributable, so no
+# picoOutRun needs PSRAM and HSTX, so it is built for HW_CONFIG 2, 8, 13, 14, 15
+# and 18 only. The OutRun ROM set is copyright SEGA and is not distributable, so no
 # data image ships with the bundle: the game reads the ROM set from /roms/ORUN
 # on the card and prepares the data itself at startup.
 #
@@ -37,8 +37,8 @@
 # unzipped; updateAll installs both. Without PSRAM a game is copied into flash
 # the first time it is started.
 #
-# picoSalamander needs PSRAM and HSTX, so it is built for HW_CONFIG 2, 8, 13, 14
-# and 15 only: Salamander and Lifeforce, chosen at start when both sets are on
+# picoSalamander needs PSRAM and HSTX, so it is built for HW_CONFIG 2, 8, 13, 14,
+# 15 and 18 only: Salamander and Lifeforce, chosen at start when both sets are on
 # the card. The games are copyright Konami: they read MAME's salamand.zip from
 # /roms/arcade/SALAMAND and lifefrce.zip (a clone of salamand) from
 # /roms/arcade/LIFEFRCE, zipped or unzipped; updateAll installs both, from a

@@ -1205,6 +1205,7 @@ static const char *hwConfigName()
     case 13: return "Murmulator M2/PicoSNES";
     case 14: return "Adafruit Feather RP2350";
     case 15: return "Olimex RP2040-PICO-PC";
+    case 18: return "RP2350-PiZero Liu PCB";
     default: return "";
     }
 }

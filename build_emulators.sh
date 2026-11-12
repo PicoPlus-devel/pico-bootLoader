@@ -170,17 +170,17 @@ repo_name() { echo "${REPO_OF[$1]##*/}"; }
 # pico-extras or Pico-PIO-USB as submodules — they come from the environment —
 # so a clone is small, and is reused across boards within a run.
 #
-# pico-quake2 ships one, pico-quake2, for boards 2 and 8. Like Duke it keeps no
-# companion image: the paks stay in /roms/quake2 on the SD card, and the game
+# pico-quake2 ships one, pico-quake2, for boards 2, 8 and 18. Like Duke it keeps
+# no companion image: the paks stay in /roms/quake2 on the SD card, and the game
 # copies each level's assets into a flash cache above its own image at run time.
-# It needs PSRAM and 16 MB of flash, and PIO USB on both boards. Its CMake target
+# It needs PSRAM and 16 MB of flash, and Pico-PIO-USB on every board. Its CMake target
 # is quake2, so the UF2 it produces is quake2.uf2, not <prog>.uf2.
 #
 # pico-lutionX (Diablo, on the DevilutionX engine) ships one, pico-lutionX, for
-# boards 2 and 8, built like pico-quake2: no companion image, the game data in
+# boards 2, 8 and 18, built like pico-quake2: no companion image, the game data in
 # /roms/devilutionx on the SD card, and a flash cache of level graphics above its
 # own image. It needs PSRAM and 16 MB of flash. Its CMake stops without
-# Pico-PIO-USB on both boards, although on board 2 it uses the native USB port.
+# Pico-PIO-USB on every board, although on board 2 it uses the native USB port.
 # Its CMake target is pico_lutionx, so the UF2 it produces is pico_lutionx.uf2.
 #
 # Adafruit_ColecoJam ships one, colecojam, for the Fruit Jam only. It is hosted
@@ -293,22 +293,23 @@ declare -A BOARD_TAG=(
     [13]=murmulatorm2    # Murmulator M2
     [14]=featherrp2350   # Adafruit Feather RP2350 + TLV320DAC3100
     [15]=olimexpicopc    # Olimex RP2040-PICO-PC + Pico 2
+    [18]=pizeroliupcb    # Waveshare RP2350-PiZero on Liu Szuping's PCB
 )
 # The HW_CONFIGs each variant has a build script for; any other config is
 # skipped cleanly. Every entry must have a BOARD_TAG.
 declare -A SCRIPTED_HWCONFIGS=(
-    [doom_tiny]="2 8 13 14 15"
-    [doom_tiny_full]="2 8 13 14 15"
-    [duke3d_game]="2 8 13 15"
-    [pico-quake2]="2 8"
-    [pico-lutionX]="2 8"
+    [doom_tiny]="2 8 13 14 15 18"
+    [doom_tiny_full]="2 8 13 14 15 18"
+    [duke3d_game]="2 8 13 15 18"
+    [pico-quake2]="2 8 18"
+    [pico-lutionX]="2 8 18"
     [colecojam]="8"
 )
 
 # Supported RP2350-ARM hwconfigs + descriptors from pico_shared/bld.sh case
 # statement. Configs 1, 2, 6, 11 are not Pico-2-only at the board level, but
 # we always pass -2 to bld.sh so they build for RP2350.
-HWCONFIGS=(1 2 5 6 7 8 9 13 14 15)
+HWCONFIGS=(1 2 5 6 7 8 9 13 14 15 18)
 declare -A HW_DESC=(
     [1]="Pimoroni Pico DV Demo Base"
     [2]="Adafruit DVI + MicroSD breakouts / custom PCB"
@@ -320,26 +321,27 @@ declare -A HW_DESC=(
     [13]="Murmulator M2"
     [14]="Adafruit Feather RP2350 + TLV320DAC3100 (PIO USB)"
     [15]="Olimex RP2040-PICO-PC + Pico 2"
+    [18]="WaveShare RP2350-PiZero on Liu Szuping's PCB (PIO USB)"
 )
 # Hwconfigs that imply PIO USB (mirrors pico_shared/bld.sh).
-PIOUSB_CONFIGS=(7 8 9 14)
+PIOUSB_CONFIGS=(7 8 9 14 18)
 
 # prog_name -> space-separated HW_CONFIGs it must NOT be built for.
 #
-# picosnesPlus supports only the five HSTX boards (2, 8, 13, 14, 15): it needs 8 MB
+# picosnesPlus supports only the six HSTX boards (2, 8, 13, 14, 15, 18): it needs 8 MB
 # of PSRAM and a framebuffer, so on the others the link fails outright —
 # SCRATCH_X overflows and pico_shared's !HSTX screensaver asset
 # (DefaultSS160_444, see pico_shared/DefaultSS.h) is never linked in. Listing
 # them here turns four noisy FAILs into clean SKIPs and keeps an unsupported
 # binary off the card.
 #
-# picoOutRun is restricted to the same five boards, for its own reasons: the
+# picoOutRun is restricted to the same six boards, for its own reasons: the
 # engine's buffers come out of PSRAM through Frens::f_malloc, and HSTX is
 # required because the bit-banged PicoDVI path ties the system clock to the
 # pixel clock (capped at 324 MHz, where the engine is too slow) and puts the
 # sound chain back on core0. See pico-outrun/buildAll.sh.
 #
-# picoSalamander is restricted to the same five boards because it runs at a
+# picoSalamander is restricted to the same six boards because it runs at a
 # fixed 384 MHz, which the PicoDVI path cannot. PSRAM is optional: without it the
 # machine's data is copied into flash. Its CMake stops on a board without HSTX.
 # See pico-salamander/buildAll.sh.

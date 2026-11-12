@@ -29,6 +29,19 @@ applications it starts use the same mode.
   match. Doom, Duke Nukem 3D, Quake II and Diablo follow it too, from their new
   versions on. In DVI mode the sound plays on the board's own audio output.
 
+### New board
+
+The **Waveshare RP2350-PiZero on the PCB by Liu Szuping** (@szuping), with an HDMI
+port, an audio jack, two NES/SNES controller ports and a socket for an ESP32
+module (HW_CONFIG 18). It has its own loader,
+`pico-bootLoader_WaveShareRP2350PiZeroLiuPCB_arm_piousb.uf2`, and its own folder
+on the card, `/emu/18/`, with the emulators, *Doom*, *Duke Nukem 3D*, *Quake II*
+and *Diablo*. Sound plays on HDMI and on the audio jack. A USB controller goes in
+the PIO-USB port of the RP2350-PiZero. The Super Nintendo emulator, PC Engine CD
+games, *OutRun*, *Duke Nukem 3D*, *Quake II*, *Diablo* and the full version of
+*Doom* need a PSRAM chip soldered onto the RP2350-PiZero. The PCB design is not
+yet available.
+
 ## v0.9
 
 USB controllers on the Adafruit Fruit Jam and the other boards with PIO-USB
