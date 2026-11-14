@@ -269,6 +269,13 @@ from `github.sha`, so it will point at whatever is current.
   generated banner (for `v0.N.M`) and version table are appended after it, so
   the table sits just above the asset list. There is no per-tag extraction, so
   prune it when it grows unwieldy.
+- **The release body is unwrapped.** GitHub shows release notes like a comment,
+  where every line break stays a break, while it joins the lines of a paragraph
+  in a file in the repository. The workflow therefore passes the notes through
+  `.github/scripts/unwrap_markdown.py`, which joins the wrapped lines of each
+  paragraph, list item and quote, so `CHANGELOG.md` can stay wrapped. A body
+  edited by hand needs the same: `python3 .github/scripts/unwrap_markdown.py
+  CHANGELOG.md`.
 - **`emu/<HW_CONFIG>/` is gitignored** — the built emulator UF2s live only in the
   archive. `emu/versions.txt` is tracked precisely so the shipped versions are
   recorded in git.

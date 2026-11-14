@@ -109,7 +109,8 @@ jobs:
           # Info and the v0.N section), then the generated tail: for a v0.N.M tag a
           # note that the firmware did not change, and the emulator versions the
           # SD-card archive ships (emu/versions.txt, written by
-          # build_emulators.sh -z and committed).
+          # build_emulators.sh -z and committed). The wrapped lines of each
+          # paragraph are then joined (.github/scripts/unwrap_markdown.py).
           #
           # The table goes last on purpose: it closes the page just above the asset
           # list GitHub renders, which is what "at the end of this page" in the
@@ -152,6 +153,10 @@ jobs:
                  else
                       echo "NOTE: emu/versions.txt is absent; release notes carry no emulator version table." >&2
                  fi
+                 # GitHub shows release notes like a comment, where every line break
+                 # stays a break, so join the wrapped lines of each paragraph.
+                 python3 .github/scripts/unwrap_markdown.py release-notes.md > release-notes.unwrapped.md
+                 mv release-notes.unwrapped.md release-notes.md
                  echo "----- release-notes.md -----"
                  cat release-notes.md
 
