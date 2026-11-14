@@ -123,7 +123,7 @@ Release tags say which of the two changed:
 | Tag | What changed | What you need to do |
 | --- | --- | --- |
 | `v0.N` | bootloader firmware | re-flash the board **and** refresh the SD card |
-| `v0.N.M` | emulator binaries only | replace `/emu` on the SD card; no re-flash needed |
+| `v0.N.M` | SD-card content only | refresh the SD card as the release notes say; no re-flash needed |
 
 `updateAll` does the SD-card part: it reports a newer archive and installs it on
 the card. It does not flash the board, and on a card already in use it says so

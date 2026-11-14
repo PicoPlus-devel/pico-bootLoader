@@ -15,14 +15,27 @@ rights to them is your responsibility.
 On boards with HSTX video, the menu can switch between HDMI and DVI, and the
 applications it starts use the same mode. In DVI mode the picture no longer
 drops out or flickers. The Waveshare RP2350-PiZero on the PCB by Liu Szuping is
-a new board.
+a new board, and Windows Defender no longer removes **updateAll** from the card.
 
-> **Do you need to update?** Yes. Re-flash the board, and replace the `/emu`
-> folder on the card with the one in the new `pico-bootLoader_sdcard.zip`, or
-> let **updateAll** install it. The `/updateAll` folder has not changed.
+> **Do you need to update?** Yes. Re-flash the board, and replace the `/emu` and
+> `/updateAll` folders on the card with the ones in the new
+> `pico-bootLoader_sdcard.zip`, or let **updateAll** install it.
+
+> [!NOTE]
+> **This is a re-release of v0.10.** Windows Defender reported the `updateAll.exe`
+> of the first v0.10 release as a virus. That was a false alarm, but Defender
+> removed the program from the card, so v0.10 was published again on 14 November
+> 2026 with updateAll v1.0.1, which Defender no longer reports. If `updateAll.exe`
+> is missing from your card, download `updateAll-v1.0.1.exe` from this page. A
+> copy of updateAll that is still on the card offers the new version itself.
 
 ### Changes
 
+- **updateAll v1.0.1.** Windows Defender reported `updateAll.exe` as
+  `Trojan:Win32/Bearfoos.A!ml` and removed it, often right after the SD-card
+  archive was installed. This was a false alarm: the program does what it did
+  before, but it is now built so that Defender no longer reports it in our
+  tests.
 - **Display mode** in the options menu (SELECT): HDMI, which carries picture and
   sound, or DVI, for monitors and TVs that do not accept an HDMI signal. If the
   screen stays black, hold SELECT and press A to switch to DVI.

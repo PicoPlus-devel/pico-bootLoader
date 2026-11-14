@@ -19,7 +19,7 @@ manual.
 | Tag | Meaning | What users must do |
 | --- | --- | --- |
 | `v0.N` | bootloader firmware changed | re-flash the board **and** refresh the card |
-| `v0.N.M` | same firmware, refreshed emulator binaries | replace `/emu` on the card only |
+| `v0.N.M` | same firmware, refreshed SD-card content | refresh the card only |
 
 A three-component tag makes the workflow add a banner to the release notes,
 after the CHANGELOG, saying the firmware is unchanged since `v0.N`, so users know

@@ -132,8 +132,8 @@ jobs:
                         echo
                         echo "> **SD-card content update.** The bootloader firmware is unchanged since"
                         echo "> [\`$baseline\`](${{ github.server_url }}/${{ github.repository }}/releases/tag/$baseline) — you do **not** need to re-flash"
-                        echo "> the board. Only the emulator binaries in \`pico-bootLoader_sdcard.zip\`"
-                        echo "> changed; replace the \`/emu\` folder on the SD card."
+                        echo "> the board. Only the contents of \`pico-bootLoader_sdcard.zip\` changed;"
+                        echo "> the notes above say what to replace on the SD card."
                       } >> release-notes.md
                  fi
                  if [ -f emu/versions.txt ]; then

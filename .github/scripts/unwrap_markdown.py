@@ -9,7 +9,8 @@ line break stays a break, so a CHANGELOG wrapped at 80 columns comes out as shor
 ragged lines. The release workflow passes its notes through this before it
 publishes them; CHANGELOG.md itself stays wrapped.
 
-Left as they are: blank lines, headings, tables, HTML lines, rules and fenced code.
+Left as they are: blank lines, headings, tables, HTML lines, rules, fenced code
+and the first line of an alert such as "> [!NOTE]".
 A list item or a quote takes its own continuation lines but is never merged with
 the next item, and a paragraph inside a list item keeps its indentation. A line
 that ends in a hard break (two spaces or a backslash) is not joined to the next.
@@ -26,6 +27,8 @@ FENCE = re.compile(r"^\s*(```|~~~)")
 BLOCK = re.compile(r"^\s*(#{1,6}(\s|$)|\||<|([-*_])(\s*\3){2,}\s*$)")
 LIST_ITEM = re.compile(r"^\s*([-*+]|\d{1,9}[.)])(\s|$)")
 QUOTE = re.compile(r"^(\s*(?:>\s?)+)(.*)$")
+# The first line of a GitHub alert, "> [!NOTE]", must stay on its own.
+ALERT = re.compile(r"^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*$", re.IGNORECASE)
 
 
 def hard_break(line):
@@ -57,10 +60,12 @@ def unwrap(lines):
 
         q = QUOTE.match(line)
         text = q.group(2) if q else line
-        if q and not text.strip():
-            # A bare ">": a blank line inside the quote.
+        if q and (not text.strip() or ALERT.match(text)):
+            # A bare ">", a blank line inside the quote, or the first line of an
+            # alert: neither takes the next line.
             out.append(line.rstrip())
             joinable = False
+            quoted = True
             continue
         if BLOCK.match(text):
             out.append(line)

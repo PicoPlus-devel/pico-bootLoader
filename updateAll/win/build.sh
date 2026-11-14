@@ -41,8 +41,15 @@ cat > build/version.h <<EOF
 EOF
 
 # Only the zip reader and inflate of miniz are needed.
+#
+# CJSON_HIDE_SYMBOLS: on Windows cJSON exports its functions unless told not to,
+# which gave the exe an export table. That, the build time in the header and
+# the missing CompanyName/LegalCopyright made Windows Defender's machine
+# learning report v1.0 as Trojan:Win32/Bearfoos.A!ml and remove it from cards.
+# Without them it passes. --no-insert-timestamp also makes the same source give
+# the same file, so a build keeps the reputation it gains.
 CFLAGS="-std=gnu99 -Os -ffunction-sections -fdata-sections -DMINIZ_NO_DEFLATE_APIS
-        -DMINIZ_NO_ZLIB_COMPATIBLE_NAMES -DMINIZ_NO_TIME"
+        -DMINIZ_NO_ZLIB_COMPATIBLE_NAMES -DMINIZ_NO_TIME -DCJSON_HIDE_SYMBOLS"
 
 "$WINDRES" -I build -O coff updateAll.rc -o build/updateAll.res
 "$CC" $CFLAGS -w -c third_party/miniz/miniz.c -o build/miniz.o
@@ -50,7 +57,7 @@ CFLAGS="-std=gnu99 -Os -ffunction-sections -fdata-sections -DMINIZ_NO_DEFLATE_AP
 for src in ua_core.c ua_win32.c ua_gui.c; do
     "$CC" $CFLAGS -Wall -Wextra -municode -include build/version.h -c "$src" -o "build/${src%.c}.o"
 done
-"$CC" -municode -mwindows -static -s -Wl,--gc-sections -o build/updateAll.exe \
+"$CC" -municode -mwindows -static -s -Wl,--gc-sections -Wl,--no-insert-timestamp -o build/updateAll.exe \
     build/ua_core.o build/ua_win32.o build/ua_gui.o build/miniz.o build/cJSON.o build/updateAll.res \
     -lwinhttp -lcomctl32 -luxtheme -lole32 -lshell32 -luuid
 
