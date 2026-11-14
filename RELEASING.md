@@ -7,7 +7,7 @@ they have different lifecycles:
 | --- | --- | --- |
 | `pico-bootLoader_<board>_arm[_piousb].uf2` (11 files) | CI, on the self-hosted runner | attached automatically by the workflow |
 | `pico-bootLoader_sdcard.zip` | **locally**, by `build_emulators.sh -c all -z` | `gh release upload`, by hand |
-| `updateAll-<version>.exe` | CI, on the self-hosted runner | attached by the workflow, only when `updateAll/win/VERSION` is higher than on earlier releases |
+| `updateAll-<version>.exe` | CI, on the self-hosted runner | attached automatically by the workflow, to every release |
 | PCB gerbers (4 zips: PicoNES v2.6, PicoNES v2.8, Mini v2.0, Micro v1.2) | nobody — vendored in the `pico_shared` submodule | attached automatically by the workflow |
 
 The archive is not built in CI because it needs every application's toolchain and
@@ -63,8 +63,9 @@ separate from the tags of this repository. Every build reports that number, what
 the state of the tree, so nothing raises it by itself.
 
 **Raise `updateAll/win/VERSION` with every change to `updateAll/win`** (`hosttest`
-excepted). The workflow attaches the program only when that number is higher than the
-highest version on a release, so that users are asked only when the program really
+excepted). The workflow attaches the program to every release, so that a new user
+finds it on the latest one, but a copy offers an update only when a release holds a
+higher number than its own, so that users are asked only when the program really
 changed. It stops at the start when `updateAll/win` changed and the number did not,
 and `build_emulators.sh -z -r` stops on the same check before it builds anything. A
 change to the sets in `updateAll/updateAll.json` needs no new version, as every copy
@@ -210,9 +211,9 @@ gh release view v0.2.1
   `unzip -p releases/pico-bootLoader_sdcard.zip emu/release.txt` prints the tag
   of this release. If it does not, updateAll still installs the archive, but a
   card unpacked by hand downloads it once more.
-- `updateAll-<version>.exe` present if `updateAll/win/VERSION` is higher than on
-  earlier releases. The log of the workflow's check says which it was. The window
-  title of the program shows that version.
+- `updateAll-<version>.exe` present, with the version in `updateAll/win/VERSION`.
+  The log of the workflow's check says whether that version is new or attached
+  again. The window title of the program shows that version.
 - **4 PCB gerber assets** — `pico_nesPCB_v2.6.zip`,
   `pico_nesPCB_v2.8_SNES_PORTS.zip`, `Gerber_PicoNES_Mini_PCB_v2.0.zip` and
   `Gerber_PicoNES_Micro_v1.2.zip`,
@@ -253,9 +254,10 @@ from `github.sha`, so it will point at whatever is current.
   (`BUILD_FOR_BOOTLOADER`) only in `pico_shared` `f2c8be9`, and the emulator tags
   of the time predated it, so their pinned revision rejected `-b` outright.
   That reason no longer applies — every current tag pins a descendant of
-  `f2c8be9` — but the substitution is not a no-op. For v0.9 Salamander v0.2 and
-  Commodore 64 v0.2 pin `cd147e0`, every other emulator tag pins `8b93b28`, and
-  the bundle is built against `main`, `f16f692`. The whole bundle is built against
+  `f2c8be9` — but the substitution is not always a no-op. For v0.9 Salamander
+  v0.2 and Commodore 64 v0.2 pin `cd147e0`, every other emulator tag pins
+  `8b93b28`, and the bundle is built against `main`, `f16f692`. For v0.10 every
+  emulator tag pins `8048999`, which is `main`. The whole bundle is built against
   the one `pico_shared` `main` that `emu/versions.txt` records.
   An older tag that no longer builds against `main` shows up as a `FAIL` in the
   grand summary.

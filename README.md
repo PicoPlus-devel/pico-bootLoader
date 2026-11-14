@@ -62,10 +62,9 @@ they are **not** emulated.
    not advised), and insert it into the computer.
 
    **On Windows, `updateAll` prepares the whole card.** Download
-   `updateAll-<version>.exe` from the most recent release on the Releases page
-   that holds it; a release holds it only when the program changed. The program
-   needs no installation and can be started from any folder. Windows may report
-   that the program is not signed: select **More info**, then **Run anyway**.
+   `updateAll-<version>.exe` from the latest release on the Releases page. The
+   program needs no installation and can be started from any folder. Windows may
+   report that the program is not signed: select **More info**, then **Run anyway**.
    The program selects the first removable drive that holds a pico-bootLoader
    card, or else the first removable drive, so check the **SD card** field; the
    program warns when that drive holds files but no pico-bootLoader card. The
@@ -217,8 +216,15 @@ applications in `/emu/18/`. The binary for the RP2350-PiZero on its own
   Winbond, such as Puya, locks up when overclocked until the flash chip has had a
   one-time fix; see
   [PSRAM with a non-Winbond flash chip](https://github.com/PicoPlus-devel/pico-infonesPlus#psram-with-a-non-winbond-flash-chip).
+- **Picture at 384 MHz.** On some TVs and monitors, the picture drops out for a
+  few seconds at a time in the applications that run the RP2350 at 384 MHz: the
+  Super Nintendo, Genesis and Commodore 64 emulators, *OutRun*, *Salamander*,
+  *Doom*, *Duke Nukem 3D*, *Quake II* and *Diablo*, and the PC Engine emulator
+  in CD games with *Overclock* on. Other TVs and monitors show the picture
+  without interruption. This is a limitation of the RP2350-PiZero at that clock.
+  The menu runs at 252 MHz.
 
-The native ports have not been tested on this board yet.
+*Doom*, *Duke Nukem 3D*, *Quake II* and *Diablo* have been tested on this board.
 
 ### Pico 2 W
 
@@ -346,8 +352,8 @@ chip fitted on GPIO 8) and the Waveshare RP2350-PiZero on the PCB by Liu Szuping
 (18, with a PSRAM chip soldered on). It needs **PSRAM** on all five. There is no
 companion data image: `DUKE3D.GRP` — shareware or registered/Atomic — is
 streamed from `/roms/duke3d/` on the SD card, with savegames and `duke3d.cfg`
-written next to it. `updateAll` installs the shareware version 1.3d there. The
-first four have been tested on hardware.
+written next to it. `updateAll` installs the shareware version 1.3d there. All
+five have been tested on hardware.
 
 *Quake II* runs on three boards: Adafruit Fruit Jam (HW_CONFIG 8), the Adafruit
 DVI + MicroSD breakout combination (2, on a Pimoroni Pico Plus 2) and the

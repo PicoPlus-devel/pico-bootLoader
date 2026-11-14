@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """
-Decides whether a release attaches the updateAll program, by the version in
-updateAll/win/VERSION and the highest version that a release already holds:
+Checks the version of the updateAll program in updateAll/win/VERSION against the
+highest version that a release already holds, and says whether this release
+attaches the program:
 
     no release holds the program                  attach it
     VERSION is higher                             attach it
-    VERSION is the same, program unchanged        leave it out
+    VERSION is the same, program unchanged        attach it again
     VERSION is the same, program changed          stop: VERSION was not raised
     VERSION is lower                              stop
 
 Users are offered an update only when a release holds a higher version, so a
 change without a new version would never reach them.
 
+Every release attaches the program, so that a new user finds it on the latest
+release. A copy of the same version does no harm: it is not offered to anyone.
 When the list of releases or the sources of that release cannot be read, this says
-so and attaches the program. That does no harm: a copy of the same version is not
-offered to anyone.
+so and attaches the program as well.
 
 Usage: updateall_version.py <tag being released>
 
@@ -144,8 +146,9 @@ def main():
         report("error", f"{PROGRAM} changed since release {held_by}, which holds updateAll {held}, "
                         f"but {PROGRAM}/VERSION is still {version}. Raise it, and commit that.")
         return 1
-    print(f"updateAll {version}: unchanged since release {held_by}, so this release does not attach it")
-    return finish(version, False)
+    print(f"updateAll {version}: unchanged since release {held_by}; this release attaches it again, "
+          "which offers no copy an update")
+    return finish(version, True)
 
 
 if __name__ == "__main__":

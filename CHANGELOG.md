@@ -13,11 +13,13 @@ rights to them is your responsibility.
 ## v0.10
 
 On boards with HSTX video, the menu can switch between HDMI and DVI, and the
-applications it starts use the same mode.
+applications it starts use the same mode. In DVI mode the picture no longer
+drops out or flickers. The Waveshare RP2350-PiZero on the PCB by Liu Szuping is
+a new board.
 
-> **Do you need to update?** Only if your monitor or TV does not accept an HDMI
-> signal. Re-flash the board and replace the `/emu` folder on the card with the
-> one in the new `pico-bootLoader_sdcard.zip`.
+> **Do you need to update?** Yes. Re-flash the board, and replace the `/emu`
+> folder on the card with the one in the new `pico-bootLoader_sdcard.zip`, or
+> let **updateAll** install it. The `/updateAll` folder has not changed.
 
 ### Changes
 
@@ -26,8 +28,17 @@ applications it starts use the same mode.
   screen stays black, hold SELECT and press A to switch to DVI.
 - **Applications start in the menu's display mode.** Before an emulator, arcade
   game or computer emulator starts, its own *Display Mode* setting is set to
-  match. Doom, Duke Nukem 3D, Quake II and Diablo follow it too, from their new
-  versions on. In DVI mode the sound plays on the board's own audio output.
+  match. *Doom*, *Duke Nukem 3D*, *Quake II* and *Diablo* now have a display mode
+  setting of their own, and follow the menu's too. In DVI mode the sound plays
+  on the board's own audio output.
+- **No more picture drop-outs or flickering lines in DVI mode.** On boards with
+  HSTX video, in DVI mode, the picture could randomly drop out, and now and then
+  a single line was shown shifted to the right for one frame.
+- **NES and SNES controllers on the controller ports are now read with the same
+  timing as a real console**, on all boards, in the menu, the emulators and the
+  arcade games. In the Super Nintendo emulator, an original SNES Mouse no longer
+  keeps moving after it has stopped. Thanks to @javavi.
+- Theme 1 has new artwork for *Doom* and *Duke Nukem 3D*.
 
 ### New board
 
@@ -35,12 +46,76 @@ The **Waveshare RP2350-PiZero on the PCB by Liu Szuping** (@szuping), with an HD
 port, an audio jack, two NES/SNES controller ports and a socket for an ESP32
 module (HW_CONFIG 18). It has its own loader,
 `pico-bootLoader_WaveShareRP2350PiZeroLiuPCB_arm_piousb.uf2`, and its own folder
-on the card, `/emu/18/`, with the emulators, *Doom*, *Duke Nukem 3D*, *Quake II*
-and *Diablo*. Sound plays on HDMI and on the audio jack. A USB controller goes in
+on the card, `/emu/18/`, with every application except *ColecoVision*. Sound
+plays on HDMI and on the audio jack. A USB controller goes in
 the PIO-USB port of the RP2350-PiZero. The Super Nintendo emulator, PC Engine CD
 games, *OutRun*, *Duke Nukem 3D*, *Quake II*, *Diablo* and the full version of
 *Doom* need a PSRAM chip soldered onto the RP2350-PiZero. The PCB design is not
 yet available.
+
+**Known issue:** on this board, some TVs and monitors lose the picture for a few
+seconds at a time in the applications that run at 384 MHz: the Super Nintendo,
+Genesis and Commodore 64 emulators, *OutRun*, *Salamander*, *Doom*, *Duke Nukem
+3D*, *Quake II* and *Diablo*, and PC Engine CD games with *Overclock* on. Other
+TVs and monitors show the picture without interruption.
+
+### Updated applications
+
+Every application except *ColecoVision* has been updated for the new board, and
+has the fixes above where they apply. Also new:
+
+- **Phoenix**
+  [v0.3](https://github.com/PicoPlus-devel/pico-phoenix/releases/tag/v0.3),
+  **Moon Cresta**
+  [v0.3](https://github.com/PicoPlus-devel/pico-mooncresta/releases/tag/v0.3),
+  **Galagino**
+  [v0.3](https://github.com/PicoPlus-devel/pico-galagino/releases/tag/v0.3) and
+  **Salamander**
+  [v0.3](https://github.com/PicoPlus-devel/pico-salamander/releases/tag/v0.3):
+  the DIP switches, such as coins per credit, lives and the bonus life, can be
+  changed in the settings menu. Salamander also offers the game's own test
+  screens there, as *Service mode*.
+- **Galagino**: *Xevious*, *Gaplus*, *Mappy* and *The Tower of Druaga* no longer
+  show missing text or wrong colors when started after another game, *Pengo*
+  gives one credit per coin instead of two, and *1942* no longer misses coins
+  inserted in quick succession.
+- **Doom**
+  [v0.6](https://github.com/PicoPlus-devel/pico-doom/releases/tag/v0.6),
+  **Duke Nukem 3D**
+  [v0.6](https://github.com/PicoPlus-devel/pico-duke3D/releases/tag/v0.6),
+  **Quake II**
+  [v0.4-alpha](https://github.com/PicoPlus-devel/pico-quake2/releases/tag/v0.4-alpha)
+  and **Diablo**
+  [v0.2-alpha](https://github.com/PicoPlus-devel/pico-lutionX/releases/tag/v0.2-alpha):
+  the display mode setting described above. On the Murmulator M2, *Doom* and
+  *Duke Nukem 3D* now start in DVI until another mode is chosen.
+
+**NES**
+[v0.56](https://github.com/PicoPlus-devel/pico-infonesPlus/releases/tag/v0.56) and
+[v0.56.1](https://github.com/PicoPlus-devel/pico-infonesPlus/releases/tag/v0.56.1),
+**Super Nintendo**
+[v0.11](https://github.com/PicoPlus-devel/pico-snesPlus/releases/tag/v0.11),
+**PC Engine**
+[v0.10](https://github.com/PicoPlus-devel/pico-pcePlus/releases/tag/v0.10),
+**Master System/Game Gear**
+[v0.34](https://github.com/PicoPlus-devel/pico-smsplus/releases/tag/v0.34),
+**Genesis**
+[v0.21](https://github.com/PicoPlus-devel/pico-genesisPlus/releases/tag/v0.21),
+**Videopac**
+[v0.7](https://github.com/PicoPlus-devel/pico-pacPlus/releases/tag/v0.7),
+**Game Boy**
+[v0.16](https://github.com/PicoPlus-devel/pico-peanutGB/releases/tag/v0.16),
+**TI-99/4A**
+[v0.4](https://github.com/PicoPlus-devel/pico-994A/releases/tag/v0.4),
+**Commodore 64**
+[v0.3](https://github.com/PicoPlus-devel/pico-c64/releases/tag/v0.3),
+**OutRun**
+[v0.7](https://github.com/PicoPlus-devel/pico-outrun/releases/tag/v0.7),
+**Dragon's Lair**
+[v0.2](https://github.com/PicoPlus-devel/pico-dragonslair/releases/tag/v0.2) and
+**1943**
+[v0.3](https://github.com/PicoPlus-devel/pico-1943/releases/tag/v0.3) have only
+the changes above.
 
 ## v0.9
 
@@ -511,9 +586,9 @@ For board-by-board wiring, supported display modes and more refer to the [pico-i
 2. **Prepare the SD card.** Use a FAT32-formatted card (exFAT also works, but is
    not advised).
 
-   **On Windows,** download `updateAll-<version>.exe` from the most recent release
-   on the [Releases](https://github.com/PicoPlus-devel/pico-bootLoader/releases)
-   page that holds it, and start it from any folder. If Windows says the program
+   **On Windows,** download `updateAll-<version>.exe` from the latest release on
+   the [Releases](https://github.com/PicoPlus-devel/pico-bootLoader/releases)
+   page, and start it from any folder. If Windows says the program
    is not signed, select **More info**, then **Run anyway**. Check the **SD card**
    field. **SD card files** is already ticked, and installs the emulators, the
    native ports and the menu artwork, and so is the data of the ported games. Tick
