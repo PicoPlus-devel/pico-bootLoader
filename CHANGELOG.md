@@ -10,6 +10,39 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 copyright of their manufacturers and are not part of this project. Holding the
 rights to them is your responsibility.
 
+## v0.11
+
+The Pico Computer 3 is a new board.
+
+> **Do you need to update?** Only on a Pico Computer 3. On the other boards
+> nothing changes: the new versions of *Doom*, *Duke Nukem 3D*, *Quake II* and
+> *Diablo* in the SD-card archive differ from the previous ones only on the new
+> board.
+
+### New board
+
+The **[Pico Computer 3](https://github.com/UKTailwind/Pico-Computer-3)**
+(HW_CONFIG 17), an RP2350B board with an HDMI connector, a microSD card slot,
+PSRAM, a USB hub with four USB-A ports and an audio jack. It has its own loader,
+`pico-bootLoader_PicoComputer3_arm.uf2`, and its own folder on the card,
+`/emu/17/`, with every application except *ColecoVision*. USB controllers go in
+the USB-A ports, and NES or SNES controllers and a Wii Classic controller connect
+to the I/O header. The board has not been tested yet, and the pin assignment may
+still change. Thanks to @javavi, who added the board to the emulators.
+
+### Updated applications
+
+**Doom**
+[v0.7](https://github.com/PicoPlus-devel/pico-doom/releases/tag/v0.7),
+**Duke Nukem 3D**
+[v0.7](https://github.com/PicoPlus-devel/pico-duke3D/releases/tag/v0.7),
+**Quake II**
+[v0.5-alpha](https://github.com/PicoPlus-devel/pico-quake2/releases/tag/v0.5-alpha)
+and **Diablo**
+[v0.3-alpha](https://github.com/PicoPlus-devel/pico-lutionX/releases/tag/v0.3-alpha)
+run on the Pico Computer 3. The emulators and arcade games keep their versions:
+they already support the board.
+
 ## v0.10
 
 On boards with HSTX video, the menu can switch between HDMI and DVI, and the

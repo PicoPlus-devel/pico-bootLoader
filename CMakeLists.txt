@@ -289,10 +289,11 @@ if(NOT PICO_PLATFORM STREQUAL "rp2040")
     )
 endif()
 
+# The UART instance comes from PICO_DEFAULT_UART below (UART1 on HW_CONFIG 17),
+# not from the TX pin, as in the emulators (pico-infonesPlus c6f2f43).
 if(DEFINED PICO_DEFAULT_UART_TX_PIN)
     target_compile_definitions(${projectname} PRIVATE
         PICO_DEFAULT_UART_TX_PIN=${PICO_DEFAULT_UART_TX_PIN}
-        PICO_DEFAULT_UART=0
     )
 endif()
 if(DEFINED PICO_DEFAULT_UART_RX_PIN)
