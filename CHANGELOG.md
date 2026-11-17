@@ -10,6 +10,12 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 copyright of their manufacturers and are not part of this project. Holding the
 rights to them is your responsibility.
 
+## Next release
+
+### Changes
+
+- Built with Pico SDK 2.3.1.
+
 ## v0.11
 
 The Pico Computer 3 is a new board.
