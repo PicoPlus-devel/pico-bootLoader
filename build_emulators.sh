@@ -197,7 +197,7 @@ repo_name() { echo "${REPO_OF[$1]##*/}"; }
 declare -A SCRIPTED_BRANCH=(
     [doom_tiny]=main
     [doom_tiny_full]=main
-    [duke3d_game]=fix/audio-production-rate
+    [duke3d_game]=main
     [pico-quake2]=main
     [pico-lutionX]=main
     [colecojam]=main
@@ -647,6 +647,12 @@ resolve_refs() {
             local branch="${SCRIPTED_BRANCH[$prog]}" tag="" sha=""
             if (( TAG_MODE )); then
                 tag="$(latest_tag_of "$url")"
+            elif (( MAIN_MODE )); then
+                # -m builds each repo's default branch, the script-built ports
+                # included; the table is only the fallback when the remote's
+                # HEAD cannot be read.
+                branch="$(default_branch_of "$url" || true)"
+                [ -n "$branch" ] || branch="${SCRIPTED_BRANCH[$prog]}"
             fi
             if [ -n "$tag" ]; then
                 ref="$tag"

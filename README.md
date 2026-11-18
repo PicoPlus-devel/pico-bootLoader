@@ -1361,8 +1361,9 @@ such as Adafruit_ColecoJam's beta `2.0b1`, is skipped in favour of the newest
 full release. `build_emulators.sh` asks the GitHub API through `gh` for this,
 and warns when it cannot, in which case every tag is a candidate. The
 `SCRIPTED_BRANCH` table in [`build_emulators.sh`](build_emulators.sh) — `main`
-for *Doom*, *Quake II*, *Diablo* and *ColecoVision*, `fix/audio-production-rate` for *Duke Nukem 3D* —
-is only the fallback for a repository that has no tag at all.
+for *Doom*, *Duke Nukem 3D*, *Quake II*, *Diablo* and *ColecoVision* — is only
+the fallback for a repository that has no tag at all; `-m` builds each
+repository's default branch.
 
 Repositories are cloned from the `PicoPlus-devel` organisation by default. An
 entry in the `REPO_OF` table of [`build_emulators.sh`](build_emulators.sh) may
