@@ -147,6 +147,13 @@ target_compile_definitions(${projectname} PRIVATE
     PNG_MAX_BUFFERED_PIXELS=10752
 )
 
+# flashProgress() draws the progress bar from inside the uf2 loader's flash
+# write, while XIP may be off, so pico_shared's progress_bar.cpp must run from
+# SRAM here. Its default (0, for the emulators) keeps it in flash.
+target_compile_definitions(${projectname} PRIVATE
+    PROGRESS_BAR_IN_SRAM=1
+)
+
 # One serial line per .uf2, per index row and per category at boot. Off by
 # default: on a full card they would fill much of the 8 KB serial buffer
 # (src/stdio_buffered.h), after which logging holds up the start-up again.
