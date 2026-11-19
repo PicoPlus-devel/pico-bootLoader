@@ -12,9 +12,36 @@ rights to them is your responsibility.
 
 ## Next release
 
+### New: attract mode
+
+When nobody touches the menu for about 30 seconds, the menu now spins to a
+random application and starts it, and an emulator starts a random game from
+its folder under `/roms`. Press any button to play that game yourself. When
+nobody does for three minutes, the menu comes back and starts the next one.
+Attract mode replaces the screensaver and can be switched off in the options
+menu (SELECT). *Quake II*, *Diablo* and *ColecoVision* do not take part, and
+on a board without PSRAM neither do *Super Nintendo*, *OutRun*, *Doom Full* and
+*Duke Nukem 3D*.
+
+Every category gets its turn before any comes back, so a category with many
+applications is not shown more often than the others; within a category every
+application gets its turn, and within an emulator every game does too. Well-known games come up more often than the rest: the
+SD-card archive lists the most popular games of each system, taken from the
+community ratings in the LaunchBox Games Database.
+
+PC Engine CD games take part when a System Card BIOS is on the card: attract
+mode presses RUN on the BIOS screen. TI-99/4A cartridges start by themselves,
+past the console's title screen and menu, and Videopac cartridges past their
+*SELECT GAME* prompt.
+
+Attract mode needs the new versions of the emulators, the arcade games, *Doom*
+and *Duke Nukem 3D* in the SD-card archive. Older versions are never picked.
+
 ### Changes
 
 - Built with Pico SDK 2.3.1.
+- An error screen at start-up, for example when there is no SD card, now
+  restarts with any button or key, not only with RESET.
 
 ## v0.11
 

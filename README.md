@@ -590,6 +590,95 @@ The flash memory map (16 MB flash, Adafruit Fruit Jam shown) is:
 0x11000000  end of flash
 ```
 
+## Attract mode
+
+When the menu has been left alone for about 30 seconds, the bootloader starts an
+application by itself, as the attract mode of an arcade cabinet does. The
+carousel spins, slows down and stops on a randomly chosen application, its
+artwork blinks, and the application is flashed and started. An emulator then
+starts a random game from its folder under `/roms`; the arcade games, *Doom* and
+*Duke Nukem 3D* run their own demonstration.
+
+- Any button pressed while the carousel spins stops it where it is.
+- Any button pressed during a game started this way hands the game to the
+  player. Attract mode is then off for that game, which runs until it is quit
+  or the board is reset.
+- When nobody touches a control for three minutes, the application returns to
+  the menu. The menu shows that application for a few seconds and then spins
+  on to the next one.
+- With categories, attract mode first picks a category, then an application in
+  it, so every category comes up equally often, however many applications it
+  holds. Categories come in rounds: each is shown once, in random order, before
+  any is shown again. Within a category, every application is started once
+  before any is started again. The application that has just run is never
+  started straight after itself. Without categories the whole list is one
+  round. Switching the board off starts new rounds.
+
+Attract mode is on by default. The *Attract mode* entry of the
+[options menu](#the-options-menu) switches it off or on and records the choice
+in `/boot.txt`. While it is off, or when no application on the card takes part,
+the screensaver appears instead. Attract mode does not change the position the
+menu remembers.
+
+An application takes part only when it was built with attract-mode support and
+its games are on the card. On a board without PSRAM, *Super Nintendo*, *OutRun*,
+*Doom Full* and *Duke Nukem 3D* do not take part, as they cannot run there.
+
+| Application | Games are picked from |
+|---|---|
+| Nintendo Entertainment System | `/roms/NES` |
+| Super Nintendo | `/roms/SNES` |
+| Sega Genesis / Mega Drive | `/roms/MD` |
+| Sega Master System / Game Gear | `/roms/SMS` |
+| NEC PC Engine | `/roms/PCE` |
+| Nintendo Game Boy / Game Boy Color | `/roms/GB` |
+| Philips Videopac / Magnavox Odyssey² | `/roms/O2E` |
+| TI-99/4A | `/roms/TI99` |
+| Commodore 64 | `/roms/C64` |
+| Arcade games | the game's set under `/roms/arcade` (*OutRun*: `/roms/ORUN`). *1943* and *Salamander* pick one of their two sets; *Galagino* picks one of its games. |
+| Doom, Doom Full, Duke Nukem 3D | their game data; the demonstration plays |
+
+An emulator picks from its folder and three levels of folders below it (up to
+256 folders), so `/roms/PCE/CD/CHD/<game>/<game>.chd` is included. Folders with
+*BIOS*, *Tool*, *Tools*, *Test*, *Tests* or *Music* as a word of their name (for
+example `5 Bios - CD Systems`) are left out. It leaves out disc images (`.cue`,
+`.chd`, `.m3u`), SuperGrafx games (`.sgx`), NES music files (`.nsf`) and `.wav`
+files, with one exception: the PC Engine emulator also picks CD games when a
+System Card BIOS is in `/bios`, and presses RUN on the System Card's title
+screen to start the disc. The TI-99/4A emulator presses its START button twice,
+past the console's title screen and then to choose the cartridge from its menu;
+it does not pick the *TI BASIC* entry. The Videopac emulator presses START once,
+which answers a cartridge's *SELECT GAME* prompt with 1. Games come in rounds as well: an emulator shows
+every game once, in random order, before any comes again, and a new round does
+not start with the game shown last. The games of the current round are listed
+in `/attract_<EMU>.txt` in the root of the SD card (for example
+`/attract_NES.txt`); delete the file to start a new round. A game started by
+attract mode is not added to the emulator's list of recently played games.
+
+Popular games come up more often. `/emu/attract/<EMU>.txt` (in the SD-card
+archive) lists the best-known games of each system: per system, the 100 games
+with the most community ratings in the
+[LaunchBox Games Database](https://gamesdb.launchbox-app.com/), leaving out
+those rated below 3.5 of 5. The games on the card that match the list form a
+pile of their own, with its own round in `/attract_<EMU>_popular.txt`, and a
+popular game is about four times as likely to be started as any other game.
+`/attract_<EMU>_last.txt` names the game shown last, which does not come
+straight back from either pile.
+Without the list all games have the same chance. A game matches when its title
+does, whatever its region and version tags, so *Legend of Zelda, The (USA).nes*
+matches *The Legend of Zelda*; the list also carries the alternate (mostly
+Japanese) titles and the ROM file names the database knows. The lists are made
+with `tools/make_attract_lists.py`. They are of little use for the TI-99/4A,
+which few people rate, and only partly for the Commodore 64. *Quake II*, *Diablo* and
+*ColecoVision* do not take part because of their long start-up times.
+
+> **Flash wear.** Every application attract mode starts is flashed into the
+> application partition, unless it is the one already there, and on boards
+> without PSRAM an emulator also writes the game into flash. Flash memory is
+> rated for about 100,000 erase cycles. Running around the clock, attract mode
+> reaches that in well under a year; occasional use is of no concern. On a board
+> that is left switched on unattended, switch attract mode off.
+
 ## Input devices
 
 The menu is operated with USB Human Interface Devices. All connected input
@@ -615,6 +704,7 @@ with B, as a USB SNES controller does.
 | Confirm the highlighted option | A | X |
 | Return from a screen | B | Z |
 | Wake from screensaver | any button | any mapped key |
+| Stop [attract mode](#attract-mode) | any button | any mapped key |
 
 SELECT and START are used for the options and help screens because they are the
 only spare buttons present on every supported input device, including NES
@@ -636,6 +726,7 @@ with UP / DOWN, confirm with A, and return with B.
 | Help | Opens the help screen described under [On-screen help](#on-screen-help). |
 | Menu mode | Switches between the text list and the full-screen artwork view. The choice is written to `/boot.txt` and restored on the next boot. |
 | Display mode | Boards with HSTX video only. Switches the video signal between HDMI, which carries picture and sound, and DVI, which carries the picture only and suits monitors and TVs that do not accept an HDMI signal. The change takes effect at once; the choice is written to `/boot.txt` as `DISPLAY=` and restored on the next boot. Until a mode is chosen, the Murmulator M2 (HW_CONFIG 13) uses DVI and all other boards use HDMI. If the screen stays black, switch to DVI without a picture: in the menu, press SELECT and keep it held, then press A. The order matters: if A is pressed first, the selected application starts instead. Applications started from the menu use the same display mode: before an emulator or arcade game starts, the menu sets the *Display Mode* in that application's own settings file to match (in DVI also its *External Audio*, as DVI carries no sound), and Doom, Duke Nukem 3D, Quake II and Diablo read the mode from `/boot.txt`. A mode changed inside an application applies until the next start from the menu. ColecoVision keeps the mode it was built with. |
+| Attract mode | Switches [attract mode](#attract-mode) on or off. The choice is written to `/boot.txt` as `ATTRACT=` and restored on the next boot. It is on until switched off. |
 | Enter BOOTSEL mode | Restarts the board into the RP2350 ROM bootloader, where it appears on a computer as a drive named `RP2350`. Copy a `.uf2` onto it to update the bootloader itself, or reset the board to return to the menu. |
 | USB drive mode | Presents the SD card to a computer as a USB mass-storage device, so applications, the index file and artwork can be changed without removing the card. |
 
@@ -906,6 +997,8 @@ project.
 /emu/assets/themes/0/Categories/*.png|.jpg category artwork (with categories.txt)
 /emu/assets/themes/1..9/                   optional extra themes (UP/DOWN to switch)
 /emu/assets/screensaver/*.png|.jpg         screensaver images (optional, not themed)
+/emu/attract/<EMU>.txt                     popular games per emulator, favoured by attract mode
+/attract_<EMU>.txt, /attract_<EMU>_popular.txt   attract mode's rounds of games (written by the emulators)
 /roms/doom/doom1-whx-bootloader.uf2        Doom!'s WAD data image, flashed by the loader (from updateAll)
 /bios/                                     BIOS files of the emulators (from updateAll, or your own)
 /updateAll/                                ROM set, BIOS and game data installer, run on a computer (optional)
@@ -922,23 +1015,25 @@ apply. A commented sample ships in the repository root: [`boot.txt`](boot.txt).
 
 - One `KEY=VALUE` per line; whitespace around `=` and the value is trimmed.
 - Lines starting with `#` or `;` are comments; blank lines are ignored.
-- Keys are case-insensitive. `SCREENSAVER`, `VIEW` and `DISPLAY` values are
-  case-insensitive; `BASEDIR`/`INDEX` values are filesystem paths and
+- Keys are case-insensitive. `SCREENSAVER`, `VIEW`, `DISPLAY` and `ATTRACT`
+  values are case-insensitive; `BASEDIR`/`INDEX` values are filesystem paths and
   case-sensitive.
 - A malformed file (unknown key, duplicate key, missing `=` or value) produces
-  an on-screen error at boot — correct the file and reset.
+  an on-screen error at boot — correct the file, then press any button or key,
+  or reset.
 
 | Key | Default | Meaning |
 |---|---|---|
 | `BASEDIR` | `/emu` | Absolute SD path (must start with `/`, max 63 characters) under which everything lives: application folders, the index, artwork, screensaver images. |
 | `INDEX` | `emulators.txt` | Bare file name (no slashes) of the index file inside `BASEDIR`. Only read when `BASEDIR` holds no `categories.txt` — see [Categories](#categories). |
-| `SCREENSAVER` | see note | `STARFIELD` — images fly outward from the screen centre, growing toward the camera. `BLOCKS` — images float and bounce off the edges; the on-screen set is re-picked every 15 s. The screensaver starts after ~30 s of inactivity and any button press exits it. |
+| `SCREENSAVER` | see note | `STARFIELD` — images fly outward from the screen centre, growing toward the camera. `BLOCKS` — images float and bounce off the edges; the on-screen set is re-picked every 15 s. The screensaver starts after ~30 s of inactivity, when [attract mode](#attract-mode) is off or has nothing to start, and any button press exits it. |
 | `GUI` | `1` | `0` = text menu, `1` = graphical menu. Rewritten whenever SELECT toggles the mode. Replaces the `.guimode` file used by earlier releases, which is migrated and deleted automatically. |
 | `THEME` | `0` | Active artwork theme, `0`–`9` — see [Artwork themes](#artwork-themes). Rewritten whenever UP/DOWN changes the theme in graphical mode. A theme that is not on the card falls back to `0`. |
 | `VIEW` | `CATEGORIES` | Which level the menu was left on: `CATEGORIES` or `APPS`. Ignored without a `categories.txt`. |
 | `CATEGORY` | — | `category_name` of the category last opened. |
 | `APP` | — | `program_name` of the application last selected. |
 | `DISPLAY` | see meaning | Video signal of the menu, and of the applications it starts, on boards with HSTX video: `HDMI` (picture and sound) or `DVI` (picture only). Written by the *Display mode* entry of the [options menu](#the-options-menu). Without the key, the Murmulator M2 (HW_CONFIG 13) uses `DVI` and all other boards `HDMI`. Accepted and ignored on boards without HSTX, so one card can serve several boards. |
+| `ATTRACT` | `ON` | `ON` or `OFF`: whether [attract mode](#attract-mode) starts applications after ~30 s without input. Written by the *Attract mode* entry of the [options menu](#the-options-menu). |
 
 `VIEW`, `CATEGORY` and `APP` record where you were so the menu returns there on
 the next boot. The bootloader maintains them; there is normally no reason to
@@ -953,7 +1048,8 @@ empty value (`CATEGORY=` with nothing after it) is a syntax error.
 
 **The bootloader writes this file.** Changing the menu mode or the artwork
 theme rewrites the corresponding `GUI=` / `THEME=` line, choosing a display
-mode rewrites `DISPLAY=`, and moving around the menu rewrites `VIEW=`,
+mode rewrites `DISPLAY=`, switching attract mode rewrites `ATTRACT=`, and
+moving around the menu rewrites `VIEW=`,
 `CATEGORY=` and `APP=`. Nothing else is
 touched: comments, blank lines, key order, spacing and any other keys are
 copied through unchanged, so the file stays yours to edit. If `/boot.txt` does
@@ -961,7 +1057,9 @@ not exist, the first such change creates it with the current effective value of
 *every* key — `SCREENSAVER` included, so that materialising the file cannot
 quietly change the screensaver through the asymmetry noted above. `DISPLAY` is
 the exception: it is written only once a display mode has been chosen, so that
-each board keeps its own default until then.
+each board keeps its own default until then. `ATTRACT` is written likewise only
+once it has been switched in the options menu, as releases before attract mode
+reject the key.
 
 Updates are written to `/boot.txt.tmp`, re-parsed to confirm they are valid,
 and only then renamed into place; if a power cut interrupts the rename, the
@@ -1275,6 +1373,61 @@ void return_to_menu(void) {
     watchdog_reboot(0, 0, 0);
 }
 ```
+
+### Taking part in attract mode
+
+An application takes part in [attract mode](#attract-mode) by declaring it in
+its `binary_info`:
+
+```c
+#include "pico/binary_info.h"
+
+bi_decl(bi_program_feature("attract:/roms/mygame"));
+```
+
+The paths after `attract:`, separated by `|`, name what the application needs on
+the card. The loader picks the application only when at least one of them
+exists; a folder must not be empty. `attract:` alone means no check. An item
+that starts with `@` is a requirement instead of a path: `@psram` keeps the
+application out of attract mode on a board without PSRAM, as in
+`attract:@psram|/roms/SNES`. A requirement the loader does not know also keeps
+it out. Builds without the declaration are never picked.
+
+When the loader starts the application for attract mode, it sets `scratch[7]` to
+`0xB007A000` plus the game time in minutes in the lowest byte. The application
+then:
+
+- starts a game, or its demonstration, without waiting for input;
+- clears `scratch[7]` on the first input: a player has taken over, and the
+  application runs as usual from then on;
+- when the game time has passed without input, resets with
+  `watchdog_reboot(0, 0, 0)` and leaves `scratch[7]` as it is. The loader then
+  starts the next application.
+
+A restart with `watchdog_enable()`, which the loader resumes, keeps `scratch[7]`
+and with it attract mode. The raw equivalent, called once per frame:
+
+```c
+#include "hardware/watchdog.h"
+#include "pico/time.h"
+
+void attract_poll(bool any_input) {
+    uint32_t w = watchdog_hw->scratch[7];
+    if (watchdog_hw->scratch[6] != 0xB007ED01u ||
+        (w & 0xFFFFF000u) != 0xB007A000u || (w & 0xFFu) == 0)
+        return;                                   // not started by attract mode
+    if (any_input)
+        watchdog_hw->scratch[7] = 0;              // a player took over
+    else if (time_us_64() >= (w & 0xFFu) * 60000000ull)
+        watchdog_reboot(0, 0, 0);                 // the loader's next application
+}
+```
+
+With `pico_shared`, one line in `main.cpp` is all that is needed:
+`FRENS_ATTRACT_DIRS("/roms/<folder>");`, or `FRENS_ATTRACT_DIRS_PSRAM(...)` for an
+application that needs PSRAM. The framework then starts a random game
+from the emulator's folder, watches the controls and returns to the loader
+([`pico_shared/attract.h`](pico_shared/attract.h)).
 
 ## Building the bootloader from source
 

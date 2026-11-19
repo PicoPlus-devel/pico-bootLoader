@@ -1,0 +1,30 @@
+# pico-bootLoader attract mode: popular Philips Videopac / Magnavox Odyssey 2 games, most rated first.
+# Made by tools/make_attract_lists.py from the LaunchBox Games Database of 2026-11-18:
+# the 100 most rated games per system with an average of 3.5 or more.
+# A line is one game: the keys its ROM files may match, then '#' and a comment.
+# Attract mode starts these about four times as often as the other games.
+attackofthetimelord senhordastrevas  # Attack of the Timelord! (60 ratings, 3.8)
+alien alieninvadersplus spacemonster  # Alien Invaders - Plus! (48 ratings, 3.0)
+comecomeii kcmunchkin  # K.C. Munchkin! (38 ratings, 3.9)
+comecome kcskrazychase  # K.C.'s Krazy Chase! (38 ratings, 3.9)
+didinaminaencantada pickaxepete  # Pick Axe Pete! (34 ratings, 3.3)
+atlantis  # Atlantis (28 ratings, 3.4)
+abelhasassassinas killerbees  # Killer Bees! (25 ratings, 3.4)
+satelliteattack ufo  # UFO! (23 ratings, 3.3)
+turtles  # Turtles! (21 ratings, 3.5)
+smithereens stonesling  # Smithereens! (20 ratings, 3.3)
+frogger  # Frogger (16 ratings, 3.4)
+tutankham  # Tutankham (15 ratings, 3.1)
+qbert  # Q*bert (14 ratings, 4.2)
+amok  # AMOK! (14 ratings, 3.2)
+greatwallstreetfortunehunt wallstreet  # The Great Wall Street Fortune Hunt (14 ratings, 3.2)
+powerlords serpentedopoder  # Power Lords (14 ratings, 3.1)
+4en1fila 4en1ligne 4gewinnt 4i1rad 4in1row 4op1rij 4palloa1riviin infilaperquattro  # 4 in 1 Row (12 ratings, 3.1)
+pongforodyssey2  # Pong for Odyssey 2! (7 ratings, 3.7)
+amityville  # Amityville (7 ratings, 3.4)
+morse telegrafista  # Morse (7 ratings, 3.1)
+mrroboto  # Mr. Roboto! (6 ratings, 3.6)
+calculator  # Calculator! (5 ratings, 3.4)
+kinderimverkehr1 verkehrsspiele1  # Verkehrsspiele 1 (3 ratings, 3.5)
+robotcity  # Robot City (3 ratings, 3.3)
+kinderimverkehr2 verkehrsspiele2  # Verkehrsspiele 2 (3 ratings, 3.0)

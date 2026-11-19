@@ -36,7 +36,13 @@
 #define BI_TYPE_ID_AND_STRING    6u
 #define BI_TAG_RP                ((((uint16_t)'P') << 8) | (uint16_t)'R')
 #define BI_ID_RP_PROGRAM_NAME    0x02031c86u
+#define BI_ID_RP_PROGRAM_FEATURE 0xa1f4b453u
 #define BI_ID_RP_BINARY_END      0x68f465deu
+
+/* pico-bootLoader attract mode: the program feature an application declares to
+ * take part (pico_shared/attract.h, FRENS_ATTRACT_FEATURE_PREFIX). */
+#define ATTRACT_FEATURE_PREFIX   "attract:"
+#define ATTRACT_FEATURE_PREFIX_LEN 8u
 
 /* SDK docs say the marker pair is in the first 256 bytes, but on RP2350 it
  * lands further in (offset 0x124 = 292 bytes, past the NVIC table). 4 KB
@@ -296,10 +302,36 @@ static bool image_end(const uf2_layout_t *L, uint32_t *out_end)
     return false;
 }
 
+/* Read the NUL-terminated string at image address str_addr, a chunk at a time
+ * so its length need not be known up front; stops at NUL or cap-1. Returns the
+ * length read. */
+static unsigned read_image_string(const uf2_layout_t *L, uint32_t str_addr,
+                                  char *out, unsigned cap)
+{
+    unsigned i = 0;
+    while (i < cap - 1u) {
+        uint8_t chunk[32];
+        uint32_t want = (uint32_t)((cap - 1u - i) < sizeof(chunk)
+                                   ? (cap - 1u - i) : sizeof(chunk));
+        if (!read_image_bytes(L, str_addr + i, chunk, want)) break;
+        unsigned m = 0;
+        while (m < want && chunk[m] != '\0') {
+            out[i + m] = (char)chunk[m];
+            m++;
+        }
+        i += m;
+        if (m < want) break;   /* hit NUL */
+    }
+    out[i] = '\0';
+    return i;
+}
+
 bool program_name_from_uf2_file(const char *path, char *out, unsigned cap,
-                                uint32_t *out_end)
+                                uint32_t *out_end,
+                                char *attract_out, unsigned attract_cap)
 {
     if (out_end) *out_end = 0;
+    if (attract_out && attract_cap > 0) attract_out[0] = '\0';
     if (cap > 0) out[0] = '\0';
     if (cap == 0) return false;
     s_blk_idx = -1;
@@ -312,20 +344,21 @@ bool program_name_from_uf2_file(const char *path, char *out, unsigned cap,
     /* Walk the pointer array. Limit the entry count so a malformed file can't
      * loop forever; real images carry well under 100 binary_info entries.
      * Pointers are fetched a batch at a time, so the walk alternates between
-     * one read of the array and the entries it points at, not one read each. */
+     * one read of the array and the entries it points at, not one read each.
+     * The walk goes on past the program name only while the caller wants the
+     * attract-mode feature and it has not turned up yet. */
     const uint32_t MAX_ENTRIES = 256u;
     const uint32_t PTR_BATCH   = 16u;
     uint32_t n = (bi_e - bi_s) / 4u;
     if (n > MAX_ENTRIES) n = MAX_ENTRIES;
 
-    for (uint32_t k0 = 0; k0 < n; k0 += PTR_BATCH) {
+    bool want_attract = attract_out && attract_cap > ATTRACT_FEATURE_PREFIX_LEN;
+    bool have_name = false;
+    for (uint32_t k0 = 0; k0 < n && (!have_name || want_attract); k0 += PTR_BATCH) {
         uint32_t ptrs[PTR_BATCH];
         uint32_t cnt = (n - k0 < PTR_BATCH) ? n - k0 : PTR_BATCH;
-        if (!read_image_bytes(&L, bi_s + k0 * 4u, ptrs, cnt * 4u)) {
-            storage_close();
-            return false;
-        }
-        for (uint32_t j = 0; j < cnt; j++) {
+        if (!read_image_bytes(&L, bi_s + k0 * 4u, ptrs, cnt * 4u)) break;
+        for (uint32_t j = 0; j < cnt && (!have_name || want_attract); j++) {
             uint32_t entry_addr = ptrs[j];
             uint8_t e[12];
             if (!read_image_bytes(&L, entry_addr, e, sizeof(e))) continue;
@@ -334,33 +367,23 @@ bool program_name_from_uf2_file(const char *path, char *out, unsigned cap,
             if (type != BI_TYPE_ID_AND_STRING || tag != BI_TAG_RP) continue;
             uint32_t id = (uint32_t)e[4] | ((uint32_t)e[5] << 8)
                         | ((uint32_t)e[6] << 16) | ((uint32_t)e[7] << 24);
-            if (id != BI_ID_RP_PROGRAM_NAME) continue;
             uint32_t str_addr = (uint32_t)e[8] | ((uint32_t)e[9] << 8)
                               | ((uint32_t)e[10] << 16) | ((uint32_t)e[11] << 24);
-
-            /* Stream the string a chunk at a time so we don't have to know its
-             * length up front; stop at NUL or cap-1. */
-            unsigned i = 0;
-            while (i < cap - 1u) {
-                uint8_t chunk[32];
-                uint32_t want = (uint32_t)((cap - 1u - i) < sizeof(chunk)
-                                           ? (cap - 1u - i) : sizeof(chunk));
-                if (!read_image_bytes(&L, str_addr + i, chunk, want)) break;
-                unsigned m = 0;
-                while (m < want && chunk[m] != '\0') {
-                    out[i + m] = (char)chunk[m];
-                    m++;
+            if (id == BI_ID_RP_PROGRAM_NAME && !have_name) {
+                have_name = read_image_string(&L, str_addr, out, cap) > 0;
+            } else if (id == BI_ID_RP_PROGRAM_FEATURE && want_attract) {
+                /* Other features ("UART stdin / stdout", ...) are skipped. */
+                if (read_image_string(&L, str_addr, attract_out, attract_cap) >= ATTRACT_FEATURE_PREFIX_LEN &&
+                    memcmp(attract_out, ATTRACT_FEATURE_PREFIX, ATTRACT_FEATURE_PREFIX_LEN) == 0) {
+                    want_attract = false;
+                } else {
+                    attract_out[0] = '\0';
                 }
-                i += m;
-                if (m < want) break;   /* hit NUL */
             }
-            out[i] = '\0';
-            if (i > 0 && out_end && !image_end(&L, out_end)) *out_end = 0;
-            storage_close();
-            return i > 0;
         }
     }
-
+    if (want_attract) attract_out[0] = '\0';
+    if (have_name && out_end && !image_end(&L, out_end)) *out_end = 0;
     storage_close();
-    return false;
+    return have_name;
 }
