@@ -3233,9 +3233,14 @@ int main()
     int   cat_top = 0;
 
     // Graphical-mode state. Buffers are allocated lazily on first entry so
-    // text-only sessions don't pay the ~300 KB cost.
+    // text-only sessions don't pay for them.
     bool graphical_mode = false;
     bool buffers_ready  = false;
+    // Without PSRAM the artwork lives only in the framebuffer (gui.h,
+    // gui_draws_in_place()), so a screen drawn over it -- help, options, a
+    // notice, the screensaver, a refused launch -- leaves nothing to repaint
+    // from. Those set this, and the next graphical frame reloads the picture.
+    bool art_stale      = false;
     int  slide_p        = 0;        // 0..SCREENWIDTH, pixels of the new image visible
     int  slide_dir      = 0;        // +1 = new enters from right, -1 = from left, 0 = idle
     int  slide_px       = GUI_SLIDE_PX_PER_FRAME;   // horizontal slide speed; attract mode varies it
@@ -3332,6 +3337,7 @@ int main()
     // change, and on every level transition.
     auto reload_current = [&]() {
         if (!buffers_ready) return;
+        art_stale = false;
         load_image_into(level == LVL_CATEGORIES ? cat_sel : sel, gui_buf_cur(), false);
         slide_p   = 0;
         slide_dir = 0;
@@ -3372,6 +3378,7 @@ int main()
     auto showNotice = [&](const char *l1, const char *l2, const char *l3) {
         showMessage(l1, l2, l3);
         DrawScreen(-1);
+        art_stale = true;
         const int MAX_FRAMES = 4 * 60;              // ~4 s @ 60 fps
         uint32_t prev = ~0u;                        // swallow the press that got here
         for (int f = 0; f < MAX_FRAMES; f++) {
@@ -3609,6 +3616,7 @@ int main()
                 // from reaching the rest of the loop.
                 screensaver_free();
                 ss_active   = false;
+                art_stale   = true;
                 idle_frames = 0;
                 prevButtons = ~0u;
                 continue;
@@ -3632,6 +3640,7 @@ int main()
         // same frame lands on one screen only.
         if (pushed & Btn::START) {
             showHelpScreen(graphical_mode, ini.index_file, cfg_save_failed);
+            art_stale   = true;
             prevButtons = ~0u;   // swallow the press that dismissed it
             idle_frames = 0;
             continue;            // repaint from scratch next frame
@@ -3645,6 +3654,7 @@ int main()
             // toggled, so hand it an `ini` that already reflects where we are.
             capture_position();
             OptionsResult r = showOptionsScreen(&ini, &cfg_save_failed, graphical_mode);
+            art_stale = true;
             if (r == OPT_MODE_CHANGED) {
                 graphical_mode = ini.gui_graphical;
                 LOG("Options -> mode=%s", graphical_mode ? "graphical" : "text");
@@ -3832,6 +3842,7 @@ int main()
                 LOG("A on \"%s\" (no config file) -> options", categories_name(cat_sel));
                 capture_position();     // it may write /boot.txt itself
                 OptionsResult r = showOptionsScreen(&ini, &cfg_save_failed, graphical_mode);
+                art_stale = true;
                 if (r == OPT_MODE_CHANGED) {
                     graphical_mode = ini.gui_graphical;
                     LOG("Options -> mode=%s", graphical_mode ? "graphical" : "text");
@@ -3872,6 +3883,7 @@ int main()
             if (emuDrift) showMessage("Flashing", dispName, "Do not power off.");
             else          showMessage("Starting", dispName, nullptr);
             DrawScreen(-1);
+            art_stale = true;           // only matters if the launch is refused
 
             uf2_fingerprint_t auxFp;
             AuxState auxState = computeAuxDrift(sel, &auxFp);
@@ -3944,8 +3956,16 @@ int main()
                          "L/R:app U/D:theme %s:go SEL:opt ST:help", bl1);
             }
             gui_set_footer(footer);
+            const bool blink_off = att == ATT_BLINK &&
+                                   ((att_blink / ATTRACT_BLINK_PERIOD) & 1) && slide_dir == 0;
             uint16_t *blank = nullptr;
-            if (att == ATT_BLINK && ((att_blink / ATTRACT_BLINK_PERIOD) & 1) && slide_dir == 0) {
+            if (gui_draws_in_place()) {
+                // The picture is only in the framebuffer: bring it back after
+                // another screen, and blink it by inverting it -- once
+                // blacked out there would be nothing to restore it from.
+                if (art_stale) reload_current();
+                gui_set_inverted(blink_off);
+            } else if (blink_off) {
                 // Attract mode's blink: the artwork off. The slide buffer is
                 // free between slides; painted black, it covers the screen.
                 blank = gui_buf_next();
@@ -3954,6 +3974,7 @@ int main()
                     else                        gui_fill_solid(blank, 0);
                 }
             }
+            art_stale = false;
             if (blank) {
                 gui_draw_frame(gui_buf_cur(), blank, gui_slide_extent(GUI_SLIDE_RIGHT),
                                GUI_SLIDE_RIGHT, gui_next_is_half_res());
