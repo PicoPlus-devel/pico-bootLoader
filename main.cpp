@@ -172,6 +172,7 @@ namespace {
 #define DISPLAY_NAME_MAX 40
 #define AUX_UF2_MAX 64
 #define ATTRACT_FEATURE_MAX 64
+#define REQUIRES_FEATURE_MAX 32
 
 struct SdEmu {
     char filename[ROMLISTER_MAXPATH];        // basename
@@ -191,6 +192,7 @@ struct Uf2File {
     uint32_t ext_hi;                         // last flash address the image touches
     bool     ext_known;                      // false when the extent probe failed
     char     attract[ATTRACT_FEATURE_MAX];   // "attract:<paths>" from binary_info, "" = takes no part
+    bool     needs_psram;                    // "requires:psram", or "@psram" in attract
 };
 
 char  g_emuDir[80];                   // "<BASEDIR>/<HW_CONFIG>"
@@ -199,6 +201,7 @@ int   g_uf2_count = 0;
 SdEmu g_emus[32];                     // the list currently on screen (one category's worth)
 int   g_emu_count = 0;                // entries actually shown (matched in the index file)
 int   g_emu_seen  = 0;                // total .uf2 files found in g_emuDir, pre-filter
+int   g_list_need_psram = 0;          // rows buildEmuList() left out: they need PSRAM, the board has none
 char  g_flash_prog_name[PROG_NAME_MAX] = {0};   // currently-flashed image's program name
 int   g_flash_idx = -1;                         // index into g_emus, or -1 if none matches
 // True when the in-flash image has the same program_name as g_emus[g_flash_idx]
@@ -2010,6 +2013,23 @@ extern "C" void __not_in_flash_func(flashProgress)(int phase, uint32_t done, uin
     Frens::blinkLed(led_on);
 }
 
+// True when the '|'-separated list after the "<prefix>:" of a binary_info
+// feature ("attract:@psram|/roms/SNES", "requires:psram") holds item exactly.
+static bool featureHasItem(const char *feature, const char *item)
+{
+    const char *p = strchr(feature, ':');
+    if (!p) return false;
+    const size_t len = strlen(item);
+    for (p++; *p; ) {
+        const char *end = strchr(p, '|');
+        const size_t n = end ? (size_t)(end - p) : strlen(p);
+        if (n == len && strncmp(p, item, len) == 0) return true;
+        if (!end) break;
+        p = end + 1;
+    }
+    return false;
+}
+
 // Read the SD directory once, parsing each .uf2's program_name from its
 // binary_info into g_uf2[], and settle everything about the image currently in
 // flash (g_flash_prog_name, g_flash_drift).
@@ -2068,9 +2088,12 @@ void scanUf2Dir()
             u.ext_hi       = 0;
             u.ext_known    = false;
             u.attract[0]   = '\0';
+            u.needs_psram  = false;
             uint32_t hi = 0;
+            char requires[REQUIRES_FEATURE_MAX];
             bool ok = program_name_from_uf2_file(full, u.prog_name, sizeof(u.prog_name), &hi,
-                                                 u.attract, sizeof(u.attract));
+                                                 u.attract, sizeof(u.attract),
+                                                 requires, sizeof(requires));
             if (!ok || !u.prog_name[0]) {
                 LOG("  SKIP %s (binary_info parse failed; no program_name)", u.filename);
                 skipped++;
@@ -2080,8 +2103,13 @@ void scanUf2Dir()
                 u.ext_hi    = hi;
                 u.ext_known = true;
             }
-            LOGV("  [%2d] %-40s  prog_name=\"%s\"%s%s", g_uf2_count, u.filename, u.prog_name,
-                 u.attract[0] ? "  " : "", u.attract);
+            // A requirement this loader does not know is ignored here: hiding an
+            // entry that may well run is worse than listing one that may not.
+            u.needs_psram = featureHasItem(requires, "psram") ||
+                            featureHasItem(u.attract, "@psram");
+            LOGV("  [%2d] %-40s  prog_name=\"%s\"%s%s%s%s", g_uf2_count, u.filename, u.prog_name,
+                 u.attract[0] ? "  " : "", u.attract,
+                 requires[0] ? "  " : "", requires);
             g_uf2_count++;
         }
         LOG("Scanned %d of %d .uf2 file(s) in %s (%d unreadable).",
@@ -2168,8 +2196,10 @@ int buildEmuList()
 {
     g_emu_count = 0;
     g_flash_idx = -1;
+    g_list_need_psram = 0;
 
     const uint32_t flash_end = appFlashEnd();
+    const bool have_psram = Frens::isPsramEnabled();
     const int rows = emulators_txt_count();
     int missing = 0, skipped = 0;
 
@@ -2210,6 +2240,15 @@ int buildEmuList()
         strncpy(e.prog_name, g_uf2[fidx].prog_name, sizeof(e.prog_name) - 1);
         e.prog_name[sizeof(e.prog_name) - 1] = '\0';
 
+        // PSRAM gate: an application that declares it needs PSRAM cannot run
+        // on this board, so it is not offered (nor picked by attract mode,
+        // whose candidates come from this list).
+        if (g_uf2[fidx].needs_psram && !have_psram) {
+            LOG("  SKIP %s (needs PSRAM)", e.filename);
+            g_list_need_psram++;
+            continue;
+        }
+
         // Size gate: hide entries whose image (or companion data image)
         // extends past the end of the actual flash chip. An extent probe
         // failure is NOT a skip -- the flash-time validate in
@@ -2246,9 +2285,9 @@ int buildEmuList()
         g_emu_count++;
     }
 
-    LOG("Built list: %d entry/entries from %d row(s) (%d not on card, %d too big). "
-        "In-flash idx=%d",
-        g_emu_count, rows, missing, skipped, g_flash_idx);
+    LOG("Built list: %d entry/entries from %d row(s) (%d not on card, %d too big, "
+        "%d need PSRAM). In-flash idx=%d",
+        g_emu_count, rows, missing, skipped, g_list_need_psram, g_flash_idx);
     return g_emu_count;
 }
 
@@ -3148,6 +3187,12 @@ int main()
         char m[48];
         snprintf(m, sizeof(m), "%d UF2 file(s) found in %s",
                  g_emu_seen, g_emuDir);
+        if (g_list_need_psram > 0) {
+            fatalErrorScreen("NO MATCHING EMULATORS",
+                             m,
+                             "but those listed need PSRAM,",
+                             "which this board lacks");
+        }
         fatalErrorScreen("NO MATCHING EMULATORS",
                          m,
                          "but none listed in",
@@ -3368,7 +3413,10 @@ int main()
         if (buildEmuList() == 0) {
             if (!quiet) {
                 char l3[SCREEN_COLS + 1];
-                snprintf(l3, sizeof(l3), "No matching .uf2 files in %s", g_emuDir);
+                if (g_list_need_psram > 0)
+                    snprintf(l3, sizeof(l3), "Needs PSRAM, which this board lacks");
+                else
+                    snprintf(l3, sizeof(l3), "No matching .uf2 files in %s", g_emuDir);
                 showNotice("NOTHING IN THIS CATEGORY", categories_name(idx), l3);
             }
             return false;

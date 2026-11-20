@@ -44,6 +44,14 @@
 #define ATTRACT_FEATURE_PREFIX   "attract:"
 #define ATTRACT_FEATURE_PREFIX_LEN 8u
 
+/* What an application needs from the board ("requires:psram"); see
+ * program_name.h. */
+#define REQUIRES_FEATURE_PREFIX     "requires:"
+#define REQUIRES_FEATURE_PREFIX_LEN 9u
+
+/* Longest program feature read; a longer one is cut short. */
+#define FEATURE_MAX              96u
+
 /* SDK docs say the marker pair is in the first 256 bytes, but on RP2350 it
  * lands further in (offset 0x124 = 292 bytes, past the NVIC table). 4 KB
  * search window via XIP costs only a handful of microseconds. */
@@ -326,12 +334,25 @@ static unsigned read_image_string(const uf2_layout_t *L, uint32_t str_addr,
     return i;
 }
 
+/* Copy a program feature to dst when it starts with prefix. */
+static bool take_feature(const char *feat, unsigned len, const char *prefix,
+                         unsigned prefix_len, char *dst, unsigned cap)
+{
+    if (len < prefix_len || memcmp(feat, prefix, prefix_len) != 0) return false;
+    if (len > cap - 1u) len = cap - 1u;
+    memcpy(dst, feat, len);
+    dst[len] = '\0';
+    return true;
+}
+
 bool program_name_from_uf2_file(const char *path, char *out, unsigned cap,
                                 uint32_t *out_end,
-                                char *attract_out, unsigned attract_cap)
+                                char *attract_out, unsigned attract_cap,
+                                char *requires_out, unsigned requires_cap)
 {
     if (out_end) *out_end = 0;
     if (attract_out && attract_cap > 0) attract_out[0] = '\0';
+    if (requires_out && requires_cap > 0) requires_out[0] = '\0';
     if (cap > 0) out[0] = '\0';
     if (cap == 0) return false;
     s_blk_idx = -1;
@@ -346,19 +367,21 @@ bool program_name_from_uf2_file(const char *path, char *out, unsigned cap,
      * Pointers are fetched a batch at a time, so the walk alternates between
      * one read of the array and the entries it points at, not one read each.
      * The walk goes on past the program name only while the caller wants the
-     * attract-mode feature and it has not turned up yet. */
+     * attract-mode or requires feature and it has not turned up yet. */
     const uint32_t MAX_ENTRIES = 256u;
     const uint32_t PTR_BATCH   = 16u;
     uint32_t n = (bi_e - bi_s) / 4u;
     if (n > MAX_ENTRIES) n = MAX_ENTRIES;
 
-    bool want_attract = attract_out && attract_cap > ATTRACT_FEATURE_PREFIX_LEN;
+    bool want_attract  = attract_out && attract_cap > ATTRACT_FEATURE_PREFIX_LEN;
+    bool want_requires = requires_out && requires_cap > REQUIRES_FEATURE_PREFIX_LEN;
     bool have_name = false;
-    for (uint32_t k0 = 0; k0 < n && (!have_name || want_attract); k0 += PTR_BATCH) {
+#define PN_WALK_ON (!have_name || want_attract || want_requires)
+    for (uint32_t k0 = 0; k0 < n && PN_WALK_ON; k0 += PTR_BATCH) {
         uint32_t ptrs[PTR_BATCH];
         uint32_t cnt = (n - k0 < PTR_BATCH) ? n - k0 : PTR_BATCH;
         if (!read_image_bytes(&L, bi_s + k0 * 4u, ptrs, cnt * 4u)) break;
-        for (uint32_t j = 0; j < cnt && (!have_name || want_attract); j++) {
+        for (uint32_t j = 0; j < cnt && PN_WALK_ON; j++) {
             uint32_t entry_addr = ptrs[j];
             uint8_t e[12];
             if (!read_image_bytes(&L, entry_addr, e, sizeof(e))) continue;
@@ -371,18 +394,24 @@ bool program_name_from_uf2_file(const char *path, char *out, unsigned cap,
                               | ((uint32_t)e[10] << 16) | ((uint32_t)e[11] << 24);
             if (id == BI_ID_RP_PROGRAM_NAME && !have_name) {
                 have_name = read_image_string(&L, str_addr, out, cap) > 0;
-            } else if (id == BI_ID_RP_PROGRAM_FEATURE && want_attract) {
-                /* Other features ("UART stdin / stdout", ...) are skipped. */
-                if (read_image_string(&L, str_addr, attract_out, attract_cap) >= ATTRACT_FEATURE_PREFIX_LEN &&
-                    memcmp(attract_out, ATTRACT_FEATURE_PREFIX, ATTRACT_FEATURE_PREFIX_LEN) == 0) {
+            } else if (id == BI_ID_RP_PROGRAM_FEATURE && (want_attract || want_requires)) {
+                /* The first of each kind counts. Other features ("UART stdin /
+                 * stdout", ...) are skipped. Static: core0's stack is 3 KB. */
+                static char feat[FEATURE_MAX];
+                unsigned len = read_image_string(&L, str_addr, feat, sizeof(feat));
+                if (want_attract &&
+                    take_feature(feat, len, ATTRACT_FEATURE_PREFIX, ATTRACT_FEATURE_PREFIX_LEN,
+                                 attract_out, attract_cap)) {
                     want_attract = false;
-                } else {
-                    attract_out[0] = '\0';
+                } else if (want_requires &&
+                           take_feature(feat, len, REQUIRES_FEATURE_PREFIX, REQUIRES_FEATURE_PREFIX_LEN,
+                                        requires_out, requires_cap)) {
+                    want_requires = false;
                 }
             }
         }
     }
-    if (want_attract) attract_out[0] = '\0';
+#undef PN_WALK_ON
     if (have_name && out_end && !image_end(&L, out_end)) *out_end = 0;
     storage_close();
     return have_name;

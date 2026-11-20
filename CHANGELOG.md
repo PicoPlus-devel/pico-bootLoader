@@ -42,6 +42,9 @@ and *Duke Nukem 3D* in the SD-card archive. Older versions are never picked.
 - Built with Pico SDK 2.3.1.
 - An error screen at start-up, for example when there is no SD card, now
   restarts with any button or key, not only with RESET.
+- On a board without PSRAM, the menu no longer lists the applications that
+  cannot run there: *Super Nintendo*, *OutRun*, *Doom Full*, *Duke Nukem 3D*,
+  *Quake II* and *Diablo*.
 
 ## v0.11
 

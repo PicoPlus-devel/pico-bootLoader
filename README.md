@@ -182,9 +182,9 @@ Flash `pico-bootLoader_OlimexPicoPC_arm.uf2` and put the applications in
 - **Flash.** A standard Pico 2 has 4 MB of flash, which leaves 3.5 MB for the
   application partition.
 - **PSRAM.** A standard Pico 2 has no PSRAM. A PSRAM chip can be added with its
-  chip-select pin on GPIO 8. Without it, the entries that require PSRAM — the
-  Super Nintendo emulator, *PCEngine CD*, *OutRun*, *Duke Nukem 3D* and
-  `doom_tiny_full` — still appear in the menu but do not run.
+  chip-select pin on GPIO 8. Without it, the applications that require PSRAM —
+  the Super Nintendo emulator, *OutRun*, *Duke Nukem 3D* and `doom_tiny_full` —
+  are left out of the menu, and *PCEngine CD* games do not run.
 
 Support for this board was contributed by
 [DnCraptor](https://github.com/DnCraptor).
@@ -211,10 +211,10 @@ applications in `/emu/18/`. The binary for the RP2350-PiZero on its own
 - **Flash.** The RP2350-PiZero has 16 MB of flash, so *Quake II* and *Diablo*
   run on it as well.
 - **PSRAM.** The RP2350-PiZero has no PSRAM unless a chip is soldered on, with
-  its chip-select pin on GPIO 47. Without it, the entries that require PSRAM —
-  the Super Nintendo emulator, *PCEngine CD*, *OutRun*, *Duke Nukem 3D*,
-  *Quake II*, *Diablo* and `doom_tiny_full` — still appear in the menu but do
-  not run. A board with PSRAM and a flash chip from a manufacturer other than
+  its chip-select pin on GPIO 47. Without it, the applications that require
+  PSRAM — the Super Nintendo emulator, *OutRun*, *Duke Nukem 3D*, *Quake II*,
+  *Diablo* and `doom_tiny_full` — are left out of the menu, and *PCEngine CD*
+  games do not run. A board with PSRAM and a flash chip from a manufacturer other than
   Winbond, such as Puya, locks up when overclocked until the flash chip has had a
   one-time fix; see
   [PSRAM with a non-Winbond flash chip](https://github.com/PicoPlus-devel/pico-infonesPlus#psram-with-a-non-winbond-flash-chip).
@@ -558,8 +558,10 @@ it first. On each boot it:
 2. Reads each `.uf2`'s embedded program name from its `binary_info` on disk —
    nothing is flashed to do this — and reads the resident application's name via
    XIP.
-3. Filters the files against the index (an allow-list), then displays the menu
-   and pre-selects the entry that matches the application currently in flash.
+3. Filters the files against the index (an allow-list), leaves out applications
+   that do not fit in the board's flash or that need PSRAM the board does not
+   have, then displays the menu and pre-selects the entry that matches the
+   application currently in flash.
 4. On selection:
    - if the chosen application is already resident, it is started with a VTOR
      jump — no flash operation and no SD I/O, so the launch is near-instant;
@@ -955,8 +957,8 @@ port.
   [options menu](#the-options-menu) does the same over the USB-C port.
 - **PSRAM.** The RP2350 Plus has no PSRAM. The build guide shows how to add a
   PSRAM chip piggybacked on the flash chip, with its chip-select pin wired to
-  GPIO 8. Without it, the entries that require PSRAM still appear in the menu
-  but do not run — see [Bootable applications](#bootable-applications).
+  GPIO 8. Without it, the applications that require PSRAM are left out of the
+  menu — see [Bootable applications](#bootable-applications).
 - **Power.** The USB-C port powers the board, and its data lines are also used
   for flashing and for [USB drive mode](#usb-drive-mode). Alternatively, an HDMI
   5 V injector powers it through the HDMI cable.
@@ -1428,6 +1430,23 @@ With `pico_shared`, one line in `main.cpp` is all that is needed:
 application that needs PSRAM. The framework then starts a random game
 from the emulator's folder, watches the controls and returns to the loader
 ([`pico_shared/attract.h`](pico_shared/attract.h)).
+
+### Requiring PSRAM
+
+An application that cannot run without PSRAM declares it in its `binary_info`,
+and the loader then leaves it out of the menu on a board without PSRAM:
+
+```c
+#include "pico/binary_info.h"
+
+bi_decl(bi_program_feature("requires:psram"));
+```
+
+This does not make the application take part in attract mode. An `attract:`
+declaration with `@psram` has the same effect on the menu, so an application
+that takes part in attract mode does not need both. Further items, separated by
+`|`, are reserved for later requirements; the loader ignores the ones it does not
+know and lists the application as usual.
 
 ## Building the bootloader from source
 
