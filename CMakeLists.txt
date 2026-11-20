@@ -112,7 +112,6 @@ add_executable(${projectname}
     src/uf2_crc.cpp
     src/uf2_stream.c
     src/flash_record.c
-    src/stdio_buffered.c
     src/gui.cpp
     src/themes.cpp
     src/screensaver.cpp
@@ -155,8 +154,9 @@ target_compile_definitions(${projectname} PRIVATE
 )
 
 # One serial line per .uf2, per index row and per category at boot. Off by
-# default: on a full card they would fill much of the 8 KB serial buffer
-# (src/stdio_buffered.h), after which logging holds up the start-up again.
+# default: on a full card that is several KB of output, and printf waits for
+# the UART (about 87 us per character at 115200 baud), which holds up the
+# start-up.
 # EXTRA_CMAKE_ARGS=-DBOOT_VERBOSE_LOG=ON ./bld.sh ... turns them back on.
 option(BOOT_VERBOSE_LOG "Log every .uf2, index row and category at boot" OFF)
 if(BOOT_VERBOSE_LOG)

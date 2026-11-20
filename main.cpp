@@ -29,9 +29,8 @@
  * Serial output: all diagnostics go to UART (PICO_DEFAULT_UART, pins 44/45 on
  * Fruit Jam, 115200-8N1). Tag every line with "[bootLoader] " so they stand out
  * when the freshly-launched emulator starts speaking. printf waits for the
- * UART: the buffered driver in src/stdio_buffered.h is not enabled (see
- * main()), so the stdio_buffered_flush() before each reboot or launch is
- * plain stdio_flush().
+ * UART (the SDK's stdio_uart; see main() for why there is no buffered driver),
+ * and stdio_flush() before each reboot or launch lets the last line finish.
  */
 #include <cstdio>
 #include <cstring>
@@ -79,7 +78,6 @@ extern "C" {
 #include "progress_bar.h"
 #include "sd_boot_ini.h"
 #include "app_display_sync.h"
-#include "stdio_buffered.h"
 #include <hardware/divider.h>
 }
 
@@ -1179,7 +1177,7 @@ void showUsbDriveScreen()
         // magic that our own resume check reads back through
         // watchdog_enable_caused_reboot(), which would make the next boot jump
         // straight into the application instead of showing the picker.
-        stdio_buffered_flush();
+        stdio_flush();
         watchdog_reboot(0, 0, 0);
         while (1) {
             tight_loop_contents();
@@ -1664,7 +1662,7 @@ OptionsResult showOptionsScreen(sd_boot_ini_t *ini, bool *cfg_save_failed,
                             "as a drive named RP2350.");
                 DrawScreen(-1);
                 idleFor(1200);
-                stdio_buffered_flush();
+                stdio_flush();
                 reset_usb_boot(0, 0);   // does not return
                 break;
 
@@ -2664,7 +2662,7 @@ static AuxState computeAuxDrift(int idx, uf2_fingerprint_t *out_fp)
 {
     LOG("Launching %s%s; bye!", label ? label : "(unknown)",
         g_launch_attract_minutes ? " (attract mode)" : "");
-    stdio_buffered_flush();
+    stdio_flush();
 #if WII_PIN_SDA >= 0 and WII_PIN_SCL >= 0
     wiipad_end();
 #endif
@@ -2675,7 +2673,7 @@ static AuxState computeAuxDrift(int idx, uf2_fingerprint_t *out_fp)
     frens_attract_mark_launch(g_launch_attract_minutes);
     app_launch_run();          // VTOR jump; no return on success
     LOG("app_launch_run() returned unexpectedly.");
-    stdio_buffered_flush();
+    stdio_flush();
     watchdog_reboot(0, 0, 0);
     for (;;) tight_loop_contents();
 }
@@ -2833,7 +2831,7 @@ void flashAndLaunch(int idx, bool flashEmu, bool flashAux, const uf2_fingerprint
             LOG("Aux flash FAILED: %s (after %u programmed, %u skipped)",
                 uf2_load_result_str(r),
                 (unsigned)ast.programmed_blocks, (unsigned)ast.skipped_blocks);
-            stdio_buffered_flush();
+            stdio_flush();
             watchdog_reboot(0, 0, 0);
             for (;;) tight_loop_contents();
         }
@@ -2857,7 +2855,7 @@ void flashAndLaunch(int idx, bool flashEmu, bool flashAux, const uf2_fingerprint
             LOG("Flash FAILED: %s (after %u programmed, %u skipped)",
                 uf2_load_result_str(r),
                 (unsigned)st.programmed_blocks, (unsigned)st.skipped_blocks);
-            stdio_buffered_flush();
+            stdio_flush();
             watchdog_reboot(0, 0, 0);
             for (;;) tight_loop_contents();
         }
@@ -2906,7 +2904,7 @@ void flashAndLaunch(int idx, bool flashEmu, bool flashAux, const uf2_fingerprint
     // Reboot to recover a clean state; the resume check's app_launch_present()
     // guard prevents jumping into a half-written partition.
     LOG("Rebooting bootloader to recover a clean state.");
-    stdio_buffered_flush();
+    stdio_flush();
 #if WII_PIN_SDA >= 0 and WII_PIN_SCL >= 0
     wiipad_end();
 #endif
@@ -2967,11 +2965,11 @@ int main()
     g_attract_continue = frens_attract_consume_return();
 
     Frens::setClocksAndStartStdio(CPUFREQ_KHZ, VREG_VOLTAGE_1_30);
-    // stdio_buffered_init() is deliberately not called. With the buffered
-    // driver, the HSTX picture dropped out -- and the board sometimes locked
+    // stdio stays the SDK's stdio_uart: printf waits for the UART. A buffered
+    // driver (an 8 KB ring sent by the UART interrupt) was tried and removed:
+    // with it the HSTX picture dropped out -- and the board sometimes locked
     // up -- while an application was being written to flash (Fruit Jam, and a
-    // Pico Plus 2 on HW_CONFIG 2); it saved little start-up time. printf waits
-    // for the UART again, and stdio_buffered_flush() is plain stdio_flush().
+    // Pico Plus 2 on HW_CONFIG 2), and it saved little start-up time.
     logPhase("clocks and stdio up");
 
     // --- BANNER -------------------------------------------------------------
