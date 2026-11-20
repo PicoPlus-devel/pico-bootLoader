@@ -17,6 +17,8 @@
 #   emu/categories.txt                   (if present, with the config files it names)
 #   emu/boot.example.txt
 #   emu/versions.txt                     (if present; written by build_emulators.sh -z)
+#   emu/attract/<EMU>.txt                (if present) the popular games attract mode
+#                                        favours, made by tools/make_attract_lists.py
 #   emu/release.txt                      the release tag, when one is given: what
 #                                        updateAll compares with the newest release
 #   emu/assets/themes/<0-9>/<image_key>.{444,555}   (or the .png/.jpg source,
@@ -121,6 +123,12 @@ if [ -f "$LOADER/emu/versions.txt" ]; then
     cp "$LOADER/emu/versions.txt" "$DEST/versions.txt"
 else
     warn "emu/versions.txt not found — the archive will not record emulator versions"
+fi
+
+# The popular-games lists attract mode reads (pico_shared, /emu/attract/<EMU>.txt).
+if compgen -G "$LOADER/emu/attract/*.txt" > /dev/null; then
+    mkdir -p "$DEST/attract"
+    cp "$LOADER"/emu/attract/*.txt "$DEST/attract/"
 fi
 
 # Without it a card unpacked by hand counts as older than any release, so its

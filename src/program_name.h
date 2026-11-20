@@ -48,9 +48,26 @@ bool binary_end_from_xip(uint32_t base, uint32_t region_size, uint32_t *out_end)
  * absolute address one past the image's last byte (the end of the last program
  * block, as uf2_extent_from_file_family() reports it), read in the same open;
  * 0 when that could not be determined.
+ *
+ * When `attract_out` is not NULL it receives the image's attract-mode feature
+ * (the binary_info program feature that starts with "attract:", see
+ * pico_shared/attract.h), prefix included, or "" when the image has none.
+ *
+ * When `requires_out` is not NULL it receives, the same way, the feature that
+ * starts with "requires:": what the application needs from the board, as
+ * '|'-separated items. The only item known is "psram": the loader leaves the
+ * application out of its menu on a board without PSRAM. An attract feature
+ * with an "@psram" item has the same effect, so an application that takes part
+ * in attract mode need not declare both:
+ *
+ *   bi_decl(bi_program_feature("requires:psram"));
+ *
+ * Each feature string is cut to its buffer's cap - 1 bytes.
  */
 bool program_name_from_uf2_file(const char *path, char *out, unsigned cap,
-                                uint32_t *out_end);
+                                uint32_t *out_end,
+                                char *attract_out, unsigned attract_cap,
+                                char *requires_out, unsigned requires_cap);
 
 #ifdef __cplusplus
 }

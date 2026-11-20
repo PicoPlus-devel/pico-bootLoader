@@ -9,12 +9,12 @@
 #
 # THE BOOTLOADER WRITES THIS FILE. Changing the menu mode (SELECT) or the
 # artwork theme (UP/DOWN) rewrites the GUI= and THEME= lines, choosing a display
-# mode in the options menu rewrites DISPLAY=, and moving around the menu
-# rewrites VIEW=, CATEGORY= and APP=. Everything else -- your comments,
-# your ordering, your spacing -- is preserved exactly. If the file does not
-# exist yet it is created on the first such change. The update is written to
-# /boot.txt.tmp, verified, and only then renamed into place, so a power cut
-# cannot corrupt your configuration.
+# mode in the options menu rewrites DISPLAY=, switching attract mode there
+# rewrites ATTRACT=, and moving around the menu rewrites VIEW=, CATEGORY= and
+# APP=. Everything else -- your comments, your ordering, your spacing -- is
+# preserved exactly. If the file does not exist yet it is created on the first
+# such change. The update is written to /boot.txt.tmp, verified, and only then
+# renamed into place, so a power cut cannot corrupt your configuration.
 #
 # Syntax:
 #   - One KEY=VALUE per line.
@@ -92,7 +92,8 @@ INDEX=emulators.txt
 
 
 # --- SCREENSAVER -------------------------------------------------------------
-# Idle visual mode. Kicks in after ~30 s of no input; any button press exits.
+# Idle visual mode. Kicks in after ~30 s of no input when attract mode (see
+# ATTRACT below) is off or has nothing to start; any button press exits.
 #
 # Values (case-insensitive):
 #   STARFIELD   Sprites fly outward from screen centre, growing as they
@@ -191,3 +192,20 @@ VIEW=CATEGORIES
 # does so, because the same card may be used in several boards.
 #
 #DISPLAY=HDMI
+
+
+# --- ATTRACT -----------------------------------------------------------------
+# Attract mode. After ~30 s without input the menu spins to a random
+# application and starts it; an emulator then starts a random game from its
+# folder under /roms. Any button hands the game to the player; when nobody
+# touches a control for three minutes, the menu returns and starts the next
+# application. Quake II, Diablo and ColecoVision do not take part.
+#
+# Values (case-insensitive): ON or OFF.
+#
+# The Attract mode entry of the options menu (SELECT) writes this line. Until
+# then the key is absent and attract mode is on.
+#
+# Default: ON
+#
+#ATTRACT=OFF

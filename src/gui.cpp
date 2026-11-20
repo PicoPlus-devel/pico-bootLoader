@@ -12,6 +12,17 @@ namespace {
     uint16_t *s_buf_cur          = nullptr;
     uint16_t *s_buf_next         = nullptr;
     bool      s_next_is_half_res = false;   // true on SRAM-only configs
+
+    // In-place mode (boards without PSRAM): s_buf_cur IS the display's
+    // framebuffer, so the picture is held once instead of twice. The footer
+    // band covers the image's bottom rows there, so those rows are kept here
+    // (an UP slide brings them into view). s_slide_dir / s_slide_p record how
+    // far the slide on screen has already been applied to the framebuffer.
+    bool      s_in_place         = false;
+    uint16_t *s_under_footer     = nullptr; // GUI_FOOTER_H rows of the current image
+    int       s_slide_dir        = 0;
+    int       s_slide_p          = 0;
+    bool      s_inverted         = false;   // attract mode's blink, in place only
     const char *s_footer         = nullptr; // one-line button-hint overlay
     char      s_asset_dir[64]    = "/emu";  // overridable via gui_set_asset_dir()
 
@@ -41,10 +52,38 @@ namespace {
 #if HSTX
 #define GUI_FOOTER_FG  0x7FFFu
 #define GUI_FOOTER_BG  0x0000u
+#define GUI_COLOR_MASK 0x7FFFu      // every colour bit, for the in-place blink
 #else
 #define GUI_FOOTER_FG  0x0FFFu
 #define GUI_FOOTER_BG  0x0000u
+#define GUI_COLOR_MASK 0x0FFFu
 #endif
+
+// The display's 320x240 framebuffer, or NULL when the backend has none
+// (PicoDVI streaming lines). Both backends keep it as one contiguous block
+// with a stride of SCREENWIDTH, which is what the in-place mode relies on.
+static uint16_t *display_framebuffer(void)
+{
+#if HSTX
+    return hstx_getlineFromFramebuffer(0);
+#elif FRAMEBUFFERISPOSSIBLE
+    return Frens::isFrameBufferUsed() ? &Frens::framebuffer[0] : nullptr;
+#else
+    return nullptr;
+#endif
+}
+
+// A new picture is in the framebuffer: keep its bottom rows (the footer is
+// about to cover them) and forget any slide or blink state.
+static void note_cur_replaced(const uint16_t *dest)
+{
+    if (!s_in_place || dest != s_buf_cur) return;
+    memcpy(s_under_footer, s_buf_cur + GUI_FOOTER_Y0 * SCREENWIDTH,
+           GUI_FOOTER_H * SCREENWIDTH * sizeof(uint16_t));
+    s_slide_dir = 0;
+    s_slide_p   = 0;
+    s_inverted  = false;
+}
 
 extern "C" {
 
@@ -101,6 +140,21 @@ void gui_set_image_subdir(const char *sub)
 bool gui_buffers_alloc(void)
 {
     const size_t sz_full = SCREENWIDTH * SCREENHEIGHT * sizeof(uint16_t);
+    // Without PSRAM the picture goes straight into the display's framebuffer
+    // rather than into a 150 KB copy of it in SRAM. Only the rows under the
+    // footer need a buffer of their own (5 KB).
+    if (!s_buf_cur && !Frens::isPsramEnabled()) {
+        uint16_t *fb = display_framebuffer();
+        if (fb) {
+            s_under_footer = (uint16_t *)Frens::f_malloc(
+                GUI_FOOTER_H * SCREENWIDTH * sizeof(uint16_t));
+            if (s_under_footer) {
+                memset(s_under_footer, 0, GUI_FOOTER_H * SCREENWIDTH * sizeof(uint16_t));
+                s_buf_cur  = fb;
+                s_in_place = true;
+            }
+        }
+    }
     if (!s_buf_cur)  s_buf_cur  = (uint16_t *)Frens::f_malloc(sz_full);
     if (!s_buf_cur) {
         printf("[bootLoader] gui: cur buffer alloc failed (size=%u)\n", (unsigned)sz_full);
@@ -108,9 +162,9 @@ bool gui_buffers_alloc(void)
     }
     // Second buffer enables the slide animation. With PSRAM we mirror cur
     // at full resolution and the swap-pointers-after-slide pattern works.
-    // Without PSRAM we'd OOM (215 KB base + 2x150 KB > 512 KB SRAM), so
-    // allocate the next buffer at half res -- still enough to drive a
-    // slide, just visibly chunkier. The caller reloads cur at full res
+    // Without PSRAM a second full image would not fit beside everything
+    // else, so allocate the next buffer at half res -- still enough to drive
+    // a slide, just visibly chunkier. The caller reloads cur at full res
     // after the slide to restore the static-display sharpness.
     if (!s_buf_next) {
         if (Frens::isPsramEnabled()) {
@@ -125,7 +179,8 @@ bool gui_buffers_alloc(void)
     if (!s_buf_next) {
         printf("[bootLoader] gui: slide buffer alloc failed; animation disabled\n");
     } else {
-        printf("[bootLoader] gui: buffers ready (cur=full, next=%s)\n",
+        printf("[bootLoader] gui: buffers ready (cur=%s, next=%s)\n",
+               s_in_place ? "framebuffer" : "full",
                s_next_is_half_res ? "half" : "full");
     }
     return true;
@@ -133,14 +188,30 @@ bool gui_buffers_alloc(void)
 
 bool gui_next_is_half_res(void) { return s_next_is_half_res; }
 
+bool gui_draws_in_place(void) { return s_in_place; }
+
 uint16_t *gui_buf_cur(void)  { return s_buf_cur;  }
 uint16_t *gui_buf_next(void) { return s_buf_next; }
 
 void gui_swap_buffers(void)
 {
+    if (s_in_place) return;     // cur is the framebuffer; nothing to swap with
     uint16_t *t = s_buf_cur;
     s_buf_cur  = s_buf_next;
     s_buf_next = t;
+}
+
+void gui_set_inverted(bool inverted)
+{
+    if (!s_in_place || inverted == s_inverted) return;
+    // XOR is its own inverse, so the second call restores the picture
+    // exactly. The footer band is left alone; it is repainted every frame.
+    // Both framebuffers are 4-byte aligned.
+    const uint32_t mask = GUI_COLOR_MASK | (GUI_COLOR_MASK << 16);
+    uint32_t *p = (uint32_t *)s_buf_cur;
+    const size_t words = (size_t)GUI_FOOTER_Y0 * SCREENWIDTH / 2;
+    for (size_t i = 0; i < words; i++) p[i] ^= mask;
+    s_inverted = inverted;
 }
 
 void gui_fill_solid(uint16_t *dest, uint16_t color)
@@ -148,6 +219,7 @@ void gui_fill_solid(uint16_t *dest, uint16_t color)
     if (!dest) return;
     const size_t pixels = SCREENWIDTH * SCREENHEIGHT;
     for (size_t i = 0; i < pixels; i++) dest[i] = color;
+    note_cur_replaced(dest);
 }
 
 void gui_fill_solid_half_res(uint16_t *dest, uint16_t color)
@@ -223,6 +295,8 @@ bool gui_load_image(const char *image_key, uint16_t *dest)
         return false;
     }
 
+    // In place this reads straight into the framebuffer on screen, so the
+    // picture is drawn from the top down as it arrives.
     const UINT want = SCREENWIDTH * SCREENHEIGHT * sizeof(uint16_t);
     fr = f_read(&fil, dest, want, &br);
     f_close(&fil);
@@ -231,6 +305,7 @@ bool gui_load_image(const char *image_key, uint16_t *dest)
                image_key, (int)fr, (unsigned)br, (unsigned)want);
         return false;
     }
+    note_cur_replaced(dest);
     return true;
 }
 
@@ -397,6 +472,115 @@ static inline void compose_row(uint16_t *dst, int y,
     }
 }
 
+// --- In-place drawing (cur is the framebuffer) ------------------------------
+//
+// There is no copy of the outgoing image to compose from, so a slide moves
+// what is already on screen: each frame shifts the picture by the progress
+// made since the last frame and fills the strip that opens up from b. Rows
+// below GUI_FOOTER_Y0 belong to the footer band and are repainted every frame.
+
+// n pixels of b's row `by` (in 240-row output space), from output column bx.
+static inline void put_b(uint16_t *dst, const uint16_t *b, bool b_half_res,
+                         int by, int bx, int n)
+{
+    if (b_half_res) copy_b_half(dst, b + (by >> 1) * GUI_HALF_W, bx, n);
+    else            copy_b_full(dst, b + by * SCREENWIDTH, bx, n);
+}
+
+// Advance the slide on screen from p0 to p1 (p1 > p0). The layouts are those
+// of compose_row(); each case follows from writing frame p1 in terms of
+// frame p0.
+static void slide_in_place(const uint16_t *b, bool b_half_res, int dir, int p0, int p1)
+{
+    const int W  = SCREENWIDTH;
+    const int H  = SCREENHEIGHT;
+    const int Y0 = GUI_FOOTER_Y0;
+    const int d  = p1 - p0;
+    uint16_t *fb = s_buf_cur;
+
+    switch (dir) {
+    case GUI_SLIDE_RIGHT:       // row = a[p..] then b[0..p)
+        for (int y = 0; y < Y0; y++) {
+            uint16_t *row = fb + y * W;
+            memmove(row, row + d, (W - d) * sizeof(uint16_t));
+            put_b(row + W - d, b, b_half_res, y, p0, d);
+        }
+        break;
+    case GUI_SLIDE_LEFT:        // row = b[W-p..W) then a[0..W-p)
+        for (int y = 0; y < Y0; y++) {
+            uint16_t *row = fb + y * W;
+            memmove(row + d, row, (W - d) * sizeof(uint16_t));
+            put_b(row, b, b_half_res, y, W - p1, d);
+        }
+        break;
+    case GUI_SLIDE_UP: {        // rows = a[p..H) then b[0..p)
+        // Rows whose source is still above the band move up. The rest came
+        // from under the band: a's bottom rows (kept in s_under_footer,
+        // the band destroyed them on screen) or b.
+        const int keep = Y0 - d;
+        if (keep > 0) memmove(fb, fb + d * W, (size_t)keep * W * sizeof(uint16_t));
+        for (int y = keep > 0 ? keep : 0; y < Y0; y++) {
+            uint16_t *row = fb + y * W;
+            if (y < H - p1) {
+                memcpy(row, s_under_footer + (y + p1 - Y0) * W, W * sizeof(uint16_t));
+            } else {
+                put_b(row, b, b_half_res, y - (H - p1), 0, W);
+            }
+        }
+        break;
+    }
+    case GUI_SLIDE_DOWN: {      // rows = b[H-p..H) then a[0..H-p)
+        const int keep = Y0 - d;
+        if (keep > 0) memmove(fb + d * W, fb, (size_t)keep * W * sizeof(uint16_t));
+        const int from_b = d < Y0 ? d : Y0;
+        for (int y = 0; y < from_b; y++) {
+            put_b(fb + y * W, b, b_half_res, H - p1 + y, 0, W);
+        }
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+// The bottom band: the footer, or with no footer text the current image's
+// own rows. (The loader always sets a footer; during a slide without one the
+// band would keep the outgoing image's rows until the reload that ends it.)
+static void draw_band_in_place(void)
+{
+    for (int y = GUI_FOOTER_Y0; y < SCREENHEIGHT; y++) {
+        uint16_t *row = s_buf_cur + y * SCREENWIDTH;
+        if (s_footer && *s_footer) {
+            overlay_footer_row(row, y, s_footer);
+        } else {
+            memcpy(row, s_under_footer + (y - GUI_FOOTER_Y0) * SCREENWIDTH,
+                   SCREENWIDTH * sizeof(uint16_t));
+        }
+    }
+}
+
+static void draw_frame_in_place(const uint16_t *b, int p, int dir, bool b_half_res)
+{
+    if (b && dir != 0) {
+        // A slide never runs on the blink's negative.
+        if (s_inverted) gui_set_inverted(false);
+        // A new slide starts from whatever is on screen. A smaller progress
+        // than the last frame's can only be a new slide in the same direction.
+        if (dir != s_slide_dir || p < s_slide_p) {
+            s_slide_dir = dir;
+            s_slide_p   = 0;
+        }
+        if (p > s_slide_p) {
+            slide_in_place(b, b_half_res, dir, s_slide_p, p);
+            s_slide_p = p;
+        }
+    } else {
+        s_slide_dir = 0;
+        s_slide_p   = 0;
+    }
+    draw_band_in_place();
+}
+
 int gui_slide_extent(int direction)
 {
     switch (direction) {
@@ -418,6 +602,11 @@ void gui_draw_frame(const uint16_t *a, const uint16_t *b,
     const int extent = gui_slide_extent(direction);
     if (slide_px < 0) slide_px = 0;
     if (extent && slide_px > extent) slide_px = extent;
+
+    if (s_in_place && a == s_buf_cur) {
+        draw_frame_in_place(b, slide_px, direction, b_half_res);
+        return;
+    }
 
     for (int y = 0; y < SCREENHEIGHT; y++) {
         uint16_t *dst;

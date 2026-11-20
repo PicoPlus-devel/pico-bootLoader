@@ -13,6 +13,7 @@
  *   CATEGORY=Console              (last category; omitted when none)
  *   APP=picogenesisPlus           (last application; omitted when none)
  *   DISPLAY=DVI                   (HDMI or DVI; omitted = the board's default)
+ *   ATTRACT=OFF                   (ON or OFF; omitted = ON)
  *
  * BASEDIR is the SD-root folder under which the bootloader looks for the
  * per-HW_CONFIG subdir, the allow-list, and the assets folder.
@@ -25,7 +26,11 @@
  * without HSTX ignore it. Which mode an absent key means is the caller's
  * decision (it differs per board), so the parser only reports whether the
  * key was there.
- * GUI, THEME, VIEW, CATEGORY, APP and DISPLAY are written back by the
+ * ATTRACT switches attract mode: after a while without input the menu starts
+ * a random application, which starts a random game. Like DISPLAY it is only
+ * written once chosen in the options menu, so a card that never had the key
+ * still loads on an older loader, which rejects unknown keys.
+ * GUI, THEME, VIEW, CATEGORY, APP, DISPLAY and ATTRACT are written back by the
  * firmware -- see sd_boot_ini_save().
  *
  * Screensaver default is asymmetric:
@@ -81,6 +86,11 @@ typedef struct {
     bool      display_dvi;     /* true = DVI, false = HDMI; valid if display_set */
     bool      display_set;
 
+    /* ATTRACT=ON|OFF. attract_set is false while the key is absent, which
+     * means ON; the writer leaves the key out until the user chooses. */
+    bool      attract;         /* attract mode on; default true */
+    bool      attract_set;
+
     /* Provenance, filled in by the loader. Not user-visible configuration --
      * the writer and the .guimode migration both need to know what was
      * actually present in the file as opposed to defaulted. */
@@ -102,15 +112,15 @@ sd_boot_ini_status_t sd_boot_ini_load(const char *path,
                                       sd_boot_ini_t *out,
                                       char *err, size_t err_sz);
 
-/* Rewrite `path` so GUI=, THEME=, VIEW=, CATEGORY=, APP= and DISPLAY= reflect
- * *ini.
+/* Rewrite `path` so GUI=, THEME=, VIEW=, CATEGORY=, APP=, DISPLAY= and
+ * ATTRACT= reflect *ini.
  *
- * File present: only those six lines are rewritten, and keys that are absent
+ * File present: only those seven lines are rewritten, and keys that are absent
  *   get appended. Everything else -- comments, blank lines, ordering, spacing,
  *   CRLF, BASEDIR/INDEX/SCREENSAVER -- is copied through byte for byte.
  *   CATEGORY / APP with an empty value are dropped rather than written empty:
  *   the parser rejects an empty value. DISPLAY is dropped likewise while
- *   display_set is false.
+ *   display_set is false, and ATTRACT while attract_set is false.
  * File absent: the file is created carrying the EFFECTIVE value of every key,
  *   SCREENSAVER included (see the asymmetry note at the top of this header).
  *

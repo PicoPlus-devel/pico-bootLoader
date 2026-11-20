@@ -12,6 +12,14 @@
  * framebuffer the active display backend (PicoDVI line-stream / PicoDVI
  * framebuffer / HSTX framebuffer) is using.
  *
+ * Without PSRAM the current image is not copied at all: the "current" buffer
+ * is the display's framebuffer itself (in-place mode, gui_draws_in_place()),
+ * which saves 150 KB of SRAM. A slide then moves the picture on screen and
+ * fills the uncovered strip from the half-resolution incoming buffer. The
+ * price is that anything else painting the framebuffer (a menu, the
+ * screensaver, a message) destroys the picture, so the caller reloads it
+ * afterwards.
+ *
  * The artwork is otherwise un-decorated -- display name, in-flash marker,
  * etc. are intentionally absent so the picture fills the screen. The only
  * overlay drawn on top is a single 8-pixel button-hint footer at the very
@@ -64,10 +72,11 @@ void gui_set_theme_fallback_dir(const char *dir);
 void gui_set_image_subdir(const char *sub);
 
 /* Allocate the image buffers. The cur buffer is always full resolution
- * (320x240, ~150 KB). The next buffer is full resolution when PSRAM is
- * available, or half resolution (160x120, ~38 KB) when it isn't -- the
- * smaller buffer keeps the slide animation working on SRAM-only configs
- * at the cost of a brief blocky look during the transition.
+ * (320x240): ~150 KB in PSRAM, or without PSRAM the display's framebuffer
+ * plus a 5 KB copy of the rows under the footer. The next buffer is full
+ * resolution when PSRAM is available, or half resolution (160x120, ~38 KB)
+ * when it isn't -- the smaller buffer keeps the slide animation working on
+ * SRAM-only configs at the cost of a brief blocky look during the transition.
  * Idempotent. Returns false only if the cur buffer can't be allocated. */
 bool gui_buffers_alloc(void);
 
@@ -75,14 +84,26 @@ bool gui_buffers_alloc(void);
  * _half_res() loaders / fillers and tell gui_draw_frame() about it. */
 bool gui_next_is_half_res(void);
 
+/* True when cur is the display's framebuffer (no PSRAM). The picture then
+ * exists only on screen: after anything else has drawn there, reload it into
+ * gui_buf_cur(). Loading into cur shows the picture as it is read. */
+bool gui_draws_in_place(void);
+
 /* Buffer accessors. Caller drives the slide animation and swaps with
  * gui_swap_buffers() once the new image is fully on screen. Note: swap
  * is only safe when both buffers are the same resolution (PSRAM mode);
  * in half-res mode the caller should instead reload cur at full res
- * after the slide completes. */
+ * after the slide completes. A no-op in place. */
 uint16_t *gui_buf_cur(void);
 uint16_t *gui_buf_next(void);
 void      gui_swap_buffers(void);
+
+/* In place only (a no-op otherwise): show the picture with its colours
+ * inverted, or back to normal. There is no second copy to restore the
+ * picture from after blanking it, so attract mode's blink uses this; the
+ * inversion is undone exactly. Loading a new picture clears it, and so does
+ * the start of a slide. */
+void gui_set_inverted(bool inverted);
 
 /* Load <theme_dir>/<image_key>.<FILEXTFORSEARCH> into the 320x240 buffer,
  * falling back to the theme-0 directory when the active theme has no artwork

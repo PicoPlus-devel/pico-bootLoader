@@ -50,6 +50,8 @@ sd_boot_ini_status_t sd_boot_ini_load(const char *path,
     out->app[0]         = '\0';
     out->display_dvi    = false;
     out->display_set    = false;    /* absent: the caller applies the board's default */
+    out->attract        = true;     /* absent: attract mode on */
+    out->attract_set    = false;
     out->file_present   = false;
     out->seen_gui       = false;
     out->seen_theme     = false;
@@ -269,6 +271,22 @@ sd_boot_ini_status_t sd_boot_ini_load(const char *path,
                 return SD_BOOT_INI_ERROR;
             }
             out->display_set = true;
+        } else if (strcasecmp(key, "ATTRACT") == 0) {
+            if (out->attract_set) {
+                snprintf_err(err, err_sz, "duplicate key ATTRACT at line %d", lineno);
+                f_close(&fil);
+                return SD_BOOT_INI_ERROR;
+            }
+            if (strcasecmp(val, "ON") == 0) {
+                out->attract = true;
+            } else if (strcasecmp(val, "OFF") == 0) {
+                out->attract = false;
+            } else {
+                snprintf_err(err, err_sz, "invalid ATTRACT value at line %d", lineno);
+                f_close(&fil);
+                return SD_BOOT_INI_ERROR;
+            }
+            out->attract_set = true;
         } else {
             snprintf_err(err, err_sz, "unknown key '%s' at line %d", key, lineno);
             f_close(&fil);
@@ -278,14 +296,15 @@ sd_boot_ini_status_t sd_boot_ini_load(const char *path,
     f_close(&fil);
 
     printf("[bootLoader] boot_ini: %s parsed OK (BASEDIR=%s INDEX=%s SCREENSAVER=%s "
-           "GUI=%d THEME=%u VIEW=%s CATEGORY=%s APP=%s DISPLAY=%s)\n",
+           "GUI=%d THEME=%u VIEW=%s CATEGORY=%s APP=%s DISPLAY=%s ATTRACT=%s)\n",
            path, out->base_dir, out->index_file,
            out->screensaver == SS_MODE_STARFIELD ? "STARFIELD" : "BLOCKS",
            (int)out->gui_graphical, (unsigned)out->theme,
            out->view_categories ? "CATEGORIES" : "APPS",
            out->category[0] ? out->category : "(none)",
            out->app[0]      ? out->app      : "(none)",
-           !out->display_set ? "(default)" : out->display_dvi ? "DVI" : "HDMI");
+           !out->display_set ? "(default)" : out->display_dvi ? "DVI" : "HDMI",
+           !out->attract_set ? "(default ON)" : out->attract ? "ON" : "OFF");
     return SD_BOOT_INI_OK;
 }
 
@@ -310,7 +329,7 @@ static bool write_str(FIL *f, const char *s)
 }
 
 /* 0 = not one of ours, 1 = GUI, 2 = THEME, 3 = VIEW, 4 = CATEGORY, 5 = APP,
- * 6 = DISPLAY. Non-destructive: `line` is left untouched so it can still be echoed
+ * 6 = DISPLAY, 7 = ATTRACT. Non-destructive: `line` is left untouched so it can still be echoed
  * verbatim. */
 static int classify(const char *line, char *work, size_t work_sz)
 {
@@ -329,6 +348,7 @@ static int classify(const char *line, char *work, size_t work_sz)
     if (strcasecmp(work, "CATEGORY") == 0) return 4;
     if (strcasecmp(work, "APP")      == 0) return 5;
     if (strcasecmp(work, "DISPLAY")  == 0) return 6;
+    if (strcasecmp(work, "ATTRACT")  == 0) return 7;
     return 0;
 }
 
@@ -368,6 +388,7 @@ bool sd_boot_ini_save(const char *path, const sd_boot_ini_t *ini)
     bool wrote_cat    = false;
     bool wrote_app    = false;
     bool wrote_disp   = false;
+    bool wrote_attr   = false;
     bool last_had_eol = true;
 
     /* An empty CATEGORY / APP is written by leaving the key out: the parser
@@ -379,6 +400,7 @@ bool sd_boot_ini_save(const char *path, const sd_boot_ini_t *ini)
     if (!ini->category[0])   wrote_cat  = true;
     if (!ini->app[0])        wrote_app  = true;
     if (!ini->display_set)   wrote_disp = true;
+    if (!ini->attract_set)   wrote_attr = true;
 
     if (f_open(&sc->fin, path, FA_READ) == FR_OK) {
         /* File present: copy through, substituting only our own keys. */
@@ -418,6 +440,10 @@ bool sd_boot_ini_save(const char *path, const sd_boot_ini_t *ini)
                          ini->display_dvi ? "DVI" : "HDMI");
                 ok = ok && write_str(&sc->fout, sc->out);
                 wrote_disp = true;
+            } else if (kind == 7 && !wrote_attr) {
+                snprintf(sc->out, sizeof(sc->out), "ATTRACT=%s\n", ini->attract ? "ON" : "OFF");
+                ok = ok && write_str(&sc->fout, sc->out);
+                wrote_attr = true;
             } else if (kind != 0) {
                 /* Duplicate key -- drop it. The parser rejects duplicates, so
                  * echoing it would produce a file that fails to load. */
@@ -438,7 +464,7 @@ bool sd_boot_ini_save(const char *path, const sd_boot_ini_t *ini)
                              "# pico-bootLoader configuration.\n"
                              "# Created by the bootloader. Edit freely -- comments and\n"
                              "# any keys you add are preserved; only GUI, THEME, VIEW,\n"
-                             "# CATEGORY, APP and DISPLAY are rewritten from the menu.\n"
+                             "# CATEGORY, APP, DISPLAY and ATTRACT are rewritten from the menu.\n"
                              "# See boot.txt in the project repository for the full reference.\n\n");
         snprintf(sc->out, sizeof(sc->out), "BASEDIR=%s\n", ini->base_dir);
         ok = ok && write_str(&sc->fout, sc->out);
@@ -492,6 +518,12 @@ bool sd_boot_ini_save(const char *path, const sd_boot_ini_t *ini)
                  ini->display_dvi ? "DVI" : "HDMI");
         ok = ok && write_str(&sc->fout, sc->out);
     }
+    if (!wrote_attr) {
+        snprintf(sc->out, sizeof(sc->out),
+                 "\n# Attract mode: ON or OFF (options menu).\nATTRACT=%s\n",
+                 ini->attract ? "ON" : "OFF");
+        ok = ok && write_str(&sc->fout, sc->out);
+    }
 
     if (f_close(&sc->fout) != FR_OK) ok = false;
 
@@ -523,11 +555,12 @@ bool sd_boot_ini_save(const char *path, const sd_boot_ini_t *ini)
 
     frens_f_free(sc);
     printf("[bootLoader] boot_ini: saved %s (GUI=%d THEME=%u VIEW=%s CATEGORY=%s APP=%s "
-           "DISPLAY=%s)\n",
+           "DISPLAY=%s ATTRACT=%s)\n",
            path, (int)ini->gui_graphical, (unsigned)ini->theme,
            ini->view_categories ? "CATEGORIES" : "APPS",
            ini->category[0] ? ini->category : "(none)",
            ini->app[0]      ? ini->app      : "(none)",
-           !ini->display_set ? "(default)" : ini->display_dvi ? "DVI" : "HDMI");
+           !ini->display_set ? "(default)" : ini->display_dvi ? "DVI" : "HDMI",
+           !ini->attract_set ? "(default ON)" : ini->attract ? "ON" : "OFF");
     return true;
 }

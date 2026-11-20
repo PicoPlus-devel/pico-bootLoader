@@ -29,9 +29,8 @@
  * Serial output: all diagnostics go to UART (PICO_DEFAULT_UART, pins 44/45 on
  * Fruit Jam, 115200-8N1). Tag every line with "[bootLoader] " so they stand out
  * when the freshly-launched emulator starts speaking. printf waits for the
- * UART: the buffered driver in src/stdio_buffered.h is not enabled (see
- * main()), so the stdio_buffered_flush() before each reboot or launch is
- * plain stdio_flush().
+ * UART (the SDK's stdio_uart; see main() for why there is no buffered driver),
+ * and stdio_flush() before each reboot or launch lets the last line finish.
  */
 #include <cstdio>
 #include <cstring>
@@ -43,8 +42,10 @@
 #include "pico/multicore.h"
 #include "pico/version.h"
 #include "pico/bootrom.h"
+#include "pico/rand.h"
 #include "hardware/clocks.h"
 #include "hardware/watchdog.h"
+#include "hardware/structs/powman.h"
 #include "hardware/vreg.h"
 #include "hardware/flash.h"
 
@@ -77,7 +78,6 @@ extern "C" {
 #include "progress_bar.h"
 #include "sd_boot_ini.h"
 #include "app_display_sync.h"
-#include "stdio_buffered.h"
 #include <hardware/divider.h>
 }
 
@@ -169,6 +169,8 @@ namespace {
 #define IMAGE_KEY_MAX 16
 #define DISPLAY_NAME_MAX 40
 #define AUX_UF2_MAX 64
+#define ATTRACT_FEATURE_MAX 64
+#define REQUIRES_FEATURE_MAX 32
 
 struct SdEmu {
     char filename[ROMLISTER_MAXPATH];        // basename
@@ -187,6 +189,8 @@ struct Uf2File {
     char     prog_name[PROG_NAME_MAX];       // from binary_info; never empty once stored
     uint32_t ext_hi;                         // last flash address the image touches
     bool     ext_known;                      // false when the extent probe failed
+    char     attract[ATTRACT_FEATURE_MAX];   // "attract:<paths>" from binary_info, "" = takes no part
+    bool     needs_psram;                    // "requires:psram", or "@psram" in attract
 };
 
 char  g_emuDir[80];                   // "<BASEDIR>/<HW_CONFIG>"
@@ -195,6 +199,7 @@ int   g_uf2_count = 0;
 SdEmu g_emus[32];                     // the list currently on screen (one category's worth)
 int   g_emu_count = 0;                // entries actually shown (matched in the index file)
 int   g_emu_seen  = 0;                // total .uf2 files found in g_emuDir, pre-filter
+int   g_list_need_psram = 0;          // rows buildEmuList() left out: they need PSRAM, the board has none
 char  g_flash_prog_name[PROG_NAME_MAX] = {0};   // currently-flashed image's program name
 int   g_flash_idx = -1;                         // index into g_emus, or -1 if none matches
 // True when the in-flash image has the same program_name as g_emus[g_flash_idx]
@@ -224,6 +229,37 @@ bool  g_have_categories = false;
 flash_records_t g_flashrec;
 flash_records_t g_flashrec_disk;
 char  g_flashrec_path[96];            // "<BASEDIR>/<HW_CONFIG>/.flashed"
+
+// --- Attract mode (pico_shared/attract.h) -------------------------------------
+// After a while without input the picker runs to a random application that
+// takes part and starts it; the application starts a random game and hands
+// back when nobody touched a control for ATTRACT_GAME_MINUTES.
+//
+// The game time travels in the attract word, so changing it needs no change
+// in the applications.
+#define ATTRACT_GAME_MINUTES 3
+// Non-zero while attract mode starts an application: handoffToApp() writes the
+// attract word (0 = a normal start, which also clears a word an earlier attract
+// start left), and the screens that wait for a button give up by themselves.
+uint32_t g_launch_attract_minutes = 0;
+// This boot follows an application that attract mode started and that handed
+// back: the picker starts the next one soon, without the idle wait.
+bool g_attract_continue = false;
+// ATTRACT= as the help screen reports it.
+bool g_attract_on = true;
+// Text-mode footer line while attract mode runs the menu; nullptr otherwise.
+const char *g_attract_footer = nullptr;
+
+// The applications attract mode can start, built at its first run (it reads
+// every category's config file and checks the card for each application's
+// games). cats: bit per category that lists it (bit 0 without categories).
+struct AttractCand {
+    uint8_t  uf2;       // g_uf2 index
+    uint32_t cats;
+};
+AttractCand g_att_cand[64];
+int      g_att_cand_count = -1;       // -1: not built yet this boot
+uint64_t g_att_dead = 0;              // bit per candidate that could not be started
 
 // Boot-time checkpoint: ms since power-on and since the previous checkpoint,
 // so a serial log shows where the start-up time goes.
@@ -414,7 +450,8 @@ void drawMenu(int sel, int top, int visible)
     char hint[SCREEN_COLS + 1];
     centerText(SCREEN_ROWS - 4, "* in flash    ! SD differs (reflash)",
                COL_FG, COL_BG);
-    centerText(SCREEN_ROWS - 3, "UP / DOWN : choose   SELECT : options", COL_FG, COL_BG);
+    centerText(SCREEN_ROWS - 3, g_attract_footer ? g_attract_footer
+                                                 : "UP / DOWN : choose   SELECT : options", COL_FG, COL_BG);
     // '_' rather than spaces for the gap: putText collapses whitespace runs,
     // so a space-padded string would render shorter than centerText measured
     // it with strlen() and the line would sit off-centre. putText turns '_'
@@ -462,7 +499,8 @@ void drawCategoryMenu(int sel, int top, int visible)
     getButtonLabels(buttonLabel1, buttonLabel2);
 
     char hint[SCREEN_COLS + 1];
-    centerText(SCREEN_ROWS - 3, "UP / DOWN : choose   SELECT : options", COL_FG, COL_BG);
+    centerText(SCREEN_ROWS - 3, g_attract_footer ? g_attract_footer
+                                                 : "UP / DOWN : choose   SELECT : options", COL_FG, COL_BG);
     snprintf(hint, sizeof(hint), "%s : open____START : help", buttonLabel1);
     centerText(SCREEN_ROWS - 2, hint, COL_FG, COL_BG);
 }
@@ -636,12 +674,27 @@ void drawErrorScreen(const char *title, const char *l1, const char *l2, const ch
 
     // "Press RESET" bar: another solid red row above the bottom stripe band.
     solidBar(21, COL_ERR_FG, COL_ERR_BG);
-    centerText(21, "Press RESET to retry", COL_ERR_FG, COL_ERR_BG);
+    centerText(21, "Press a button or RESET to retry", COL_ERR_FG, COL_ERR_BG);
+}
+
+uint32_t readPads(bool pace);   // below; the error screen polls the controls too
+
+// True while any key of a USB keyboard is down (modifiers included).
+bool anyKeyDown()
+{
+    const io::KeyboardState &kb = io::getCurrentKeyboardState();
+    if (kb.modifier)
+        return true;
+    for (int i = 0; i < 6; i++) {
+        if (kb.keycode[i])
+            return true;
+    }
+    return false;
 }
 
 // Render the error screen and never return.
 //
-// The screen is entirely static (no animation, no input), so on backends with
+// The screen is entirely static (no animation), so on backends with
 // a persistent framebuffer (HSTX, PicoDVI in framebuffer mode) we paint once
 // and then just pump USB. Redrawing every frame causes visible flicker: the
 // stripe rows go briefly blank between DrawScreen (which writes charcell bg
@@ -668,10 +721,20 @@ void drawErrorScreen(const char *title, const char *l1, const char *l2, const ch
     DrawScreen(-1);
     if (persistentFB) overlayErrorDecor();
 
+    // Any button or key restarts the board, as RESET does. It has to be let go
+    // first, so that one still held when the screen comes up does not restart
+    // it straight away.
+    bool released = false;
     for (;;) {
-        tuh_task();
+        const bool pressed = readPads(true) != 0 || anyKeyDown();   // paces to vsync, pumps USB
         if (!persistentFB) DrawScreen(-1);  // line-stream needs every frame
-        sleep_ms(16);
+        if (!pressed) {
+            released = true;
+        } else if (released) {
+            LOG("Button pressed on the error screen: restarting");
+            watchdog_reboot(0, 0, 0);
+            for (;;) tight_loop_contents();
+        }
     }
 }
 
@@ -813,8 +876,6 @@ const HelpLine HELP_BODY[] = {
     { 18, 18, "- starts by reflashing" },
 
     { 20, 1, "STATUS" },
-    { 26, 3, "Screensaver: after 30 s idle." },
-    { 27, 3, "Any button wakes it." },
 };
 
 // The same page for a card WITH categories. Rows are at a premium -- the
@@ -836,8 +897,6 @@ const HelpLine HELP_BODY_CATEGORIES[] = {
     { 17, 3, "!" },              { 17, 18, "SD differs, reflashes" },
 
     { 20, 1, "STATUS" },
-    { 26, 3, "Screensaver: after 30 s idle." },
-    { 27, 3, "Any button wakes it." },
 };
 
 // Paint the help page into the charcell layer. Pure charcell on purpose: it
@@ -910,6 +969,13 @@ void drawHelpScreen(bool graphical_mode, const char *index_file, bool cfg_save_f
         putText(3, 25, "Settings not saved - SD write failed",
                 COL_ERR_FG, COL_ERR_BG);
     }
+
+    // What 30 s without input brings: attract mode (options menu), or the
+    // screensaver. Attract mode falls back to the screensaver when no
+    // application on the card takes part.
+    putText(3, 26, g_attract_on ? "After 30 s idle: attract mode." : "Screensaver: after 30 s idle.",
+            COL_FG, COL_BG);
+    putText(3, 27, g_attract_on ? "Any button stops it." : "Any button wakes it.", COL_FG, COL_BG);
 
     // Own buffer: val[] is sized for the 22-cell description column, and this
     // line is wider than that.
@@ -1111,7 +1177,7 @@ void showUsbDriveScreen()
         // magic that our own resume check reads back through
         // watchdog_enable_caused_reboot(), which would make the next boot jump
         // straight into the application instead of showing the picker.
-        stdio_buffered_flush();
+        stdio_flush();
         watchdog_reboot(0, 0, 0);
         while (1) {
             tight_loop_contents();
@@ -1162,15 +1228,16 @@ enum OptionId {
     OPTID_HELP,
     OPTID_MENU_MODE,
     OPTID_DISPLAY_MODE,
+    OPTID_ATTRACT,
     OPTID_BOOTSEL,
     OPTID_USB_DRIVE,
 };
 
-// Help, Menu mode, [Display mode], BOOTSEL, USB drive. Everything below the
-// entries is placed from this count, so builds without the display-mode row
-// keep the rows they always had (hint 11, SYSTEM 13) and HSTX builds move
-// down by one entry (hint 13, SYSTEM 15).
-#define OPT_MAX_ENTRIES (4 + HSTX)
+// Help, Menu mode, [Display mode], Attract mode, BOOTSEL, USB drive.
+// Everything below the entries is placed from this count: builds without the
+// display-mode row have the hint on row 13 and SYSTEM on 15, HSTX builds move
+// down by one entry (hint 15, SYSTEM 17, save-failed line 26).
+#define OPT_MAX_ENTRIES (5 + HSTX)
 
 #define OPT_FIRST_ROW  3    // first entry row; entries are two rows apart
 #define OPT_ROW_STEP   2
@@ -1411,6 +1478,9 @@ void drawOptionsScreen(const OptionId *ids, int count, int sel,
         case OPTID_DISPLAY_MODE: label = "Display mode";
                                value = displayIsDvi(ini) ? "DVI" : "HDMI";
                                break;
+        case OPTID_ATTRACT:    label = "Attract mode";
+                               value = ini->attract ? "on" : "off";
+                               break;
         case OPTID_BOOTSEL:    label = "Enter BOOTSEL mode"; break;
         case OPTID_USB_DRIVE:  label = "USB drive mode";     break;
         }
@@ -1426,6 +1496,7 @@ void drawOptionsScreen(const OptionId *ids, int count, int sel,
     case OPTID_HELP:      hint = "Show the controls and current settings"; break;
     case OPTID_MENU_MODE: hint = "Application list, or full-screen artwork"; break;
     case OPTID_DISPLAY_MODE: hint = "Video signal: HDMI, or plain DVI"; break;
+    case OPTID_ATTRACT:   hint = "Play random games when nobody plays"; break;
     case OPTID_BOOTSEL:   hint = "Restart for flashing over USB"; break;
     case OPTID_USB_DRIVE: hint = "Show the SD card on your computer"; break;
     }
@@ -1476,6 +1547,7 @@ OptionsResult showOptionsScreen(sd_boot_ini_t *ini, bool *cfg_save_failed,
 #if HSTX
     ids[count++] = OPTID_DISPLAY_MODE;
 #endif
+    ids[count++] = OPTID_ATTRACT;
     ids[count++] = OPTID_BOOTSEL;
 #if FRENS_USB_MSC
     ids[count++] = OPTID_USB_DRIVE;
@@ -1566,6 +1638,21 @@ OptionsResult showOptionsScreen(sd_boot_ini_t *ini, bool *cfg_save_failed,
 #endif
                 break;
 
+            case OPTID_ATTRACT:
+                // Written from now on (attract_set), so the choice sticks.
+                ini->attract     = !ini->attract;
+                ini->attract_set = true;
+                g_attract_on     = ini->attract;
+                LOG("Options -> attract mode %s", ini->attract ? "on" : "off");
+                if (!sd_boot_ini_save("/boot.txt", ini)) {
+                    LOG("boot.txt write FAILED; setting kept in RAM only");
+                    *cfg_save_failed = true;
+                } else {
+                    *cfg_save_failed = false;
+                }
+                dirty = true;
+                break;
+
             case OPTID_BOOTSEL:
                 // The picture dies with the reset, so say what is about to
                 // happen while there is still a screen to say it on.
@@ -1575,7 +1662,7 @@ OptionsResult showOptionsScreen(sd_boot_ini_t *ini, bool *cfg_save_failed,
                             "as a drive named RP2350.");
                 DrawScreen(-1);
                 idleFor(1200);
-                stdio_buffered_flush();
+                stdio_flush();
                 reset_usb_boot(0, 0);   // does not return
                 break;
 
@@ -1804,6 +1891,8 @@ void showUf2ErrorScreen(const char *filename, const uf2_diag_t *d, bool isAux)
     // ~0u so the A press that started the launch isn't immediately read as the
     // press that dismisses this screen.
     uint32_t prev = ~0u;
+    // Attract mode has nobody to press a button: it moves on after a while.
+    int frames = 0;
     for (;;) {
         uint32_t btns   = readPads();
         uint32_t pushed = btns & ~prev;
@@ -1812,6 +1901,7 @@ void showUf2ErrorScreen(const char *filename, const uf2_diag_t *d, bool isAux)
         DrawScreen(-1);
 
         if (pushed & (Btn::START | Btn::A | Btn::B | Btn::SELECT)) break;
+        if (g_launch_attract_minutes && ++frames >= 6 * 60) break;
     }
 }
 
@@ -1921,6 +2011,23 @@ extern "C" void __not_in_flash_func(flashProgress)(int phase, uint32_t done, uin
     Frens::blinkLed(led_on);
 }
 
+// True when the '|'-separated list after the "<prefix>:" of a binary_info
+// feature ("attract:@psram|/roms/SNES", "requires:psram") holds item exactly.
+static bool featureHasItem(const char *feature, const char *item)
+{
+    const char *p = strchr(feature, ':');
+    if (!p) return false;
+    const size_t len = strlen(item);
+    for (p++; *p; ) {
+        const char *end = strchr(p, '|');
+        const size_t n = end ? (size_t)(end - p) : strlen(p);
+        if (n == len && strncmp(p, item, len) == 0) return true;
+        if (!end) break;
+        p = end + 1;
+    }
+    return false;
+}
+
 // Read the SD directory once, parsing each .uf2's program_name from its
 // binary_info into g_uf2[], and settle everything about the image currently in
 // flash (g_flash_prog_name, g_flash_drift).
@@ -1978,8 +2085,13 @@ void scanUf2Dir()
             u.prog_name[0] = '\0';
             u.ext_hi       = 0;
             u.ext_known    = false;
+            u.attract[0]   = '\0';
+            u.needs_psram  = false;
             uint32_t hi = 0;
-            bool ok = program_name_from_uf2_file(full, u.prog_name, sizeof(u.prog_name), &hi);
+            char requires[REQUIRES_FEATURE_MAX];
+            bool ok = program_name_from_uf2_file(full, u.prog_name, sizeof(u.prog_name), &hi,
+                                                 u.attract, sizeof(u.attract),
+                                                 requires, sizeof(requires));
             if (!ok || !u.prog_name[0]) {
                 LOG("  SKIP %s (binary_info parse failed; no program_name)", u.filename);
                 skipped++;
@@ -1989,7 +2101,13 @@ void scanUf2Dir()
                 u.ext_hi    = hi;
                 u.ext_known = true;
             }
-            LOGV("  [%2d] %-40s  prog_name=\"%s\"", g_uf2_count, u.filename, u.prog_name);
+            // A requirement this loader does not know is ignored here: hiding an
+            // entry that may well run is worse than listing one that may not.
+            u.needs_psram = featureHasItem(requires, "psram") ||
+                            featureHasItem(u.attract, "@psram");
+            LOGV("  [%2d] %-40s  prog_name=\"%s\"%s%s%s%s", g_uf2_count, u.filename, u.prog_name,
+                 u.attract[0] ? "  " : "", u.attract,
+                 requires[0] ? "  " : "", requires);
             g_uf2_count++;
         }
         LOG("Scanned %d of %d .uf2 file(s) in %s (%d unreadable).",
@@ -2076,8 +2194,10 @@ int buildEmuList()
 {
     g_emu_count = 0;
     g_flash_idx = -1;
+    g_list_need_psram = 0;
 
     const uint32_t flash_end = appFlashEnd();
+    const bool have_psram = Frens::isPsramEnabled();
     const int rows = emulators_txt_count();
     int missing = 0, skipped = 0;
 
@@ -2118,6 +2238,15 @@ int buildEmuList()
         strncpy(e.prog_name, g_uf2[fidx].prog_name, sizeof(e.prog_name) - 1);
         e.prog_name[sizeof(e.prog_name) - 1] = '\0';
 
+        // PSRAM gate: an application that declares it needs PSRAM cannot run
+        // on this board, so it is not offered (nor picked by attract mode,
+        // whose candidates come from this list).
+        if (g_uf2[fidx].needs_psram && !have_psram) {
+            LOG("  SKIP %s (needs PSRAM)", e.filename);
+            g_list_need_psram++;
+            continue;
+        }
+
         // Size gate: hide entries whose image (or companion data image)
         // extends past the end of the actual flash chip. An extent probe
         // failure is NOT a skip -- the flash-time validate in
@@ -2154,10 +2283,309 @@ int buildEmuList()
         g_emu_count++;
     }
 
-    LOG("Built list: %d entry/entries from %d row(s) (%d not on card, %d too big). "
-        "In-flash idx=%d",
-        g_emu_count, rows, missing, skipped, g_flash_idx);
+    LOG("Built list: %d entry/entries from %d row(s) (%d not on card, %d too big, "
+        "%d need PSRAM). In-flash idx=%d",
+        g_emu_count, rows, missing, skipped, g_list_need_psram, g_flash_idx);
     return g_emu_count;
+}
+
+// Why an application cannot take part in attract mode, from its attract feature
+// ("attract:<item>|<item>..."), or nullptr when it can. An item that starts
+// with '@' is a requirement: "@psram", the board must have PSRAM; one this
+// loader does not know is not met. Any other item is a path, and one of them
+// must be on the card: a file, or a folder that is not empty. No paths: no
+// check. Static scratch: core0's stack is 3 KB.
+const char *attractUnavailable(const char *feature)
+{
+    static FILINFO fi;
+    static DIR     dir;
+    static char    path[ATTRACT_FEATURE_MAX];
+    const char *p = feature + strlen(FRENS_ATTRACT_FEATURE_PREFIX);
+    bool paths = false, found = false;
+    while (*p) {
+        const char *end = strchr(p, '|');
+        size_t n = end ? (size_t)(end - p) : strlen(p);
+        if (n && *p == '@') {
+            if (n != 6 || strncmp(p, "@psram", 6) != 0) return "needs a newer loader";
+            if (!Frens::isPsramEnabled()) return "needs PSRAM";
+        } else if (n && !found) {
+            paths = true;
+            if (n >= sizeof(path)) n = sizeof(path) - 1;
+            memcpy(path, p, n);
+            path[n] = '\0';
+            if (f_stat(path, &fi) == FR_OK) {
+                if (!(fi.fattrib & AM_DIR)) {
+                    found = true;
+                } else if (f_opendir(&dir, path) == FR_OK) {
+                    found = f_readdir(&dir, &fi) == FR_OK && fi.fname[0];
+                    f_closedir(&dir);
+                }
+            }
+        }
+        if (!end) break;
+        p = end + 1;
+    }
+    return (!paths || found) ? nullptr : "nothing on the card";
+}
+
+// Fill g_att_cand from every category (or from the flat list on a card without
+// categories), through buildEmuList() so that it holds exactly what the menu
+// shows. With categories it leaves g_emus and the loaded config file at the
+// last category: the caller reloads its own.
+void attractBuildCandidates()
+{
+    static char path[FF_MAX_LFN];
+    bool checked[sizeof(g_uf2) / sizeof(g_uf2[0])] = {};
+    bool usable[sizeof(g_uf2) / sizeof(g_uf2[0])]  = {};
+    g_att_cand_count = 0;
+    g_att_dead = 0;
+
+    auto consider = [&](int cat) {
+        for (int i = 0; i < g_emu_count; i++) {
+            int u = -1;
+            for (int k = 0; k < g_uf2_count; k++) {
+                if (strcmp(g_uf2[k].prog_name, g_emus[i].prog_name) == 0) { u = k; break; }
+            }
+            if (u < 0 || !g_uf2[u].attract[0]) continue;
+            if (!checked[u]) {
+                checked[u] = true;
+                char auxFull[AUX_PATH_MAX];
+                const char *why = attractUnavailable(g_uf2[u].attract);
+                if (!why && g_emus[i].aux_uf2[0] && !resolveAuxPath(g_emus[i].aux_uf2, auxFull, nullptr))
+                    why = "nothing on the card";
+                usable[u] = !why;
+                LOG("  attract: %-20s %s (%s)", g_uf2[u].prog_name,
+                    why ? why : "takes part", g_uf2[u].attract);
+            }
+            if (!usable[u]) continue;
+            const uint32_t bit = (cat >= 0 && cat < 32) ? (1u << cat) : 1u;
+            int c = 0;
+            while (c < g_att_cand_count && g_att_cand[c].uf2 != u) c++;
+            if (c == g_att_cand_count) {
+                if (g_att_cand_count >= (int)(sizeof(g_att_cand) / sizeof(g_att_cand[0]))) continue;
+                g_att_cand[c].uf2  = (uint8_t)u;
+                g_att_cand[c].cats = 0;
+                g_att_cand_count++;
+            }
+            g_att_cand[c].cats |= bit;
+        }
+    };
+
+    LOG("Attract mode: looking for applications that take part");
+    if (g_have_categories) {
+        for (int c = 0; c < categories_count() && c < 32; c++) {
+            const char *cfg = categories_config(c);
+            if (!cfg[0]) continue;                  // the options row
+            snprintf(path, sizeof(path), "%s/%s", g_base_dir, cfg);
+            if (!emulators_txt_load(path)) continue;
+            buildEmuList();
+            consider(c);
+        }
+    } else {
+        consider(-1);
+    }
+    LOG("Attract mode: %d application(s) to choose from", g_att_cand_count);
+}
+
+// --- Attract mode's rounds ------------------------------------------------------
+// As in Galagino, in rounds, now at two levels. First a category: each category
+// once, in random order, before any comes again, so that every category is shown
+// as often as the others however many applications it holds. Then, within that
+// category, an application its round there has not started yet: every
+// application of a category once before any comes back. Without categories the
+// whole list is one category. An application listed in two categories has one
+// "started" bit for both.
+//
+// The rounds must outlive the runs, and the watchdog scratch registers are all
+// taken (0..3 and 5 by applications, 4 by the SDK, 6 and 7 by the loader
+// contract). The RP2350's power manager has eight more: they keep their value
+// through the watchdog reset an application hands back with (checked on the
+// Fruit Jam) and are cleared by a power cycle, which then simply starts new
+// rounds. Nothing the loader starts uses them; the SDK's pico_low_power (6 and
+// 7) is not linked.
+//
+//   POWMAN scratch[0]  ATTRACT_ROUND_MAGIC << 16 | number of candidates
+//   POWMAN scratch[1]  hash of the candidates' program names and categories
+//   POWMAN scratch[2]  started in their category's round: candidates 0..31, a bit each
+//   POWMAN scratch[3]  candidates 32..63
+//   POWMAN scratch[4]  categories shown in this round, a bit each
+//   POWMAN scratch[5]  1 + the category the last start went through; 0: none
+//
+// A card whose applications changed has another count or hash: new rounds.
+#define ATTRACT_ROUND_MAGIC 0xA77Eu
+
+struct AttractRound {
+    uint64_t started;   // applications started in their category's round
+    uint32_t cats;      // categories shown in this round
+    int      last_cat;  // the category the last start went through, -1: none
+};
+
+uint32_t attractCandHash()
+{
+    uint32_t h = 2166136261u;                 // FNV-1a
+    for (int c = 0; c < g_att_cand_count; c++) {
+        for (const char *p = g_uf2[g_att_cand[c].uf2].prog_name; *p; p++) {
+            h = (h ^ (uint8_t)*p) * 16777619u;
+        }
+        h = (h ^ 0xFFu) * 16777619u;          // name separator
+        h = (h ^ g_att_cand[c].cats) * 16777619u;
+    }
+    return h;
+}
+
+AttractRound attractRoundLoad()
+{
+    AttractRound r = {0, 0, -1};
+    if (powman_hw->scratch[0] != ((ATTRACT_ROUND_MAGIC << 16) | (uint32_t)g_att_cand_count) ||
+        powman_hw->scratch[1] != attractCandHash()) {
+        return r;
+    }
+    r.started  = (uint64_t)powman_hw->scratch[2] | ((uint64_t)powman_hw->scratch[3] << 32);
+    r.cats     = powman_hw->scratch[4];
+    r.last_cat = (int)powman_hw->scratch[5] - 1;
+    if (r.last_cat < -1 || r.last_cat >= 32) r.last_cat = -1;
+    return r;
+}
+
+void attractRoundSave(const AttractRound &r)
+{
+    powman_hw->scratch[0] = (ATTRACT_ROUND_MAGIC << 16) | (uint32_t)g_att_cand_count;
+    powman_hw->scratch[1] = attractCandHash();
+    powman_hw->scratch[2] = (uint32_t)r.started;
+    powman_hw->scratch[3] = (uint32_t)(r.started >> 32);
+    powman_hw->scratch[4] = r.cats;
+    powman_hw->scratch[5] = (uint32_t)(r.last_cat + 1);
+}
+
+// The categories a candidate is reached through, as bits; one without categories.
+static uint32_t attractCatsOf(int c)
+{
+    return g_att_cand[c].cats ? g_att_cand[c].cats : 1u;
+}
+
+static bool attractInFlash(int c)
+{
+    return strcmp(g_uf2[g_att_cand[c].uf2].prog_name, g_flash_prog_name) == 0;
+}
+
+// A random set bit of mask (not 0).
+static int attractRandomBit(uint64_t mask)
+{
+    int n = 0;
+    for (uint64_t m = mask; m; m &= m - 1) n++;
+    int k = (int)(get_rand_32() % (uint32_t)n);
+    for (int b = 0; b < 64; b++) {
+        if ((mask & (1ull << b)) && k-- == 0) return b;
+    }
+    return -1;
+}
+
+static const char *attractCatName(int k)
+{
+    return g_have_categories ? categories_name(k) : "the list";
+}
+
+// Attract mode starts candidate c through category cat (-1: no categories).
+void attractRoundStarted(int c, int cat)
+{
+    AttractRound r = attractRoundLoad();
+    const int k = cat < 0 ? 0 : cat;
+    r.started |= 1ull << c;
+    r.cats    |= 1u << k;
+    r.last_cat = k;
+    attractRoundSave(r);
+    int cats = 0, cats_shown = 0, apps = 0, apps_started = 0;
+    uint32_t all = 0;
+    for (int i = 0; i < g_att_cand_count; i++) {
+        all |= attractCatsOf(i);
+        if (attractCatsOf(i) & (1u << k)) {
+            apps++;
+            if (r.started & (1ull << i)) apps_started++;
+        }
+    }
+    for (int b = 0; b < 32; b++) {
+        if (all & (1u << b)) { cats++; if (r.cats & (1u << b)) cats_shown++; }
+    }
+    LOG("Attract mode: %d of %d categories this round; %d of %d applications in %s",
+        cats_shown, cats, apps_started, apps, attractCatName(k));
+}
+
+// The next candidate, and in *cat the category to reach it through (-1 without
+// categories). The category: one this round has not shown, with an application
+// that can start now -- not failed this boot, and not the one in flash, the one
+// that just ran; with none left a new round, which does not begin with the
+// category just shown when there is another. Then an application of that
+// category its round there has not started, other than the one in flash; with
+// none left a new round in that category. -1 when nothing can be started.
+int attractPick(int *cat)
+{
+    AttractRound r = attractRoundLoad();
+    uint32_t usable = 0;
+    int alive = 0, only = -1;
+    for (int c = 0; c < g_att_cand_count; c++) {
+        if (g_att_dead & (1ull << c)) continue;
+        alive++;
+        only = c;
+        if (!attractInFlash(c)) usable |= attractCatsOf(c);
+    }
+    *cat = -1;
+    if (alive == 0) return -1;
+    if (!usable) {
+        // A single application, the one in flash: it is all there is to show.
+        if (g_have_categories) *cat = attractRandomBit(attractCatsOf(only));
+        return only;
+    }
+    uint32_t fresh = usable & ~r.cats;
+    if (!fresh) {
+        LOG("Attract mode: every category shown, a new round");
+        r.cats = 0;
+        fresh = usable;
+        if (r.last_cat >= 0 && (fresh & ~(1u << r.last_cat))) fresh &= ~(1u << r.last_cat);
+        attractRoundSave(r);
+    }
+    const int k = attractRandomBit(fresh);
+    uint64_t in_k = 0, all_k = 0;
+    for (int c = 0; c < g_att_cand_count; c++) {
+        if (!(attractCatsOf(c) & (1u << k))) continue;
+        all_k |= 1ull << c;
+        if (!(g_att_dead & (1ull << c)) && !attractInFlash(c)) in_k |= 1ull << c;
+    }
+    uint64_t apps = in_k & ~r.started;
+    if (!apps) {
+        LOG("Attract mode: every application in %s shown, a new round there", attractCatName(k));
+        r.started &= ~all_k;
+        attractRoundSave(r);
+        apps = in_k;
+    }
+    if (g_have_categories) *cat = k;
+    return attractRandomBit(apps);
+}
+
+// The candidate for the application called prog_name, or -1.
+int attractFindCand(const char *prog_name)
+{
+    for (int c = 0; c < g_att_cand_count; c++) {
+        if (strcmp(g_uf2[g_att_cand[c].uf2].prog_name, prog_name) == 0) return c;
+    }
+    return -1;
+}
+
+// The category to show a candidate in after it hands back: the one attract mode
+// went through to start it (the round keeps it), else the one the menu
+// remembers (home, /boot.txt CATEGORY=) when it lists the application, else the
+// first that does. -1 without categories.
+int attractCategoryOf(int cand, const char *home)
+{
+    if (!g_have_categories || cand < 0) return -1;
+    const uint32_t cats = g_att_cand[cand].cats;
+    const int last = attractRoundLoad().last_cat;
+    if (last >= 0 && (cats & (1u << last))) return last;
+    const int h = categories_find(home);
+    if (h >= 0 && h < 32 && (cats & (1u << h))) return h;
+    for (int k = 0; k < 32; k++) {
+        if (cats & (1u << k)) return k;
+    }
+    return -1;
 }
 
 // AuxState tells the launch dispatcher how to handle a row's aux blob.
@@ -2232,16 +2660,20 @@ static AuxState computeAuxDrift(int idx, uf2_fingerprint_t *out_fp)
 // the handshake register, and VTOR-jump. Never returns on success.
 [[noreturn]] void handoffToApp(const char *label)
 {
-    LOG("Launching %s; bye!", label ? label : "(unknown)");
-    stdio_buffered_flush();
+    LOG("Launching %s%s; bye!", label ? label : "(unknown)",
+        g_launch_attract_minutes ? " (attract mode)" : "");
+    stdio_flush();
 #if WII_PIN_SDA >= 0 and WII_PIN_SCL >= 0
     wiipad_end();
 #endif
     multicore_reset_core1();   // hand HSTX over; emulator brings its own driver up
     Frens::markLaunchedFromBootloader();
+    // The attract word, or 0: a normal start clears what an earlier attract
+    // start may have left in scratch[7] (attract.h).
+    frens_attract_mark_launch(g_launch_attract_minutes);
     app_launch_run();          // VTOR jump; no return on success
     LOG("app_launch_run() returned unexpectedly.");
-    stdio_buffered_flush();
+    stdio_flush();
     watchdog_reboot(0, 0, 0);
     for (;;) tight_loop_contents();
 }
@@ -2399,7 +2831,7 @@ void flashAndLaunch(int idx, bool flashEmu, bool flashAux, const uf2_fingerprint
             LOG("Aux flash FAILED: %s (after %u programmed, %u skipped)",
                 uf2_load_result_str(r),
                 (unsigned)ast.programmed_blocks, (unsigned)ast.skipped_blocks);
-            stdio_buffered_flush();
+            stdio_flush();
             watchdog_reboot(0, 0, 0);
             for (;;) tight_loop_contents();
         }
@@ -2423,7 +2855,7 @@ void flashAndLaunch(int idx, bool flashEmu, bool flashAux, const uf2_fingerprint
             LOG("Flash FAILED: %s (after %u programmed, %u skipped)",
                 uf2_load_result_str(r),
                 (unsigned)st.programmed_blocks, (unsigned)st.skipped_blocks);
-            stdio_buffered_flush();
+            stdio_flush();
             watchdog_reboot(0, 0, 0);
             for (;;) tight_loop_contents();
         }
@@ -2472,7 +2904,7 @@ void flashAndLaunch(int idx, bool flashEmu, bool flashAux, const uf2_fingerprint
     // Reboot to recover a clean state; the resume check's app_launch_present()
     // guard prevents jumping into a half-written partition.
     LOG("Rebooting bootloader to recover a clean state.");
-    stdio_buffered_flush();
+    stdio_flush();
 #if WII_PIN_SDA >= 0 and WII_PIN_SCL >= 0
     wiipad_end();
 #endif
@@ -2528,13 +2960,16 @@ int main()
         Frens::markLaunchedFromBootloader();
         app_launch_run();          // VTOR jump; no return on success
     }
+    // Not resuming: an application that attract mode started handed back with
+    // the attract word still in scratch[7]. The picker goes on to the next one.
+    g_attract_continue = frens_attract_consume_return();
 
     Frens::setClocksAndStartStdio(CPUFREQ_KHZ, VREG_VOLTAGE_1_30);
-    // stdio_buffered_init() is deliberately not called. With the buffered
-    // driver, the HSTX picture dropped out -- and the board sometimes locked
+    // stdio stays the SDK's stdio_uart: printf waits for the UART. A buffered
+    // driver (an 8 KB ring sent by the UART interrupt) was tried and removed:
+    // with it the HSTX picture dropped out -- and the board sometimes locked
     // up -- while an application was being written to flash (Fruit Jam, and a
-    // Pico Plus 2 on HW_CONFIG 2); it saved little start-up time. printf waits
-    // for the UART again, and stdio_buffered_flush() is plain stdio_flush().
+    // Pico Plus 2 on HW_CONFIG 2), and it saved little start-up time.
     logPhase("clocks and stdio up");
 
     // --- BANNER -------------------------------------------------------------
@@ -2750,6 +3185,12 @@ int main()
         char m[48];
         snprintf(m, sizeof(m), "%d UF2 file(s) found in %s",
                  g_emu_seen, g_emuDir);
+        if (g_list_need_psram > 0) {
+            fatalErrorScreen("NO MATCHING EMULATORS",
+                             m,
+                             "but those listed need PSRAM,",
+                             "which this board lacks");
+        }
         fatalErrorScreen("NO MATCHING EMULATORS",
                          m,
                          "but none listed in",
@@ -2790,11 +3231,17 @@ int main()
     int   cat_top = 0;
 
     // Graphical-mode state. Buffers are allocated lazily on first entry so
-    // text-only sessions don't pay the ~300 KB cost.
+    // text-only sessions don't pay for them.
     bool graphical_mode = false;
     bool buffers_ready  = false;
+    // Without PSRAM the artwork lives only in the framebuffer (gui.h,
+    // gui_draws_in_place()), so a screen drawn over it -- help, options, a
+    // notice, the screensaver, a refused launch -- leaves nothing to repaint
+    // from. Those set this, and the next graphical frame reloads the picture.
+    bool art_stale      = false;
     int  slide_p        = 0;        // 0..SCREENWIDTH, pixels of the new image visible
     int  slide_dir      = 0;        // +1 = new enters from right, -1 = from left, 0 = idle
+    int  slide_px       = GUI_SLIDE_PX_PER_FRAME;   // horizontal slide speed; attract mode varies it
 
     // Screensaver state. Activates after 30 s of no input; loads up to 5
     // small bouncing images from /emu/assets/screensaver/ and exits on any
@@ -2888,6 +3335,7 @@ int main()
     // change, and on every level transition.
     auto reload_current = [&]() {
         if (!buffers_ready) return;
+        art_stale = false;
         load_image_into(level == LVL_CATEGORIES ? cat_sel : sel, gui_buf_cur(), false);
         slide_p   = 0;
         slide_dir = 0;
@@ -2928,6 +3376,7 @@ int main()
     auto showNotice = [&](const char *l1, const char *l2, const char *l3) {
         showMessage(l1, l2, l3);
         DrawScreen(-1);
+        art_stale = true;
         const int MAX_FRAMES = 4 * 60;              // ~4 s @ 60 fps
         uint32_t prev = ~0u;                        // swallow the press that got here
         for (int f = 0; f < MAX_FRAMES; f++) {
@@ -2969,13 +3418,20 @@ int main()
         if (buildEmuList() == 0) {
             if (!quiet) {
                 char l3[SCREEN_COLS + 1];
-                snprintf(l3, sizeof(l3), "No matching .uf2 files in %s", g_emuDir);
+                if (g_list_need_psram > 0)
+                    snprintf(l3, sizeof(l3), "Needs PSRAM, which this board lacks");
+                else
+                    snprintf(l3, sizeof(l3), "No matching .uf2 files in %s", g_emuDir);
                 showNotice("NOTHING IN THIS CATEGORY", categories_name(idx), l3);
             }
             return false;
         }
         return true;
     };
+
+    // After a hand-back attract mode needs its table at once (below). Built
+    // before the restore, as it walks every category's list.
+    if (g_attract_continue && ini.attract) attractBuildCandidates();
 
     // Restore the position /boot.txt remembers. An unknown name, or a category
     // that has since gone empty, lands on the categories carousel rather than
@@ -2995,6 +3451,34 @@ int main()
 
     select_initial_app();
 
+    // After a hand-back the menu opens on the application that just ran -- the
+    // one in flash -- in the category attract mode took it from, and the reel
+    // runs on from there to the next one (attract_start). Nothing is written:
+    // /boot.txt keeps the user's place.
+    if (g_attract_continue && ini.attract) {
+        const int c = attractFindCand(g_flash_prog_name);
+        bool shown = c >= 0;
+        if (shown && g_have_categories) {
+            const int cat = attractCategoryOf(c, ini.category);
+            shown = cat >= 0 && open_category(cat, /*quiet=*/true);
+            if (shown) {
+                level   = LVL_APPS;
+                cat_sel = cat;
+                cat_top = (cat_sel >= visible) ? cat_sel - visible + 1 : 0;
+            } else if (level == LVL_APPS) {
+                open_category(cat_sel, /*quiet=*/true);   // the user's again
+            }
+        }
+        if (shown) {
+            for (int i = 0; i < g_emu_count; i++) {
+                if (strcmp(g_emus[i].prog_name, g_flash_prog_name) == 0) { sel = i; break; }
+            }
+            top = (sel >= visible) ? sel - visible + 1 : 0;
+            LOG("Attract mode: back from %s%s%s", g_flash_prog_name,
+                g_have_categories ? " in " : "", g_have_categories ? categories_name(cat_sel) : "");
+        }
+    }
+
     // Restore the last mode the user left us in (/boot.txt GUI= key).
     graphical_mode = ini.gui_graphical;
     LOG("Initial menu mode: %s, level: %s", graphical_mode ? "graphical" : "text",
@@ -3008,10 +3492,111 @@ int main()
     constexpr uint32_t POS_SETTLE_FRAMES = 2 * 60;
     int pos_settle = -1;                // frames left, or -1 when nothing pending
 
+    // --- Attract mode (pico_shared/attract.h) ----------------------------------
+    // After SS_IDLE_THRESHOLD without input (in place of the screensaver), or
+    // ATTRACT_CONTINUE_FRAMES after an application attract mode started handed
+    // back, the menu runs to a random application and starts it, the way
+    // Galagino's menu runs to a game: the carousel spins, slows down, stops on
+    // it, the artwork blinks, and it starts. The steps are the presses a user
+    // would make -- B out of a category, RIGHT, A into one, RIGHT, A -- fed to
+    // the code below, so the slides, the level changes and the launch are the
+    // ordinary ones. Any button stops it where it is. Attract mode never writes
+    // /boot.txt: the menu keeps the place the user left it at.
+    enum AttractPhase { ATT_OFF, ATT_CATS, ATT_APPS, ATT_BLINK };
+    AttractPhase att = ATT_OFF;
+    int  att_cand    = -1;      // g_att_cand index the reel runs to
+    int  att_cat     = -1;      // the category it is reached through; -1 without categories
+    int  att_steps   = -1;      // steps left in this phase; -1 = not worked out yet
+    int  att_wait    = 0;       // frames until the next step
+    int  att_blink   = 0;       // frames of blinking left before the start
+    bool att_unavailable = false;   // nothing to start this boot: the screensaver runs instead
+    // After a hand-back: the display takes up to ~3 s to lock on to the signal
+    // again; the reel starts as it comes back, from the application that just ran.
+    constexpr uint32_t ATTRACT_CONTINUE_FRAMES = 3 * 60;
+    constexpr int ATTRACT_MIN_STEPS    = 8;                 // the reel runs at least this far
+    constexpr int ATTRACT_BLINK_PERIOD = 9;                 // frames off, then as many on
+    constexpr int ATTRACT_BLINK_FRAMES = 4 * 2 * ATTRACT_BLINK_PERIOD;   // four blinks
+    static const char ATTRACT_FOOTER[] = "ATTRACT MODE - any button stops it";
+    g_attract_on = ini.attract;
+    LOG("Attract mode: %s%s", ini.attract ? "on" : "off",
+        g_attract_continue ? ", an application handed back: next one soon" : "");
+
+    auto attract_stop = [&](const char *why) {
+        LOG("Attract mode: stopped (%s)", why);
+        att       = ATT_OFF;
+        att_steps = -1;
+        g_attract_footer         = nullptr;
+        g_launch_attract_minutes = 0;
+        slide_px  = GUI_SLIDE_PX_PER_FRAME;
+        // Where the reel stopped is not the user's place: nothing to write back.
+        pos_dirty  = false;
+        pos_settle = -1;
+    };
+
+    // Pick the next application and set the reel going. False when there is
+    // nothing to start; the screensaver then takes over for this boot.
+    auto attract_start = [&]() -> bool {
+        if (g_att_cand_count < 0) {
+            attractBuildCandidates();
+            // That walked every category: put the one on screen back.
+            if (g_have_categories && level == LVL_APPS) open_category(cat_sel, /*quiet=*/true);
+        }
+        int cat = -1;
+        const int c = attractPick(&cat);
+        if (c < 0) {
+            LOG("Attract mode: no application to start; screensaver instead");
+            return false;
+        }
+        att_cand = c;
+        // The category the round picked; the hand-back shows the application
+        // there again (attractCategoryOf).
+        att_cat  = cat;
+        att       = g_have_categories ? ATT_CATS : ATT_APPS;
+        att_steps = -1;
+        att_wait  = 0;
+        g_attract_footer = ATTRACT_FOOTER;
+        LOG("Attract mode: on to %s%s%s", g_uf2[g_att_cand[c].uf2].prog_name,
+            att_cat >= 0 ? " in " : "", att_cat >= 0 ? categories_name(att_cat) : "");
+        return true;
+    };
+
+    // One step of the reel, `left` steps (this one included) before it stops:
+    // fast at first, slowing down over the last four. Graphical: a RIGHT press
+    // with the slide running at the speed of this step. Text mode: the cursor
+    // moves down, wrapping at the end, as UP/DOWN never do for the user.
+    // Returns the press to feed the picker (0 in text mode).
+    auto attract_step = [&](int left) -> uint32_t {
+        if (graphical_mode && buffers_ready) {
+            static const int slow_px[5] = { 0, 12, 18, 28, 40 };
+            slide_px = left > 4 ? 64 : slow_px[left];
+            att_wait = left > 4 ? 0 : (5 - left) * 3;
+            return Btn::RIGHT;
+        }
+        att_wait = left > 4 ? 4 : 4 + (5 - left) * 6;
+        int &cur = (level == LVL_CATEGORIES) ? cat_sel : sel;
+        int &scr = (level == LVL_CATEGORIES) ? cat_top : top;
+        const int n = (level == LVL_CATEGORIES) ? categories_count() : g_emu_count;
+        if (n > 0) cur = (cur + 1) % n;
+        if (scr > cur) scr = cur;
+        if (cur >= scr + visible) scr = cur - visible + 1;
+        return 0;
+    };
+
     for (;;) {
         uint32_t btns   = readPads();
         uint32_t pushed = btns & ~prevButtons;
         prevButtons = btns;
+
+        // A button stops attract mode where it is. Like waking the screensaver,
+        // the press does nothing else; a slide under way finishes by itself.
+        if (att != ATT_OFF && btns) {
+            attract_stop("button pressed");
+            idle_frames = 0;
+            prevButtons = ~0u;
+            continue;
+        }
+        // Someone is there: attract mode waits the full idle time again.
+        if (btns) g_attract_continue = false;
 
         // Idle counter feeds the screensaver. Tick only while no button is
         // pressed -- a held button is not "idle".
@@ -3029,6 +3614,7 @@ int main()
                 // from reaching the rest of the loop.
                 screensaver_free();
                 ss_active   = false;
+                art_stale   = true;
                 idle_frames = 0;
                 prevButtons = ~0u;
                 continue;
@@ -3036,7 +3622,13 @@ int main()
                 screensaver_run_one_frame();
                 continue;   // skip nav + normal render while running
             }
-        } else if (!ss_unavailable && idle_frames >= SS_IDLE_THRESHOLD) {
+        } else if (att == ATT_OFF && ini.attract && !att_unavailable &&
+                   (idle_frames >= SS_IDLE_THRESHOLD ||
+                    (g_attract_continue && idle_frames >= ATTRACT_CONTINUE_FRAMES))) {
+            // Attract mode takes the screensaver's place.
+            g_attract_continue = false;
+            if (!attract_start()) att_unavailable = true;
+        } else if (att == ATT_OFF && !ss_unavailable && idle_frames >= SS_IDLE_THRESHOLD) {
             if (screensaver_init()) ss_active = true;
             else                    ss_unavailable = true;
         }
@@ -3046,6 +3638,7 @@ int main()
         // same frame lands on one screen only.
         if (pushed & Btn::START) {
             showHelpScreen(graphical_mode, ini.index_file, cfg_save_failed);
+            art_stale   = true;
             prevButtons = ~0u;   // swallow the press that dismissed it
             idle_frames = 0;
             continue;            // repaint from scratch next frame
@@ -3059,6 +3652,7 @@ int main()
             // toggled, so hand it an `ini` that already reflects where we are.
             capture_position();
             OptionsResult r = showOptionsScreen(&ini, &cfg_save_failed, graphical_mode);
+            art_stale = true;
             if (r == OPT_MODE_CHANGED) {
                 graphical_mode = ini.gui_graphical;
                 LOG("Options -> mode=%s", graphical_mode ? "graphical" : "text");
@@ -3067,6 +3661,75 @@ int main()
             prevButtons = ~0u;   // swallow the press that dismissed it
             idle_frames = 0;
             continue;            // repaint from scratch next frame
+        }
+
+        // Attract mode's next press, once the slide under way has finished and
+        // the pause after it is over.
+        bool att_launch = false;    // this frame's A is attract mode's start
+        if (att != ATT_OFF) {
+            const bool sliding = graphical_mode && buffers_ready && slide_dir != 0;
+            const char *target = g_uf2[g_att_cand[att_cand].uf2].prog_name;
+            if (sliding) {
+                // the slide first
+            } else if (att_wait > 0) {
+                att_wait--;
+            } else if (att == ATT_CATS) {
+                if (level == LVL_APPS) {
+                    if (cat_sel == att_cat) { att = ATT_APPS; att_steps = -1; }
+                    else                    pushed |= Btn::B;   // out of this category
+                } else {
+                    const int n = categories_count();
+                    if (att_steps < 0) att_steps = n > 0 ? (att_cat - cat_sel + n) % n : 0;
+                    if (att_steps > 0) {
+                        pushed |= attract_step(att_steps);
+                        att_steps--;
+                    } else {
+                        pushed |= Btn::A;                       // into the category
+                        att = ATT_APPS;
+                        att_steps = -1;
+                    }
+                }
+            } else if (att == ATT_APPS) {
+                if (level != LVL_APPS) {
+                    g_att_dead |= 1ull << att_cand;
+                    attract_stop("the category did not open");
+                } else {
+                    if (att_steps < 0) {
+                        int t = -1;
+                        for (int i = 0; i < g_emu_count; i++) {
+                            if (strcmp(g_emus[i].prog_name, target) == 0) { t = i; break; }
+                        }
+                        if (t < 0) {
+                            g_att_dead |= 1ull << att_cand;
+                            attract_stop("not in this list");
+                        } else {
+                            const int n = g_emu_count;
+                            int d = (t - sel + n) % n;
+                            if (n > 1) while (d < ATTRACT_MIN_STEPS) d += n;
+                            att_steps = d;
+                        }
+                    }
+                    if (att == ATT_APPS) {
+                        if (att_steps > 0) {
+                            pushed |= attract_step(att_steps);
+                            att_steps--;
+                        } else {
+                            att       = ATT_BLINK;
+                            att_blink = ATTRACT_BLINK_FRAMES;
+                        }
+                    }
+                }
+            } else if (att == ATT_BLINK) {
+                if (att_blink > 0) {
+                    att_blink--;
+                } else {
+                    LOG("Attract mode: starting %s", target);
+                    attractRoundStarted(att_cand, att_cat);
+                    g_launch_attract_minutes = ATTRACT_GAME_MINUTES;
+                    pushed |= Btn::A;
+                    att_launch = true;
+                }
+            }
         }
 
         // Mode-specific navigation. `count` and `cursor` alias whichever level
@@ -3136,7 +3799,7 @@ int main()
                 const bool vertical = (slide_dir == GUI_SLIDE_UP ||
                                        slide_dir == GUI_SLIDE_DOWN);
                 const int  extent   = gui_slide_extent(slide_dir);
-                slide_p += vertical ? GUI_SLIDE_PY_PER_FRAME : GUI_SLIDE_PX_PER_FRAME;
+                slide_p += vertical ? GUI_SLIDE_PY_PER_FRAME : slide_px;
                 if (slide_p > extent) slide_p = extent;
             }
         } else {
@@ -3163,7 +3826,7 @@ int main()
             LOG("B -> back to categories");
             level = LVL_CATEGORIES;
             start_level_slide(GUI_SLIDE_DOWN);
-            persist_cfg();
+            if (att == ATT_OFF) persist_cfg();      // attract mode leaves boot.txt alone
             idle_frames = 0;
             continue;                       // repaint at the new level
         }
@@ -3177,6 +3840,7 @@ int main()
                 LOG("A on \"%s\" (no config file) -> options", categories_name(cat_sel));
                 capture_position();     // it may write /boot.txt itself
                 OptionsResult r = showOptionsScreen(&ini, &cfg_save_failed, graphical_mode);
+                art_stale = true;
                 if (r == OPT_MODE_CHANGED) {
                     graphical_mode = ini.gui_graphical;
                     LOG("Options -> mode=%s", graphical_mode ? "graphical" : "text");
@@ -3186,7 +3850,7 @@ int main()
                 level = LVL_APPS;
                 select_initial_app();
                 start_level_slide(GUI_SLIDE_UP);
-                persist_cfg();
+                if (att == ATT_OFF) persist_cfg();  // attract mode leaves boot.txt alone
             }
             prevButtons = ~0u;   // swallow the press
             idle_frames = 0;
@@ -3202,7 +3866,8 @@ int main()
 
             // Remember where we are before the launch takes the board away:
             // returning from the application has to land back on this entry.
-            persist_cfg();
+            // Not for attract mode: the menu comes back at the user's place.
+            if (!att_launch) persist_cfg();
 
             // Acknowledge the press on screen BEFORE any SD I/O.
             // computeAuxDrift() CRC-walks a possibly multi-MB aux .uf2 and
@@ -3216,6 +3881,7 @@ int main()
             if (emuDrift) showMessage("Flashing", dispName, "Do not power off.");
             else          showMessage("Starting", dispName, nullptr);
             DrawScreen(-1);
+            art_stale = true;           // only matters if the launch is refused
 
             uf2_fingerprint_t auxFp;
             AuxState auxState = computeAuxDrift(sel, &auxFp);
@@ -3249,10 +3915,20 @@ int main()
             prevButtons = ~0u;
         }
 
+        // Attract mode's start was refused (the page saying why closed by
+        // itself): leave that application out for this boot and go on.
+        if (att_launch) {
+            LOG("Attract mode: %s could not be started",
+                g_uf2[g_att_cand[att_cand].uf2].prog_name);
+            g_att_dead |= 1ull << att_cand;
+            attract_stop("start refused");
+            if (!attract_start()) att_unavailable = true;
+        }
+
         // Write the position back once the user has settled. Deliberately not
         // per keypress: sd_boot_ini_save() rewrites the whole file through a
         // .tmp and a rename.
-        if (pos_settle > 0 && --pos_settle == 0 && pos_dirty) {
+        if (pos_settle > 0 && --pos_settle == 0 && pos_dirty && att == ATT_OFF) {
             persist_cfg();
         }
 
@@ -3265,7 +3941,9 @@ int main()
             char bl1[2], bl2[2];
             getButtonLabels(bl1, bl2);
             char footer[SCREEN_COLS + 1];
-            if (level == LVL_CATEGORIES) {
+            if (att != ATT_OFF) {
+                snprintf(footer, sizeof(footer), "%s", ATTRACT_FOOTER);
+            } else if (level == LVL_CATEGORIES) {
                 snprintf(footer, sizeof(footer),
                          "L/R:category U/D:theme %s:open SEL:opt", bl1);
             } else if (g_have_categories) {
@@ -3276,10 +3954,34 @@ int main()
                          "L/R:app U/D:theme %s:go SEL:opt ST:help", bl1);
             }
             gui_set_footer(footer);
-            gui_draw_frame(gui_buf_cur(),
-                           slide_dir != 0 ? gui_buf_next() : nullptr,
-                           slide_p, slide_dir,
-                           gui_next_is_half_res());
+            const bool blink_off = att == ATT_BLINK &&
+                                   ((att_blink / ATTRACT_BLINK_PERIOD) & 1) && slide_dir == 0;
+            uint16_t *blank = nullptr;
+            if (gui_draws_in_place()) {
+                // The picture is only in the framebuffer: bring it back after
+                // another screen, and blink it by inverting it -- once
+                // blacked out there would be nothing to restore it from.
+                if (art_stale) reload_current();
+                gui_set_inverted(blink_off);
+            } else if (blink_off) {
+                // Attract mode's blink: the artwork off. The slide buffer is
+                // free between slides; painted black, it covers the screen.
+                blank = gui_buf_next();
+                if (blank) {
+                    if (gui_next_is_half_res()) gui_fill_solid_half_res(blank, 0);
+                    else                        gui_fill_solid(blank, 0);
+                }
+            }
+            art_stale = false;
+            if (blank) {
+                gui_draw_frame(gui_buf_cur(), blank, gui_slide_extent(GUI_SLIDE_RIGHT),
+                               GUI_SLIDE_RIGHT, gui_next_is_half_res());
+            } else {
+                gui_draw_frame(gui_buf_cur(),
+                               slide_dir != 0 ? gui_buf_next() : nullptr,
+                               slide_p, slide_dir,
+                               gui_next_is_half_res());
+            }
             if (slide_dir != 0 && slide_p >= gui_slide_extent(slide_dir)) {
                 if (gui_next_is_half_res()) {
                     // Half-res slide: don't swap (next is a 160x120 scratch).
@@ -3295,8 +3997,10 @@ int main()
                 slide_p   = 0;
             }
         } else {
+            // Attract mode's blink: the selection bar off.
+            const bool blink_off = att == ATT_BLINK && ((att_blink / ATTRACT_BLINK_PERIOD) & 1);
             if (level == LVL_CATEGORIES) drawCategoryMenu(cat_sel, cat_top, visible);
-            else                         drawMenu(sel, top, visible);
+            else                         drawMenu(blink_off ? -1 : sel, top, visible);
             DrawScreen(-1);
         }
         if (firstFrame) {
