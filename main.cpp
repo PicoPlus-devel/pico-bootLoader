@@ -1210,7 +1210,8 @@ static void applyDisplayMode(bool dvi)
 // --- Options menu (SELECT) --------------------------------------------------
 //
 // The picker's secondary screen: help, the text/graphical toggle, the display
-// mode (HSTX boards), BOOTSEL mode and (where it is built in) USB drive mode,
+// mode (HSTX boards), attract mode and its history of games, BOOTSEL mode and
+// (where it is built in) USB drive mode,
 // with a SYSTEM block below them describing the board, its flash, SRAM, PSRAM
 // and SD card. Same charcell chrome and the same pump as showHelpScreen(); A
 // applies the highlighted entry, B or SELECT returns.
@@ -1228,15 +1229,17 @@ enum OptionId {
     OPTID_MENU_MODE,
     OPTID_DISPLAY_MODE,
     OPTID_ATTRACT,
+    OPTID_ATTRACT_HISTORY,
     OPTID_BOOTSEL,
     OPTID_USB_DRIVE,
 };
 
-// Help, Menu mode, [Display mode], Attract mode, BOOTSEL, USB drive.
-// Everything below the entries is placed from this count: builds without the
-// display-mode row have the hint on row 13 and SYSTEM on 15, HSTX builds move
-// down by one entry (hint 15, SYSTEM 17, save-failed line 26).
-#define OPT_MAX_ENTRIES (5 + HSTX)
+// Help, Menu mode, [Display mode], Attract mode, Attract history, BOOTSEL, USB
+// drive. Everything below the entries is placed from this count: builds without
+// the display-mode row have the hint on row 15 and SYSTEM on 17, HSTX builds
+// move down by one entry (hint 17, SYSTEM 19, save-failed line 27, just above
+// the footer on row 28).
+#define OPT_MAX_ENTRIES (6 + HSTX)
 
 #define OPT_FIRST_ROW  3    // first entry row; entries are two rows apart
 #define OPT_ROW_STEP   2
@@ -1249,8 +1252,8 @@ enum OptionId {
 // neighbouring values always keep a space between them.
 #define SYS_HDR_ROW    (OPT_HINT_ROW + 2)
 #define SYS_BOARD_ROW  (SYS_HDR_ROW + 1)
-#define SYS_TABLE_ROW  (SYS_HDR_ROW + 3)   // column headings; Flash, SRAM, PSRAM, SD rows follow
-#define OPT_SAVEFAIL_ROW (SYS_TABLE_ROW + 6)   // one blank row below the SD row (22, or 24 with HSTX)
+#define SYS_TABLE_ROW  (SYS_HDR_ROW + 2)   // column headings; Flash, SRAM, PSRAM, SD rows follow
+#define OPT_SAVEFAIL_ROW (SYS_TABLE_ROW + 6)   // one blank row below the SD row (25, or 27 with HSTX)
 #define SYS_LABEL_COL  3
 #define SYS_BOARD_COL  12
 #define SYS_COL_W      9
@@ -1447,9 +1450,40 @@ void drawSysInfo(const SysInfo *si)
     }
 }
 
+// The emulators keep attract mode's rounds of games here (pico_shared menu.cpp,
+// ATTRACTDIR): /attract/attract_<EMU>.txt, _popular.txt and _last.txt. Without
+// them every emulator starts new rounds; they are made again as games are shown.
+#define ATTRACT_HISTORY_DIR "/attract"
+
+// The files in ATTRACT_HISTORY_DIR; with remove, deletes them first and returns
+// how many are left. Folders in it are left alone. Static scratch: core0's
+// stack is 3 KB. FatFs allows f_unlink() between f_readdir() calls on the same
+// folder (its delete_node example does it).
+static int attractHistoryFiles(bool remove)
+{
+    static DIR     dir;
+    static FILINFO fi;
+    static char    path[FF_MAX_LFN + sizeof(ATTRACT_HISTORY_DIR) + 1];
+    int left = 0, deleted = 0;
+    if (f_opendir(&dir, ATTRACT_HISTORY_DIR) != FR_OK) return 0;
+    while (f_readdir(&dir, &fi) == FR_OK && fi.fname[0]) {
+        if (fi.fattrib & AM_DIR) continue;
+        if (remove) {
+            snprintf(path, sizeof(path), ATTRACT_HISTORY_DIR "/%s", fi.fname);
+            const FRESULT fr = f_unlink(path);
+            if (fr == FR_OK) { deleted++; continue; }
+            LOG("Attract history: cannot delete %s: %d", path, (int)fr);
+        }
+        left++;
+    }
+    f_closedir(&dir);
+    if (remove) LOG("Options -> attract history: %d file(s) deleted, %d left", deleted, left);
+    return left;
+}
+
 void drawOptionsScreen(const OptionId *ids, int count, int sel,
                        const sd_boot_ini_t *ini, bool cfg_save_failed,
-                       const SysInfo *si)
+                       const SysInfo *si, int att_files)
 {
     char btn1[2], btn2[2];
     getButtonLabels(btn1, btn2);
@@ -1469,6 +1503,7 @@ void drawOptionsScreen(const OptionId *ids, int count, int sel,
 
         const char *label = "";
         const char *value = nullptr;
+        char files[16];
         switch (ids[i]) {
         case OPTID_HELP:       label = "Help";              break;
         case OPTID_MENU_MODE:  label = "Menu mode";
@@ -1479,6 +1514,15 @@ void drawOptionsScreen(const OptionId *ids, int count, int sel,
                                break;
         case OPTID_ATTRACT:    label = "Attract mode";
                                value = ini->attract ? "on" : "off";
+                               break;
+        case OPTID_ATTRACT_HISTORY: label = "Attract history";
+                               if (att_files <= 0) {
+                                   value = "empty";
+                               } else {
+                                   snprintf(files, sizeof(files), "%d file%s", att_files,
+                                            att_files == 1 ? "" : "s");
+                                   value = files;
+                               }
                                break;
         case OPTID_BOOTSEL:    label = "Enter BOOTSEL mode"; break;
         case OPTID_USB_DRIVE:  label = "USB drive mode";     break;
@@ -1496,6 +1540,7 @@ void drawOptionsScreen(const OptionId *ids, int count, int sel,
     case OPTID_MENU_MODE: hint = "Application list, or full-screen artwork"; break;
     case OPTID_DISPLAY_MODE: hint = "Video signal: HDMI, or plain DVI"; break;
     case OPTID_ATTRACT:   hint = "Play random games when nobody plays"; break;
+    case OPTID_ATTRACT_HISTORY: hint = "Forget the games attract mode showed"; break;
     case OPTID_BOOTSEL:   hint = "Restart for flashing over USB"; break;
     case OPTID_USB_DRIVE: hint = "Show the SD card on your computer"; break;
     }
@@ -1547,6 +1592,7 @@ OptionsResult showOptionsScreen(sd_boot_ini_t *ini, bool *cfg_save_failed,
     ids[count++] = OPTID_DISPLAY_MODE;
 #endif
     ids[count++] = OPTID_ATTRACT;
+    ids[count++] = OPTID_ATTRACT_HISTORY;
     ids[count++] = OPTID_BOOTSEL;
 #if FRENS_USB_MSC
     ids[count++] = OPTID_USB_DRIVE;
@@ -1568,10 +1614,11 @@ OptionsResult showOptionsScreen(sd_boot_ini_t *ini, bool *cfg_save_failed,
     // mode reboots whenever the card was written.
     SysInfo si;
     gatherSysInfo(&si);
+    int att_files = attractHistoryFiles(false);
 
     for (;;) {
         if (dirty) {
-            drawOptionsScreen(ids, count, sel, ini, *cfg_save_failed, &si);
+            drawOptionsScreen(ids, count, sel, ini, *cfg_save_failed, &si, att_files);
             dirty = false;
         }
 
@@ -1649,6 +1696,13 @@ OptionsResult showOptionsScreen(sd_boot_ini_t *ini, bool *cfg_save_failed,
                 } else {
                     *cfg_save_failed = false;
                 }
+                dirty = true;
+                break;
+
+            case OPTID_ATTRACT_HISTORY:
+                // Every emulator starts new rounds of games. The loader's own
+                // round of applications is in POWMAN registers, not here.
+                att_files = attractHistoryFiles(true);
                 dirty = true;
                 break;
 
@@ -2323,12 +2377,19 @@ int buildEmuList()
     return g_emu_count;
 }
 
+// "@unless=<program name>" in an attract feature: the application steps aside
+// when the one named takes part (doom_tiny for doom_tiny_full, the same demo).
+#define ATTRACT_UNLESS     "@unless="
+#define ATTRACT_UNLESS_LEN (sizeof(ATTRACT_UNLESS) - 1)
+
 // Why an application cannot take part in attract mode, from its attract feature
 // ("attract:<item>|<item>..."), or nullptr when it can. An item that starts
-// with '@' is a requirement: "@psram", the board must have PSRAM; one this
-// loader does not know is not met. Any other item is a path, and one of them
-// must be on the card: a file, or a folder that is not empty. No paths: no
-// check. Static scratch: core0's stack is 3 KB.
+// with '@' is a requirement: "@psram", the board must have PSRAM;
+// "@unless=<program name>", decided once every candidate is known
+// (attractBuildCandidates); one this loader does not know is not met. Any
+// other item is a path, and one of them must be on the card: a file, or a
+// folder that is not empty. No paths: no check. Static scratch: core0's stack
+// is 3 KB.
 const char *attractUnavailable(const char *feature)
 {
     static FILINFO fi;
@@ -2340,8 +2401,11 @@ const char *attractUnavailable(const char *feature)
         const char *end = strchr(p, '|');
         size_t n = end ? (size_t)(end - p) : strlen(p);
         if (n && *p == '@') {
-            if (n != 6 || strncmp(p, "@psram", 6) != 0) return "needs a newer loader";
-            if (!Frens::isPsramEnabled()) return "needs PSRAM";
+            const bool psram  = n == 6 && strncmp(p, "@psram", 6) == 0;
+            const bool unless = n > ATTRACT_UNLESS_LEN &&
+                                strncmp(p, ATTRACT_UNLESS, ATTRACT_UNLESS_LEN) == 0;
+            if (!psram && !unless) return "needs a newer loader";
+            if (psram && !Frens::isPsramEnabled()) return "needs PSRAM";
         } else if (n && !found) {
             paths = true;
             if (n >= sizeof(path)) n = sizeof(path) - 1;
@@ -2360,6 +2424,29 @@ const char *attractUnavailable(const char *feature)
         p = end + 1;
     }
     return (!paths || found) ? nullptr : "nothing on the card";
+}
+
+// The candidate that an "@unless=<program name>" item of candidate c's attract
+// feature names, or -1 when no such item names a candidate.
+static int attractUnlessTaker(int c)
+{
+    const char *p = strchr(g_uf2[g_att_cand[c].uf2].attract, ':');
+    if (!p) return -1;
+    for (p++; *p; ) {
+        const char *end = strchr(p, '|');
+        const size_t n = end ? (size_t)(end - p) : strlen(p);
+        if (n > ATTRACT_UNLESS_LEN && strncmp(p, ATTRACT_UNLESS, ATTRACT_UNLESS_LEN) == 0) {
+            const char  *name = p + ATTRACT_UNLESS_LEN;
+            const size_t len  = n - ATTRACT_UNLESS_LEN;
+            for (int o = 0; o < g_att_cand_count; o++) {
+                const char *pn = g_uf2[g_att_cand[o].uf2].prog_name;
+                if (o != c && strlen(pn) == len && strncmp(pn, name, len) == 0) return o;
+            }
+        }
+        if (!end) break;
+        p = end + 1;
+    }
+    return -1;
 }
 
 // Fill g_att_cand from every category (or from the flat list on a card without
@@ -2418,17 +2505,36 @@ void attractBuildCandidates()
     } else {
         consider(-1);
     }
+
+    // "@unless=<program name>": out when the application named takes part.
+    // Decided against the list as found, so two that name each other both
+    // drop out.
+    uint64_t out = 0;
+    for (int c = 0; c < g_att_cand_count; c++) {
+        const int o = attractUnlessTaker(c);
+        if (o < 0) continue;
+        out |= 1ull << c;
+        LOG("  attract: %-20s left out: %s takes part", g_uf2[g_att_cand[c].uf2].prog_name,
+            g_uf2[g_att_cand[o].uf2].prog_name);
+    }
+    if (out) {
+        int k = 0;
+        for (int c = 0; c < g_att_cand_count; c++) {
+            if (!(out & (1ull << c))) g_att_cand[k++] = g_att_cand[c];
+        }
+        g_att_cand_count = k;
+    }
     LOG("Attract mode: %d application(s) to choose from", g_att_cand_count);
 }
 
 // --- Attract mode's rounds ------------------------------------------------------
-// As in Galagino, in rounds, now at two levels. First a category: each category
-// once, in random order, before any comes again, so that every category is shown
-// as often as the others however many applications it holds. Then, within that
-// category, an application its round there has not started yet: every
-// application of a category once before any comes back. Without categories the
-// whole list is one category. An application listed in two categories has one
-// "started" bit for both.
+// As in Galagino, in rounds: every application that takes part is started once,
+// in random order, before any is started again, so each comes up as often as
+// the others, whichever category lists it. The category is only the route the
+// menu walks to it: one of those that list it, and not the one the last start
+// went through while an application elsewhere is still to come in this round.
+// The application that has just run (the one in flash) is never next. Without
+// categories the whole list is one category.
 //
 // The rounds must outlive the runs, and the watchdog scratch registers are all
 // taken (0..3 and 5 by applications, 4 by the SDK, 6 and 7 by the loader
@@ -2440,17 +2546,17 @@ void attractBuildCandidates()
 //
 //   POWMAN scratch[0]  ATTRACT_ROUND_MAGIC << 16 | number of candidates
 //   POWMAN scratch[1]  hash of the candidates' program names and categories
-//   POWMAN scratch[2]  started in their category's round: candidates 0..31, a bit each
+//   POWMAN scratch[2]  started in this round: candidates 0..31, a bit each
 //   POWMAN scratch[3]  candidates 32..63
-//   POWMAN scratch[4]  categories shown in this round, a bit each
+//   POWMAN scratch[4]  unused (categories shown, when categories had rounds)
 //   POWMAN scratch[5]  1 + the category the last start went through; 0: none
 //
 // A card whose applications changed has another count or hash: new rounds.
-#define ATTRACT_ROUND_MAGIC 0xA77Eu
+// The magic changed with the meaning of the bits (0xA77E: rounds per category).
+#define ATTRACT_ROUND_MAGIC 0xA77Fu
 
 struct AttractRound {
-    uint64_t started;   // applications started in their category's round
-    uint32_t cats;      // categories shown in this round
+    uint64_t started;   // applications started in this round
     int      last_cat;  // the category the last start went through, -1: none
 };
 
@@ -2469,13 +2575,12 @@ uint32_t attractCandHash()
 
 AttractRound attractRoundLoad()
 {
-    AttractRound r = {0, 0, -1};
+    AttractRound r = {0, -1};
     if (powman_hw->scratch[0] != ((ATTRACT_ROUND_MAGIC << 16) | (uint32_t)g_att_cand_count) ||
         powman_hw->scratch[1] != attractCandHash()) {
         return r;
     }
     r.started  = (uint64_t)powman_hw->scratch[2] | ((uint64_t)powman_hw->scratch[3] << 32);
-    r.cats     = powman_hw->scratch[4];
     r.last_cat = (int)powman_hw->scratch[5] - 1;
     if (r.last_cat < -1 || r.last_cat >= 32) r.last_cat = -1;
     return r;
@@ -2487,7 +2592,7 @@ void attractRoundSave(const AttractRound &r)
     powman_hw->scratch[1] = attractCandHash();
     powman_hw->scratch[2] = (uint32_t)r.started;
     powman_hw->scratch[3] = (uint32_t)(r.started >> 32);
-    powman_hw->scratch[4] = r.cats;
+    powman_hw->scratch[4] = 0;
     powman_hw->scratch[5] = (uint32_t)(r.last_cat + 1);
 }
 
@@ -2525,42 +2630,33 @@ void attractRoundStarted(int c, int cat)
     AttractRound r = attractRoundLoad();
     const int k = cat < 0 ? 0 : cat;
     r.started |= 1ull << c;
-    r.cats    |= 1u << k;
     r.last_cat = k;
     attractRoundSave(r);
-    int cats = 0, cats_shown = 0, apps = 0, apps_started = 0;
-    uint32_t all = 0;
+    int started = 0;
     for (int i = 0; i < g_att_cand_count; i++) {
-        all |= attractCatsOf(i);
-        if (attractCatsOf(i) & (1u << k)) {
-            apps++;
-            if (r.started & (1ull << i)) apps_started++;
-        }
+        if (r.started & (1ull << i)) started++;
     }
-    for (int b = 0; b < 32; b++) {
-        if (all & (1u << b)) { cats++; if (r.cats & (1u << b)) cats_shown++; }
-    }
-    LOG("Attract mode: %d of %d categories this round; %d of %d applications in %s",
-        cats_shown, cats, apps_started, apps, attractCatName(k));
+    LOG("Attract mode: %d of %d applications this round; through %s",
+        started, g_att_cand_count, attractCatName(k));
 }
 
 // The next candidate, and in *cat the category to reach it through (-1 without
-// categories). The category: one this round has not shown, with an application
-// that can start now -- not failed this boot, and not the one in flash, the one
-// that just ran; with none left a new round, which does not begin with the
-// category just shown when there is another. Then an application of that
-// category its round there has not started, other than the one in flash; with
-// none left a new round in that category. -1 when nothing can be started.
+// categories). The candidate: one this round has not started, that can start
+// now -- not failed this boot, and not the one in flash, the one that just
+// ran; with none left a new round. Among those, one that can be reached
+// through another category than the last start went through, when there is
+// one. The category: one that lists it, not the last one when it has another.
+// -1 when nothing can be started.
 int attractPick(int *cat)
 {
     AttractRound r = attractRoundLoad();
-    uint32_t usable = 0;
+    uint64_t usable = 0;
     int alive = 0, only = -1;
     for (int c = 0; c < g_att_cand_count; c++) {
         if (g_att_dead & (1ull << c)) continue;
         alive++;
         only = c;
-        if (!attractInFlash(c)) usable |= attractCatsOf(c);
+        if (!attractInFlash(c)) usable |= 1ull << c;
     }
     *cat = -1;
     if (alive == 0) return -1;
@@ -2569,30 +2665,26 @@ int attractPick(int *cat)
         if (g_have_categories) *cat = attractRandomBit(attractCatsOf(only));
         return only;
     }
-    uint32_t fresh = usable & ~r.cats;
-    if (!fresh) {
-        LOG("Attract mode: every category shown, a new round");
-        r.cats = 0;
-        fresh = usable;
-        if (r.last_cat >= 0 && (fresh & ~(1u << r.last_cat))) fresh &= ~(1u << r.last_cat);
-        attractRoundSave(r);
-    }
-    const int k = attractRandomBit(fresh);
-    uint64_t in_k = 0, all_k = 0;
-    for (int c = 0; c < g_att_cand_count; c++) {
-        if (!(attractCatsOf(c) & (1u << k))) continue;
-        all_k |= 1ull << c;
-        if (!(g_att_dead & (1ull << c)) && !attractInFlash(c)) in_k |= 1ull << c;
-    }
-    uint64_t apps = in_k & ~r.started;
+    uint64_t apps = usable & ~r.started;
     if (!apps) {
-        LOG("Attract mode: every application in %s shown, a new round there", attractCatName(k));
-        r.started &= ~all_k;
+        LOG("Attract mode: every application shown, a new round");
+        r.started = 0;
         attractRoundSave(r);
-        apps = in_k;
+        apps = usable;
     }
-    if (g_have_categories) *cat = k;
-    return attractRandomBit(apps);
+    const uint32_t not_last = (g_have_categories && r.last_cat >= 0) ? ~(1u << r.last_cat) : ~0u;
+    uint64_t elsewhere = 0;
+    for (int c = 0; c < g_att_cand_count; c++) {
+        if ((apps & (1ull << c)) && (attractCatsOf(c) & not_last)) elsewhere |= 1ull << c;
+    }
+    if (elsewhere) apps = elsewhere;
+    const int c = attractRandomBit(apps);
+    if (g_have_categories) {
+        uint32_t cats = attractCatsOf(c);
+        if (cats & not_last) cats &= not_last;
+        *cat = attractRandomBit(cats);
+    }
+    return c;
 }
 
 // The candidate for the application called prog_name, or -1.

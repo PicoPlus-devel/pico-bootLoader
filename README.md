@@ -608,13 +608,13 @@ starts a random game from its folder under `/roms`; the arcade games, *Doom* and
 - When nobody touches a control for three minutes, the application returns to
   the menu. The menu shows that application for a few seconds and then spins
   on to the next one.
-- With categories, attract mode first picks a category, then an application in
-  it, so every category comes up equally often, however many applications it
-  holds. Categories come in rounds: each is shown once, in random order, before
-  any is shown again. Within a category, every application is started once
-  before any is started again. The application that has just run is never
-  started straight after itself. Without categories the whole list is one
-  round. Switching the board off starts new rounds.
+- Applications come in rounds: every application that takes part is started
+  once, in random order, before any is started again, so each comes up equally
+  often, whichever category lists it. The carousel reaches it through one of
+  its categories, and not through the category shown last when an application
+  elsewhere is still to come in the round. The application that has just run is
+  never started straight after itself. Switching the board off starts new
+  rounds.
 
 Attract mode is on by default. The *Attract mode* entry of the
 [options menu](#the-options-menu) switches it off or on and records the choice
@@ -625,6 +625,8 @@ menu remembers.
 An application takes part only when it was built with attract-mode support and
 its games are on the card. On a board without PSRAM, *Super Nintendo*, *OutRun*,
 *Doom Full* and *Duke Nukem 3D* do not take part, as they cannot run there.
+Where *Doom Full* takes part, *Doom* does not, as both show the same
+demonstration.
 
 | Application | Games are picked from |
 |---|---|
@@ -655,7 +657,9 @@ every game once, in random order, before any comes again, and a new round does
 not start with the game shown last. The games of the current round are listed
 in `/attract/attract_<EMU>.txt` on the SD card (for example
 `/attract/attract_NES.txt`); delete the file to start a new round. The
-`/attract` folder is created when attract mode first starts a game. A game
+*Attract history* entry of the [options menu](#the-options-menu) deletes all of
+them at once. The `/attract` folder is created when attract mode first starts a
+game. A game
 started by attract mode is not added to the emulator's list of recently played
 games.
 
@@ -731,6 +735,7 @@ with UP / DOWN, confirm with A, and return with B.
 | Menu mode | Switches between the text list and the full-screen artwork view. The choice is written to `/boot.txt` and restored on the next boot. |
 | Display mode | Boards with HSTX video only. Switches the video signal between HDMI, which carries picture and sound, and DVI, which carries the picture only and suits monitors and TVs that do not accept an HDMI signal. The change takes effect at once; the choice is written to `/boot.txt` as `DISPLAY=` and restored on the next boot. Until a mode is chosen, the Murmulator M2 (HW_CONFIG 13) uses DVI and all other boards use HDMI. If the screen stays black, switch to DVI without a picture: in the menu, press SELECT and keep it held, then press A. The order matters: if A is pressed first, the selected application starts instead. Applications started from the menu use the same display mode: before an emulator or arcade game starts, the menu sets the *Display Mode* in that application's own settings file to match (in DVI also its *External Audio*, as DVI carries no sound), and Doom, Duke Nukem 3D, Quake II and Diablo read the mode from `/boot.txt`. A mode changed inside an application applies until the next start from the menu. ColecoVision keeps the mode it was built with. |
 | Attract mode | Switches [attract mode](#attract-mode) on or off. The choice is written to `/boot.txt` as `ATTRACT=` and restored on the next boot. It is on until switched off. |
+| Attract history | Shows how many files the emulators keep in `/attract` to remember which games [attract mode](#attract-mode) has shown. A deletes them, so every emulator starts new rounds of games. Folders inside `/attract` and read-only files are left in place. The order of the applications is not affected; it starts anew when the board is switched off. |
 | Enter BOOTSEL mode | Restarts the board into the RP2350 ROM bootloader, where it appears on a computer as a drive named `RP2350`. Copy a `.uf2` onto it to update the bootloader itself, or reset the board to return to the menu. |
 | USB drive mode | Presents the SD card to a computer as a USB mass-storage device, so applications, the index file and artwork can be changed without removing the card. |
 
@@ -1394,8 +1399,11 @@ the card. The loader picks the application only when at least one of them
 exists; a folder must not be empty. `attract:` alone means no check. An item
 that starts with `@` is a requirement instead of a path: `@psram` keeps the
 application out of attract mode on a board without PSRAM, as in
-`attract:@psram|/roms/SNES`. A requirement the loader does not know also keeps
-it out. Builds without the declaration are never picked.
+`attract:@psram|/roms/SNES`. `@unless=<program name>` keeps the application out
+while the application with that program name takes part, as in
+`attract:@unless=doom_tiny_full`: the shareware *Doom* steps aside for *Doom
+Full*. A requirement the loader does not know also keeps it out. Builds without
+the declaration are never picked.
 
 When the loader starts the application for attract mode, it sets `scratch[7]` to
 `0xB007A000` plus the game time in minutes in the lowest byte. The application

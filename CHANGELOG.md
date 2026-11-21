@@ -30,11 +30,12 @@ menu (SELECT). *Quake II*, *Diablo* and *ColecoVision* do not take part, and
 on a board without PSRAM neither do *Super Nintendo*, *OutRun*, *Doom Full* and
 *Duke Nukem 3D*.
 
-Every category gets its turn before any comes back, so a category with many
-applications is not shown more often than the others; within a category every
-application gets its turn, and within an emulator every game does too. Well-known games come up more often than the rest: the
+Every application gets its turn before any comes back, whichever category it
+is in, and within an emulator every game does too. *Doom* steps aside where
+*Doom Full* can run, as both show the same demo. Well-known games come up more often than the rest: the
 SD-card archive lists the most popular games of each system, taken from the
-community ratings in the LaunchBox Games Database.
+community ratings in the LaunchBox Games Database. *Attract history* in the
+options menu makes attract mode forget which games it has shown.
 
 PC Engine CD games take part when a System Card BIOS is on the card: attract
 mode presses RUN on the BIOS screen. TI-99/4A cartridges start by themselves,
