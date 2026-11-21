@@ -46,8 +46,9 @@ Doom's entry downloads `doom1.whx` from the pico-doom tag v0.3 and converts it
 into `doom1-whx-bootloader.uf2` at 0x10200000 itself; pico-doom does not release
 that file, so that it cannot be flashed by mistake. The address in the entry
 must match pico-doom's bootloader builds (`TINY_WAD_ADDR` in its
-`*_cflags.h`). `build_emulators.sh` builds Doom from pico-doom's latest release
-tag, so that tag must be v0.4 or later, the first to put the WAD there on every
+`*_cflags.h`). `build_emulators.sh` builds Doom from pico-doom's latest tag
+(see [Bootloader-only application tags](#bootloader-only-application-tags)), so
+that tag must be v0.4 or later, the first to put the WAD there on every
 board and to name it `doom1-whx-bootloader.uf2`. The SD-card archive no longer
 packs the WAD image, so a card made from it runs *Doom!* only after updateAll
 has run.
@@ -76,6 +77,33 @@ the archive and the one on the release are the same. A copy already on a tag is 
 told that its asset was replaced, so a bad exe needs a new version. To stop every copy
 from offering an update, remove `program_asset` from `updateAll/updateAll.json` on
 `main`.
+
+## Bootloader-only application tags
+
+An application that changed only for the loader, with nothing new for anyone who
+runs it on its own, is tagged without a release: its latest release tag followed
+by `_bl`, such as `v0.56.1_bl` after `v0.56.1`, or `v0.5-alpha_bl` after
+`v0.5-alpha`. v0.12 introduced them, for attract mode.
+
+- Every application's release workflow would match such a tag through `v*.*`, so
+  its tag filter ends in `"!v*_bl"`. GitHub reads the workflow of the tagged
+  commit, so the filter must be in that commit; push the commit before the tag.
+  After the push, `gh run list -R PicoPlus-devel/<repo> -L 3` shows no new run.
+- Base the tag on the latest release tag, nothing else. By version order a `_bl`
+  tag sorts just above its base and below any later release, which is all
+  `build_emulators.sh` relies on: it builds the newest tag that has no
+  pre-release, and so the `_bl` tag until the next release. `v0.56_bl` would sort
+  above `v0.56.1` and even a later `v0.56.2`, and `v0.57_bl` above a later
+  `v0.57`.
+- The application's `CHANGELOG.md` gets a section headed with the tag, which says
+  that the version is built for the loader only.
+- A `_bl` tag has no release page, so the loader's CHANGELOG links to the
+  application's `CHANGELOG.md` at that tag. `build_emulators.sh -z` takes
+  `ld2pico.exe` from the pico-dragonslair release the `_bl` tag is based on.
+- Until the loader release that ships a `_bl` tag is published, the tag may be
+  moved to a later commit, as it was for v0.12 after a `pico_shared` update:
+  `git tag -f <tag>` and `git push -f origin <tag>`. After that release, leave
+  it where it is: the archive's `emu/versions.txt` names it.
 
 ## Prerequisites
 
@@ -127,7 +155,8 @@ This is the common case: an emulator repo got a new tag, so the card content
 changes but the board does not need re-flashing.
 
 ```bash
-# 1. Build every emulator from its latest release tag and pack the archive.
+# 1. Build every emulator from its latest tag (a release tag, or the
+#    bootloader-only <tag>_bl above it) and pack the archive.
 #    -j 3 keeps total load near nproc; -z requires -c all. -r is the tag of step 3.
 ./build_emulators.sh -c all -j 3 -z -r v0.2.1
 ```
@@ -257,8 +286,10 @@ from `github.sha`, so it will point at whatever is current.
   `f2c8be9` — but the substitution is not always a no-op. For v0.9 Salamander
   v0.2 and Commodore 64 v0.2 pin `cd147e0`, every other emulator tag pins
   `8b93b28`, and the bundle is built against `main`, `f16f692`. For v0.10 every
-  emulator tag pins `8048999`, which is `main`. The whole bundle is built against
-  the one `pico_shared` `main` that `emu/versions.txt` records.
+  emulator tag pins `8048999`, which is `main`. For v0.12 every `_bl` tag of an
+  application with `pico_shared` pins `ce2dbfc`, which is `main`. The whole
+  bundle is built against the one `pico_shared` `main` that `emu/versions.txt`
+  records.
   An older tag that no longer builds against `main` shows up as a `FAIL` in the
   grand summary.
 - **A tag pushed from CI would not trigger this workflow** — GitHub does not fire

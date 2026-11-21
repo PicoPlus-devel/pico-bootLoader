@@ -653,19 +653,21 @@ it does not pick the *TI BASIC* entry. The Videopac emulator presses START once,
 which answers a cartridge's *SELECT GAME* prompt with 1. Games come in rounds as well: an emulator shows
 every game once, in random order, before any comes again, and a new round does
 not start with the game shown last. The games of the current round are listed
-in `/attract_<EMU>.txt` in the root of the SD card (for example
-`/attract_NES.txt`); delete the file to start a new round. A game started by
-attract mode is not added to the emulator's list of recently played games.
+in `/attract/attract_<EMU>.txt` on the SD card (for example
+`/attract/attract_NES.txt`); delete the file to start a new round. The
+`/attract` folder is created when attract mode first starts a game. A game
+started by attract mode is not added to the emulator's list of recently played
+games.
 
 Popular games come up more often. `/emu/attract/<EMU>.txt` (in the SD-card
 archive) lists the best-known games of each system: per system, the 100 games
 with the most community ratings in the
 [LaunchBox Games Database](https://gamesdb.launchbox-app.com/), leaving out
 those rated below 3.5 of 5. The games on the card that match the list form a
-pile of their own, with its own round in `/attract_<EMU>_popular.txt`, and a
-popular game is about four times as likely to be started as any other game.
-`/attract_<EMU>_last.txt` names the game shown last, which does not come
-straight back from either pile.
+pile of their own, with its own round in `/attract/attract_<EMU>_popular.txt`,
+and a popular game is about four times as likely to be started as any other
+game. `/attract/attract_<EMU>_last.txt` names the game shown last, which does
+not come straight back from either pile.
 Without the list all games have the same chance. A game matches when its title
 does, whatever its region and version tags, so *Legend of Zelda, The (USA).nes*
 matches *The Legend of Zelda*; the list also carries the alternate (mostly
@@ -1000,7 +1002,7 @@ project.
 /emu/assets/themes/1..9/                   optional extra themes (UP/DOWN to switch)
 /emu/assets/screensaver/*.png|.jpg         screensaver images (optional, not themed)
 /emu/attract/<EMU>.txt                     popular games per emulator, favoured by attract mode
-/attract_<EMU>.txt, /attract_<EMU>_popular.txt   attract mode's rounds of games (written by the emulators)
+/attract/attract_<EMU>*.txt                attract mode's rounds of games (written by the emulators)
 /roms/doom/doom1-whx-bootloader.uf2        Doom!'s WAD data image, flashed by the loader (from updateAll)
 /bios/                                     BIOS files of the emulators (from updateAll, or your own)
 /updateAll/                                ROM set, BIOS and game data installer, run on a computer (optional)
@@ -1464,14 +1466,18 @@ CYW43 driver for the Pico 2 W LED, which is no longer released (see
 `releases/` (requires `picotool`).
 
 The serial log marks each start-up phase with the time since power-on
-(`T+<ms> (+<ms>): <phase>`). Output is held in an 8 KB RAM buffer and sent in
-the background, so logging does not hold up the start-up; it may therefore
-continue for a moment after the menu has appeared. A crash that stops the
-board without a panic message (a hard fault) loses whatever was still in the
-buffer. The log lists every `.uf2`, index row and category only in a build
+(`T+<ms> (+<ms>): <phase>`). Output goes straight to the UART: `printf` waits
+until the UART has taken each line, so the log is complete up to a crash. Two
+lines say why the board started. `Boot cause` says whether a watchdog reset
+did, as it does when an application returns to the loader. `Reset cause` names
+the last chip-level reset (`POR` when the board was switched on, `RUN` for its
+reset pin, `BOR` when the supply dropped, `GLITCH`), the reason of the watchdog
+(`TIMER` or `FORCE`, or `none` when it did not reset the board) and the boot
+type the bootrom reports. A watchdog reset leaves the chip-level reset as it
+was. The log lists every `.uf2`, index row and category only in a build
 configured with `-DBOOT_VERBOSE_LOG=ON`
 (`EXTRA_CMAKE_ARGS=-DBOOT_VERBOSE_LOG=ON ./bld.sh ...`); by default those lines
-are left out so that they do not fill the buffer.
+are left out, as sending them holds up the start-up.
 
 The image must fit the 512 KB bootloader region; the linker errors out if it
 does not, and every link prints its occupancy. The released binaries sit between
@@ -1486,9 +1492,13 @@ produces the bootloader-format `.uf2` files, placing them under `emu/<HW_CONFIG>
 
 By default each repository is built from its **latest release tag**, with the tag
 stamped into that repository's own `pico_shared/menu.h` `SWVERSION` so the
-emulator reports its version instead of a build date. `-B` asks interactively for
-a branch instead, and `-m` builds each repository's default branch; neither
-stamps a version.
+emulator reports its version instead of a build date. A repository that changed
+only for the loader has a bootloader-only tag instead, its latest release tag
+followed by `_bl` (such as `v0.56.1_bl`), which has no release of its own; it
+sorts above its release tag, so it is the one built until the next release (see
+[RELEASING.md](RELEASING.md#bootloader-only-application-tags)). `-B` asks
+interactively for a branch instead, and `-m` builds each repository's default
+branch; neither stamps a version.
 
 > **`pico_shared` is taken from `main`, not from the revision the tag pins.** Tag
 > mode builds each emulator's tagged source against `pico_shared` `main`; every

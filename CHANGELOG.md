@@ -10,7 +10,14 @@ A resident .uf2 bootloader / front-end for the RP2350 retro-emulator family (pic
 copyright of their manufacturers and are not part of this project. Holding the
 rights to them is your responsibility.
 
-## Next release
+## v0.12
+
+When the menu is left alone, attract mode now starts the applications and their
+games by itself.
+
+> **Do you need to update?** Yes. Re-flash the board, and replace the `/emu` and
+> `/updateAll` folders on the card with the ones in the new
+> `pico-bootLoader_sdcard.zip`, or let **updateAll** install it.
 
 ### New: attract mode
 
@@ -45,6 +52,56 @@ and *Duke Nukem 3D* in the SD-card archive. Older versions are never picked.
 - On a board without PSRAM, the menu no longer lists the applications that
   cannot run there: *Super Nintendo*, *OutRun*, *Doom Full*, *Duke Nukem 3D*,
   *Quake II* and *Diablo*.
+
+### Updated applications
+
+Every application except *ColecoVision* has a new version in the SD-card
+archive, made for this loader only. It adds attract mode or, for *Quake II* and
+*Diablo*, lets the menu hide the game on a board without PSRAM, and it is built
+with Pico SDK 2.3.1. These versions have a tag ending in `_bl` and no release of
+their own: to run an application without the loader, keep using its latest
+release. Each link below leads to the application's changelog.
+
+- Emulators: **Nintendo Entertainment System**
+  [v0.56.1_bl](https://github.com/PicoPlus-devel/pico-infonesPlus/blob/v0.56.1_bl/CHANGELOG.md#v0561_bl),
+  **Super Nintendo**
+  [v0.11_bl](https://github.com/PicoPlus-devel/pico-snesPlus/blob/v0.11_bl/CHANGELOG.md#v011_bl),
+  **Sega Genesis/Mega Drive**
+  [v0.21_bl](https://github.com/PicoPlus-devel/pico-genesisPlus/blob/v0.21_bl/CHANGELOG.md#v021_bl),
+  **Sega Master System/Game Gear**
+  [v0.34_bl](https://github.com/PicoPlus-devel/pico-smsplus/blob/v0.34_bl/CHANGELOG.md#v034_bl),
+  **PC Engine**
+  [v0.10_bl](https://github.com/PicoPlus-devel/pico-pcePlus/blob/v0.10_bl/CHANGELOG.md#v010_bl),
+  **Game Boy**
+  [v0.16_bl](https://github.com/PicoPlus-devel/pico-peanutGB/blob/v0.16_bl/CHANGELOG.md#v016_bl),
+  **Videopac**
+  [v0.7_bl](https://github.com/PicoPlus-devel/pico-pacPlus/blob/v0.7_bl/CHANGELOG.md#v07_bl),
+  **TI-99/4A**
+  [v0.4_bl](https://github.com/PicoPlus-devel/pico-994A/blob/v0.4_bl/CHANGELOG.md#v04_bl) and
+  **Commodore 64/128**
+  [v0.3_bl](https://github.com/PicoPlus-devel/pico-c64/blob/v0.3_bl/CHANGELOG.md#v03_bl).
+- Arcade games: **OutRun**
+  [v0.7_bl](https://github.com/PicoPlus-devel/pico-outrun/blob/v0.7_bl/CHANGELOG.md#v07_bl),
+  **Phoenix**
+  [v0.3_bl](https://github.com/PicoPlus-devel/pico-phoenix/blob/v0.3_bl/CHANGELOG.md#v03_bl),
+  **Moon Cresta**
+  [v0.3_bl](https://github.com/PicoPlus-devel/pico-mooncresta/blob/v0.3_bl/CHANGELOG.md#v03_bl),
+  **Galagino**
+  [v0.3_bl](https://github.com/PicoPlus-devel/pico-galagino/blob/v0.3_bl/CHANGELOG.md#v03_bl),
+  **Dragon's Lair**
+  [v0.2_bl](https://github.com/PicoPlus-devel/pico-dragonslair/blob/v0.2_bl/CHANGELOG.md#v02_bl),
+  **1943**
+  [v0.3_bl](https://github.com/PicoPlus-devel/pico-1943/blob/v0.3_bl/CHANGELOG.md#v03_bl) and
+  **Salamander**
+  [v0.3_bl](https://github.com/PicoPlus-devel/pico-salamander/blob/v0.3_bl/CHANGELOG.md#v03_bl).
+- Ports: **Doom**
+  [v0.7_bl](https://github.com/PicoPlus-devel/pico-doom/blob/v0.7_bl/CHANGELOG.md#v07_bl),
+  **Duke Nukem 3D**
+  [v0.7_bl](https://github.com/PicoPlus-devel/pico-duke3D/blob/v0.7_bl/CHANGELOG.md#v07_bl),
+  **Quake II**
+  [v0.5-alpha_bl](https://github.com/PicoPlus-devel/pico-quake2/blob/v0.5-alpha_bl/CHANGELOG.md#v05-alpha_bl) and
+  **Diablo**
+  [v0.3-alpha_bl](https://github.com/PicoPlus-devel/pico-lutionX/blob/v0.3-alpha_bl/CHANGELOG.md#v03-alpha_bl).
 
 ## v0.11
 

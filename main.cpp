@@ -152,9 +152,8 @@ static uint32_t appFlashEnd()
 #define LOG(fmt, ...) printf("[bootLoader] " fmt "\n", ##__VA_ARGS__)
 
 // Per-item detail: one line per .uf2, per index row, per category. At 115200
-// baud the UART needs ~87 us per character; the output is buffered, but on a
-// full card these lines alone would fill much of the buffer, after which every
-// write waits for the UART again. Build with
+// baud the UART needs ~87 us per character and printf waits for it, so on a
+// full card these lines alone would hold up the start-up noticeably. Build with
 // EXTRA_CMAKE_ARGS=-DBOOT_VERBOSE_LOG=ON to get them back. The if (0) keeps the
 // arguments type-checked when they are compiled out.
 #if BOOT_VERBOSE_LOG
@@ -1922,6 +1921,41 @@ void logBootCause()
     bool wd_enable   = watchdog_enable_caused_reboot();
     LOG("Boot cause: watchdog=%d  watchdog_enable=%d  (menu-triggered reboot if both true)",
         (int)wd, (int)wd_enable);
+
+    // The last chip-level reset, which a watchdog reset leaves as it is: after
+    // a boot that was not a watchdog reset it says whether the board was
+    // switched on (POR), reset with its RUN pin, lost its supply (BOR) or had a
+    // glitch, so an application that failed to reset can be told apart from a
+    // board that was reset by hand. The watchdog's own reason (TIMER, FORCE)
+    // and the bootrom's boot type complete the picture.
+    static const struct { uint32_t bit; const char *name; } chip_resets[] = {
+        {POWMAN_CHIP_RESET_HAD_POR_BITS,                       "POR"},
+        {POWMAN_CHIP_RESET_HAD_BOR_BITS,                       "BOR"},
+        {POWMAN_CHIP_RESET_HAD_RUN_LOW_BITS,                   "RUN"},
+        {POWMAN_CHIP_RESET_HAD_DP_RESET_REQ_BITS,              "DEBUG"},
+        {POWMAN_CHIP_RESET_HAD_RESCUE_BITS,                    "RESCUE"},
+        {POWMAN_CHIP_RESET_HAD_WATCHDOG_RESET_POWMAN_ASYNC_BITS, "WD_POWMAN_ASYNC"},
+        {POWMAN_CHIP_RESET_HAD_WATCHDOG_RESET_POWMAN_BITS,     "WD_POWMAN"},
+        {POWMAN_CHIP_RESET_HAD_WATCHDOG_RESET_SWCORE_BITS,     "WD_SWCORE"},
+        {POWMAN_CHIP_RESET_HAD_SWCORE_PD_BITS,                 "SWCORE_PD"},
+        {POWMAN_CHIP_RESET_HAD_GLITCH_DETECT_BITS,             "GLITCH"},
+        {POWMAN_CHIP_RESET_HAD_HZD_SYS_RESET_REQ_BITS,         "SYSRESETREQ"},
+        {POWMAN_CHIP_RESET_HAD_WATCHDOG_RESET_PSM_BITS,        "WD_PSM"},
+    };
+    const uint32_t chip = powman_hw->chip_reset;
+    char names[96] = "";
+    size_t len = 0;
+    for (const auto &r : chip_resets) {
+        if ((chip & r.bit) && len < sizeof(names))
+            len += snprintf(names + len, sizeof(names) - len, "%s%s", len ? "+" : "", r.name);
+    }
+    const uint32_t reason = watchdog_hw->reason;
+    LOG("Reset cause: last chip reset %s (CHIP_RESET=0x%08lX)  watchdog reason=%s%s%s  boot type=%d",
+        names[0] ? names : "none", (unsigned long)chip,
+        (reason & WATCHDOG_REASON_TIMER_BITS) ? "TIMER" : "",
+        (reason & WATCHDOG_REASON_FORCE_BITS) ? ((reason & WATCHDOG_REASON_TIMER_BITS) ? "+FORCE" : "FORCE") : "",
+        reason ? "" : "none",
+        rom_get_last_boot_type());
 }
 
 // Inspect the application partition's vector table and report whether it looks

@@ -9,6 +9,12 @@
 # is skipped (see latest_tag_of). This is the mode the release bundle is cut
 # from; add -z to also pack the SD-card zip.
 #
+# A repo that changed only for the loader carries a bootloader-only tag,
+# <release tag>_bl (v0.56.1_bl): tagged, never released, and kept from starting
+# its release workflow by a "!v*_bl" tag filter. Nothing here treats it
+# specially: by version order it sorts just above its release tag and below any
+# later release, so the newest tag is the _bl one until the next release.
+#
 # pico_shared is taken from main, NOT from the revision the tag pins, and
 # emu/versions.txt records both refs. The reason is historical: bld.sh only
 # learned -b (BUILD_FOR_BOOTLOADER) in pico_shared f2c8be9, and the emulator
@@ -47,7 +53,8 @@ Usage: $0 [-c N|all] [-j N] [-B|-m] [-z [-r TAG]] [-h]
   -m     non-interactively build each repo's default branch (main or master,
          whichever its remote HEAD points at), skipping the branch picker.
   -z     after building, write emu/versions.txt, build updateAll.exe, download
-         ld2pico.exe from the pico-dragonslair release that was built, and pack
+         ld2pico.exe from the pico-dragonslair release that was built (the
+         release a bootloader-only <tag>_bl is based on), and pack
          the SD-card archive releases/pico-bootLoader_sdcard.zip (updateAll.exe
          needs mingw-w64, ld2pico.exe curl). Requires -c all (a zip built from
          one hwconfig would be missing every other board) and the default tag
@@ -57,8 +64,9 @@ Usage: $0 [-c N|all] [-j N] [-B|-m] [-z [-r TAG]] [-h]
          download the archive again on a card unpacked by hand.
   -h     this help
 
-Default (no -B/-m): each emulator repo's latest release tag, built against
-pico_shared main rather than the tag's own pin (see the note at the top).
+Default (no -B/-m): each emulator repo's latest release tag, or the
+bootloader-only <tag>_bl above it, built against pico_shared main rather than
+the tag's own pin (see the note at the top).
 EOF
 }
 while getopts "c:j:Btmzr:h" opt; do
@@ -379,6 +387,7 @@ default_branch_of() {
 # such as Adafruit_ColecoJam's 2.0b1, or a v*.*-alpha dry run — so a bundle
 # ships releases only. git cannot tell, so this asks the GitHub API through gh;
 # without gh, or when the API cannot be reached, every tag is a candidate.
+# A bootloader-only <tag>_bl has no release at all, so it is never skipped.
 latest_tag_of() {
     local url="$1" out slug pre="" tag
     out=$(git ls-remote --tags --refs --sort=-v:refname "$url" 2>/dev/null) || return 0
@@ -573,8 +582,9 @@ pick_branch() {
 
 # --- Ask: emulator + pico_shared branches (skipped in tag mode) --------------
 if (( TAG_MODE )); then
-    info "Tag mode (default): each emulator repo builds its latest release tag,"
-    info "          with the tag stamped into its SWVERSION."
+    info "Tag mode (default): each emulator repo builds its latest release tag"
+    info "          (or the bootloader-only <tag>_bl above it), with the tag"
+    info "          stamped into its SWVERSION."
     EMU_BRANCH="(latest tag per repo)"
     # NOT the revision the tag pins: bld.sh gained -b (BUILD_FOR_BOOTLOADER) only
     # in pico_shared f2c8be9. Emulator tags older than that pin a pico_shared
@@ -1291,8 +1301,10 @@ write_versions_manifest() {
         echo "# Format: <program_name>;<repo>;<ref>;<pico_shared>"
         echo "#   repo         the repository name under ${GITHUB_OWNER}, or"
         echo "#                <owner>/<repo> for one hosted elsewhere."
-        echo "#   ref          the release tag the emulator was built from, or"
-        echo "#                <branch>@<shortsha> for a repo that has no tag yet."
+        echo "#   ref          the release tag the emulator was built from, a"
+        echo "#                bootloader-only <release tag>_bl (tagged, never"
+        echo "#                released), or <branch>@<shortsha> for a repo that"
+        echo "#                has no tag yet."
         echo "#   pico_shared  the shared-framework revision it was built against."
         echo "#                Taken from pico_shared main, not from the tag's own"
         echo "#                pin: bld.sh gained -b only in f2c8be9, so an older"
@@ -1337,18 +1349,21 @@ if (( PACK_ZIP )); then
     # ld2pico.exe, the Dragon's Lair laserdisc converter for Windows, ships in
     # ld2pico/ next to emu/. It is not built here: it is the asset of the
     # pico-dragonslair release whose tag was just bundled, so the archive carries
-    # the same binary as that release. The packer takes it from ld2pico/build/;
-    # an old copy is removed first so a failed download cannot ship a stale one.
+    # the same binary as that release. A bootloader-only <tag>_bl has no release,
+    # so its ld2pico.exe comes from <tag>, the release it is based on. The packer
+    # takes it from ld2pico/build/; an old copy is removed first so a failed
+    # download cannot ship a stale one.
     LD2PICO_EXE="$LOADER_DIR/ld2pico/build/ld2pico.exe"
     rm -f "$LD2PICO_EXE"
     if [ -n "${REF_OF[picoDragonsLair]:-}" ]; then
         ld_repo="${REPO_OF[picoDragonsLair]}"
         [[ "$ld_repo" == */* ]] || ld_repo="$GITHUB_OWNER/$ld_repo"
-        ld_url="https://github.com/$ld_repo/releases/download/${REF_OF[picoDragonsLair]}/ld2pico.exe"
+        ld_tag="${REF_OF[picoDragonsLair]%_bl}"
+        ld_url="https://github.com/$ld_repo/releases/download/${ld_tag}/ld2pico.exe"
         mkdir -p "$(dirname "$LD2PICO_EXE")"
         if curl -fsSL -o "$LD2PICO_EXE" "$ld_url" \
                 && [ "$(head -c 2 "$LD2PICO_EXE")" = "MZ" ]; then
-            info "downloaded ld2pico.exe from $ld_repo ${REF_OF[picoDragonsLair]}"
+            info "downloaded ld2pico.exe from $ld_repo $ld_tag"
         else
             rm -f "$LD2PICO_EXE"
             warn "downloading ld2pico.exe failed ($ld_url) — the archive ships without it"
