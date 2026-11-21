@@ -103,7 +103,7 @@ they are **not** emulated.
    emulator's file browser opens in its own folder: `/roms/NES`, `/roms/SNES`,
    `/roms/MD` (Genesis / Mega Drive), `/roms/PCE`, `/roms/GB`, `/roms/SMS`
    (Master System and Game Gear), `/roms/O2E` (Videopac), `/roms/TI99` or
-   `/roms/C64`, and at the root of the card when that folder does not exist.
+   `/roms/C64`, and at the root of the card when that folder does not exist. **[Attract mode](#attract-mode) picks games only from these folders and the folders below them; it does not use games at the root of the card.**
    The BIOS files and the folders of *ColecoVision*, *Doom*, *Duke Nukem 3D*,
    *Quake II*, *Diablo* and the arcade games are given under
    [Bootable applications](#bootable-applications).
