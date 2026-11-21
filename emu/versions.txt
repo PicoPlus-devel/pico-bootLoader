@@ -13,23 +13,23 @@
 #                pin: bld.sh gained -b only in f2c8be9, so an older
 #                tag cannot build for the loader from its own pin.
 #                Since the v0.4 tag set the two are the same anyway.
-picoOutRun;pico-outrun;v0.7_bl;ce2dbfc
-picoPhoenix;pico-phoenix;v0.3_bl;ce2dbfc
-picoMoonCresta;pico-mooncresta;v0.3_bl;ce2dbfc
-picoGalagino;pico-galagino;v0.3_bl;ce2dbfc
-picoDragonsLair;pico-dragonslair;v0.2_bl;ce2dbfc
-pico1943;pico-1943;v0.3_bl;ce2dbfc
-picoSalamander;pico-salamander;v0.3_bl;ce2dbfc
-pico994A;pico-994A;v0.4_bl;ce2dbfc
-picoC64;pico-c64;v0.3_bl;ce2dbfc
-piconesPlus;pico-infonesPlus;v0.56.1_bl;ce2dbfc
-picosnesPlus;pico-snesPlus;v0.11_bl;ce2dbfc
-picopcePlus;pico-pcePlus;v0.10_bl;ce2dbfc
-picosmsPlus;pico-smsplus;v0.34_bl;ce2dbfc
-picogenesisPlus;pico-genesisPlus;v0.21_bl;ce2dbfc
-picoPacPlus;pico-pacPlus;v0.7_bl;ce2dbfc
+picoOutRun;pico-outrun;v0.7_bl;76206fc
+picoPhoenix;pico-phoenix;v0.3_bl;76206fc
+picoMoonCresta;pico-mooncresta;v0.3_bl;76206fc
+picoGalagino;pico-galagino;v0.3_bl;76206fc
+picoDragonsLair;pico-dragonslair;v0.2_bl;76206fc
+pico1943;pico-1943;v0.3_bl;76206fc
+picoSalamander;pico-salamander;v0.3_bl;76206fc
+pico994A;pico-994A;v0.4_bl;76206fc
+picoC64;pico-c64;v0.3_bl;76206fc
+piconesPlus;pico-infonesPlus;v0.56.1_bl;76206fc
+picosnesPlus;pico-snesPlus;v0.11_bl;76206fc
+picopcePlus;pico-pcePlus;v0.10_bl;76206fc
+picosmsPlus;pico-smsplus;v0.34_bl;76206fc
+picogenesisPlus;pico-genesisPlus;v0.21_bl;76206fc
+picoPacPlus;pico-pacPlus;v0.7_bl;76206fc
 colecojam;cogliano/Adafruit_ColecoJam;1.7;
-PicoPeanutGB;pico-peanutGB;v0.16_bl;ce2dbfc
+PicoPeanutGB;pico-peanutGB;v0.16_bl;76206fc
 doom_tiny;pico-doom;v0.7_bl;
 doom_tiny_full;pico-doom;v0.7_bl;
 duke3d_game;pico-duke3D;v0.7_bl;
