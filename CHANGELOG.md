@@ -23,7 +23,8 @@ games by itself.
 
 When nobody touches the menu for about 30 seconds, the menu now spins to a
 random application and starts it, and an emulator starts a random game from
-its folder under `/roms`. Press any button to play that game yourself. When
+its folder under `/roms`, such as `/roms/NES`. Games at the root of the card are
+not used, so keep them in the emulator's folder. Press any button to play that game yourself. When
 nobody does for three minutes, the menu comes back and starts the next one.
 Attract mode replaces the screensaver and can be switched off in the options
 menu (SELECT). *Quake II*, *Diablo* and *ColecoVision* do not take part, and
@@ -742,7 +743,8 @@ For board-by-board wiring, supported display modes and more refer to the [pico-i
    emulator opens in its own folder: `/roms/NES`, `/roms/SNES`, `/roms/MD`
    (Genesis), `/roms/PCE`, `/roms/GB`, `/roms/SMS` (Master System and Game
    Gear), `/roms/O2E` (Videopac), `/roms/TI99` or `/roms/C64`, or at the root of
-   the card when that folder does not exist. The BIOS files and the folders of the other
+   the card when that folder does not exist. Attract mode picks games only from
+   these folders and the folders below them, not from the root of the card. The BIOS files and the folders of the other
    applications are listed in the README under
    [Bootable applications](https://github.com/PicoPlus-devel/pico-bootLoader#bootable-applications);
    `updateAll` installs the arcade ROM sets, the BIOS files and the game data of
