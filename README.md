@@ -4,7 +4,7 @@
 
 pico-bootLoader is a bootloader for RP2350 boards. Its primary purpose is to
 host [a collection of retro-game emulators, arcade games and native ports of *Doom*,
-*Duke Nukem 3D*, *Quake II* and *Diablo*](#Bootable-applications) on a single board and to let the user choose which one to run
+*Duke Nukem 3D*, *Quake II* and *Diablo*](#bootable-applications) on a single board and to let the user choose which one to run
 from an on-screen menu, without reconnecting the board to a computer.
 
 It runs on twelve board configurations, each with its own ready-made binary — see
@@ -124,9 +124,10 @@ they are **not** emulated.
    **START** is pressed, and the screensaver shows box art.
 5. **Run it.** Insert the card and power on the board. The menu appears.
 
-The Releases page provides three kinds of download: the per-board bootloader
-`.uf2` binaries, the `pico-bootLoader_sdcard.zip` SD-card archive and, on
-releases where the program changed, the standalone `updateAll-<version>.exe`.
+The Releases page provides four kinds of download: the per-board bootloader
+`.uf2` binaries, the `pico-bootLoader_sdcard.zip` SD-card archive, the
+standalone `updateAll-<version>.exe` and the gerber files of the
+[custom PCBs](#custom-pcbs).
 
 Release tags say which of the two changed:
 
@@ -283,9 +284,9 @@ it by default.
 
 ## Video
 
-*Click the image below to watch pico-bootLoader in action.*
+*The video below shows pico-bootLoader in use. Click the image to open it.*
 
-[![pico-bootLoader in action](https://img.youtube.com/vi/X-7ZBaCIoeQ/maxresdefault.jpg)](https://www.youtube.com/watch?v=X-7ZBaCIoeQ)
+[![pico-bootLoader in use](https://img.youtube.com/vi/X-7ZBaCIoeQ/maxresdefault.jpg)](https://www.youtube.com/watch?v=X-7ZBaCIoeQ)
 
 
 ## Bootable applications
@@ -449,8 +450,8 @@ OutRun ROM set is copyright SEGA and is not distributed with the bundle: copy
 the unzipped MAME `outrun` (revision B) set to `/roms/ORUN` on the SD card and
 the game prepares its data in PSRAM at startup, which takes a few seconds on
 every boot. If the ROMs are missing the game says so on screen rather than
-failing silently. The loader's own [USB drive mode](#usb-drive-mode) is the
-easiest way to put them on the card without taking it out of the board.
+failing silently. The loader's own [USB drive mode](#usb-drive-mode) puts them
+on the card without taking it out of the board.
 
 *Phoenix* is the second **Arcade** entry: an emulation of Amstar's 1980 arcade
 board. It runs on every board the loader supports, and needs neither PSRAM nor
@@ -551,7 +552,9 @@ demo data of *Doom*, *Duke Nukem 3D*, *Quake II* and *Diablo*, and the BIOS
 files of the emulators, which it downloads from third-party sources as well. See
 [updateAll/README.md](updateAll/README.md).
 
-*PCEngine CD* needs PSRAM.
+*PCEngine CD* needs PSRAM. On a board without PSRAM the menu leaves out the
+Super Nintendo emulator, *OutRun*, `doom_tiny_full`, *Duke Nukem 3D*, *Quake II*
+and *Diablo*, as they cannot run there.
 
 Additional emulators may be added over time.
 
@@ -686,8 +689,9 @@ does, whatever its region and version tags, so *Legend of Zelda, The (USA).nes*
 matches *The Legend of Zelda*; the list also carries the alternate (mostly
 Japanese) titles and the ROM file names the database knows. The lists are made
 with `tools/make_attract_lists.py`. They are of little use for the TI-99/4A,
-which few people rate, and only partly for the Commodore 64. *Quake II*, *Diablo* and
-*ColecoVision* do not take part because of their long start-up times.
+which few people rate, and only partly for the Commodore 64. *Quake II* and
+*Diablo* do not take part because of their long start-up times. *ColecoVision*,
+which is maintained outside this project, has no attract-mode support.
 
 > **Flash wear.** Every application attract mode starts is flashed into the
 > application partition, unless it is the one already there, and on boards
@@ -729,7 +733,7 @@ controllers. On controllers whose face buttons are labelled differently, the
 on-screen prompts follow the attached device: A and B appear as B and A on an
 XInput pad, and as ○ and ✕ on a DualShock or DualSense.
 
-The chosen menu mode, artwork theme and display mode are remembered across boots. Inside a running emulator built
+The chosen menu mode, artwork theme, display mode and attract-mode setting are remembered across boots. Inside a running emulator built
 on the shared framework, **SELECT + START** opens its menu, which offers *Return
 to boot loader* to reboot back into this menu.
 
@@ -790,7 +794,7 @@ see [Pico 2 W](#pico-2-w) for what that board does and does not do. On the
 Community PCB designs turn a supported board into a finished console: the
 PicoNES in two versions, the PicoNES Mini and the PicoNES Micro, each with an
 optional 3D-printed case, and the PicoSNES, which fits inside a SNES controller.
-Every one of them is just a neater way to build a hardware configuration the
+Each of them is another way to build a hardware configuration the
 loader already supports, so nothing about the firmware changes: flash the binary
 for that HW_CONFIG and put the applications in the matching `/emu/<HW_CONFIG>/`
 folder.
@@ -851,7 +855,7 @@ Controllers on the two GPIO controller ports:
   are not recommended.
 
 Two controllers give a two-player setup; a USB controller for player 1 and a
-controller in either port for player 2 works just as well.
+controller in either port for player 2 also works.
 
 The parts lists and assembly notes are in the PCB README:
 [PicoNES v2.6](https://github.com/PicoPlus-devel/pico_shared/blob/main/PCB/README.md#picones-v26-nes-controller-ports)
@@ -880,12 +884,13 @@ change what the menu can offer:
 
 - **Flash.** The application partition is whatever is left after the loader's
   512 KB — 15.5 MB on a Pimoroni Pico Plus 2, but only 3.5 MB on a 4 MB Pico 2.
-  An application that does not fit is simply **not listed** in the menu rather
+  An application that does not fit is **not listed** in the menu rather
   than reported as an error, so on a Pico 2 some entries are missing.
-- **PSRAM.** The entries that require it — *Duke Nukem 3D*, *Quake II*,
-  *Diablo*, *PCEngine CD* and `doom_tiny_full` — are the Pimoroni Pico Plus 2's
-  alone; neither Pico 2 has PSRAM. *Quake II* and *Diablo* also need the 16 MB
-  of flash. See
+- **PSRAM.** The entries that require it — the Super Nintendo emulator,
+  *OutRun*, *Duke Nukem 3D*, *Quake II*, *Diablo* and `doom_tiny_full` — are
+  the Pimoroni Pico Plus 2's alone, and so are *PCEngine CD* games; neither
+  Pico 2 has PSRAM, and the menu leaves those entries out there. *Quake II* and
+  *Diablo* also need the 16 MB of flash. See
   [Bootable applications](#bootable-applications).
 
 #### 3D printed case
@@ -952,7 +957,7 @@ in the PCB README.
 ### PicoSNES PCB (HW_CONFIG 13)
 
 The PicoSNES, by Gavin Knight ([DynaMight1124](https://github.com/DynaMight1124)),
-is an excellent project and the most self-contained of the four designs: the
+is the most self-contained of the four designs: the
 complete console is built into the shell of a SNES controller, original or
 aftermarket. The HDMI and USB-C ports and the microSD slot are let into the
 shell, and the controller's own buttons are read through CD4021 shift
@@ -989,13 +994,11 @@ port.
 > through the PCB onto the test points of the RP2350 Plus. The controller shell
 > also has to be cut and filed to make room for the ports and the microSD slot.
 
-Gavin's build guide on Instructables is thorough and well illustrated. It covers
-the component list, the order in which to assemble the PCB, the PSRAM
+Gavin's build guide on Instructables covers the component list, the order in which to assemble the PCB, the PSRAM
 modification and the trimming of the controller shell:
 <https://www.instructables.com/PicoSNES-RP2350-Retro-Gaming-Inside-a-Controller>
 
-Many thanks to Gavin for this amazing work, and for designing it around this
-project.
+The PicoSNES was designed around this project.
 
 <img width="480" alt="PicoSNES controller connected to a monitor, showing the Pico-InfoNES+ menu" src="docs/images/picosnes.png" />
 
@@ -1112,7 +1115,7 @@ doom_tiny       ; doom      ; Doom!                     ; doom/doom1-whx-bootloa
   `binary_info`, without flashing anything). The `.uf2` *file name* is
   irrelevant; files may be renamed freely.
 - **`image_key`** (max 16 characters) — basename of the menu artwork:
-  `<BASEDIR>/assets/<image_key>.png` (or `.jpg`/`.jpeg`).
+  `<BASEDIR>/assets/themes/<N>/<image_key>.png` (or `.jpg`/`.jpeg`).
 - **`display_name`** (max 40 characters) — the label shown in the menu.
 - **`aux_uf2`** (optional, max 64 characters) — path of a companion data
   `.uf2`, relative to `/roms`, flashed alongside the application. The loader
@@ -1122,8 +1125,7 @@ doom_tiny       ; doom      ; Doom!                     ; doom/doom1-whx-bootloa
 
 ### Categories
 
-With many applications on a card, one flat list becomes tedious to page
-through. Placing a file named `categories.txt` in `BASEDIR` adds a level above
+With many applications on a card, one flat list becomes long. Placing a file named `categories.txt` in `BASEDIR` adds a level above
 it: the menu opens on a list of categories, and opening one shows the
 applications it holds. Remove the file and the menu is a single flat list again,
 driven by `INDEX`. The file's presence is the only switch; there is no key in
@@ -1258,7 +1260,7 @@ artwork is not shown.
 
 **Incomplete themes are fine.** An application the active theme has no image for
 falls back to theme 0's image, and to a black screen if theme 0 has none either.
-A theme can therefore restyle just a few entries.
+A theme can therefore restyle only some entries.
 
 **Existing cards are migrated automatically.** Releases before v0.2 kept menu
 artwork loose in `<BASEDIR>/assets`. On the first boot the bootloader creates
@@ -1469,6 +1471,10 @@ know and lists the application as usual.
 
 ## Building the bootloader from source
 
+The bootloader is built with Pico SDK 2.3.1. Set `PICO_SDK_PATH` to the SDK, and
+`PICO_PIO_USB_PATH` to [Pico-PIO-USB](https://github.com/sekigon-gonnoc/Pico-PIO-USB)
+for HW_CONFIG 7, 8, 9, 14 and 18, as in the example below.
+
 ```sh
 mkdir build && cd build
 cmake -DCMAKE_BUILD_TYPE=Release -DPICO_BOARD=pico2 -DHW_CONFIG=8 \
@@ -1552,12 +1558,13 @@ without it, they are skipped on HW_CONFIG 2 and 17 as well.
 All of these repositories are tagged and are built from their latest tag like
 the emulators, so `versions.txt` records a real version for `doom_tiny`,
 `doom_tiny_full`, `duke3d_game`, `pico-quake2`, `pico-lutionX` and `colecojam`.
-The tag is simply the newest by version order, whether or not it carries a `v`
+The tag is the newest by version order, whether or not it carries a `v`
 prefix (Adafruit_ColecoJam's
 tags do not), so later tags are picked up with no change here. This applies to
 the emulators as well: a tag whose GitHub release is marked as a pre-release,
 such as Adafruit_ColecoJam's beta `2.0b1`, is skipped in favour of the newest
-full release. `build_emulators.sh` asks the GitHub API through `gh` for this,
+tag that is not a pre-release. A bootloader-only `<tag>_bl`, which has no
+release, counts (see [RELEASING.md](RELEASING.md#bootloader-only-application-tags)). `build_emulators.sh` asks the GitHub API through `gh` for this,
 and warns when it cannot, in which case every tag is a candidate. The
 `SCRIPTED_BRANCH` table in [`build_emulators.sh`](build_emulators.sh) — `main`
 for *Doom*, *Duke Nukem 3D*, *Quake II*, *Diablo* and *ColecoVision* — is only
@@ -1604,7 +1611,9 @@ from the archive, `updateAll` installs it in `/roms/doom/`.
 
 The loader `.uf2`s are built by CI; the SD-card archive is built locally, because
 it needs the toolchain of every application. An emulator-only refresh still gets its own
-release so users find out about it — that is what the `v0.N.M` form is for.
+release so users find out about it — that is what the `v0.N.M` form is for. A
+release that changes the loader firmware takes a two-component tag (`v0.N`), and
+any bootloader-only application tags must be pushed before the archive is built.
 
 The full maintainer checklist — per-scenario steps, dry runs, verification and
 rollback — is in [`RELEASING.md`](RELEASING.md). The short version:
@@ -1626,8 +1635,8 @@ gh release upload v0.2.1 releases/pico-bootLoader_sdcard.zip
   applications](#bootable-applications).
 - The ColecoVision emulator,
   [ColecoJam](https://github.com/cogliano/Adafruit_ColecoJam), is the work of
-  Dan Cogliano ([@cogliano](https://github.com/cogliano)). Many thanks to him for
-  writing it and for making it available to this project.
+  Dan Cogliano ([@cogliano](https://github.com/cogliano)), who made it available
+  to this project.
 - The games of *Galagino* are emulated by
   [Galagino](https://github.com/harbaum/galagino), by Till Harbaum, and its fork
   [GalaginoPlus](https://github.com/VirtualClaudioBoy/GalaginoPlus), by

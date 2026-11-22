@@ -108,9 +108,9 @@ shopt -s nullglob
 cp "$LOADER/emu/emulators.txt" "$DEST/emulators.txt"
 
 # boot.txt lives at the repo root as the documented example; on the card the
-# loader reads <BASEDIR>/boot.txt, so it ships as boot.example.txt for the user
-# to rename. emu/boot.example.txt is kept in sync in-tree; prefer whichever
-# exists, root first.
+# loader reads /boot.txt at the root, so it ships as boot.example.txt for the
+# user to copy there. emu/boot.example.txt is a copy of it in-tree; prefer
+# whichever exists, root first.
 if [ -f "$LOADER/boot.txt" ]; then
     cp "$LOADER/boot.txt" "$DEST/boot.example.txt"
 elif [ -f "$LOADER/emu/boot.example.txt" ]; then

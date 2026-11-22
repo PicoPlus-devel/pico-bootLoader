@@ -81,6 +81,9 @@ right place.
 - On a board without PSRAM, the menu no longer lists the applications that
   cannot run there: *Super Nintendo*, *OutRun*, *Doom Full*, *Duke Nukem 3D*,
   *Quake II* and *Diablo*.
+- Switching attract mode in the options menu adds an `ATTRACT=` line to
+  `/boot.txt`. An older loader does not accept that line and reports the file as
+  invalid, so remove it before going back to an older version.
 
 ### Updated applications
 

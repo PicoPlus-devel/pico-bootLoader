@@ -287,7 +287,8 @@ from `github.sha`, so it will point at whatever is current.
   v0.2 and Commodore 64 v0.2 pin `cd147e0`, every other emulator tag pins
   `8b93b28`, and the bundle is built against `main`, `f16f692`. For v0.10 every
   emulator tag pins `8048999`, which is `main`. For v0.12 every `_bl` tag of an
-  application with `pico_shared` pins `ce2dbfc`, which is `main`. The whole
+  application with `pico_shared` pins `ce2dbfc`, and the bundle is built
+  against `main`, `76206fc`, which differs from it only in a comment. The whole
   bundle is built against the one `pico_shared` `main` that `emu/versions.txt`
   records.
   An older tag that no longer builds against `main` shows up as a `FAIL` in the

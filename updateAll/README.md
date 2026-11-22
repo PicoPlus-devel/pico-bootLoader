@@ -237,7 +237,7 @@ Warning:      files on the card that the archive also holds are replaced; edited
 To leave a card as it is, untick the row, or use `--core` with other sets or `--no-download`.
 
 - An archive that holds a file name that could lead outside the card is rejected as a whole.
-- A list in `/emu` that changes, such as `emulators.txt`, is first saved next to it as `emulators.txt.bak`, or `.bak2` and so on if that name is taken by other contents. Edits to these lists must be repeated after an update, as new applications appear in the menu only through the new lists. `versions.txt` and `boot.example.txt` are not saved. Custom artwork under a name that the archive also holds is replaced without a copy.
+- A list in `/emu` that changes, such as `emulators.txt`, is first saved next to it as `emulators.txt.bak`, or `.bak2` and so on if that name is taken by other contents. Edits to these lists must be repeated after an update, as new applications appear in the menu only through the new lists. `versions.txt` and `boot.example.txt` are not saved, and neither are the lists of popular games in `/emu/attract`. Custom artwork under a name that the archive also holds is replaced without a copy.
 - `updateAll/updateAll.json` is not replaced when it has no `config_url`, or cannot be read: that is how a card is set to use its own configuration. Other copies are replaced.
 - `updateAll.exe` can replace itself when it runs from the card. The copy that was running stays next to it as `updateAll.exe.old` until the next start, and continues the current run.
 - `/emu/release.txt` is written last, and only when the whole archive was installed. A run that was cancelled or failed is repeated in full by the next one, which leaves the files that were already written as they are.
