@@ -23,8 +23,7 @@ games by itself.
 
 When nobody touches the menu for about 30 seconds, the menu now spins to a
 random application and starts it, and an emulator starts a random game from
-its folder under `/roms`, such as `/roms/NES`. Games at the root of the card are
-not used, so keep them in the emulator's folder. Press any button to play that game yourself. When
+its folder under `/roms`, listed below. Press any button to play that game yourself. When
 nobody does for three minutes, the menu comes back and starts the next one.
 Attract mode replaces the screensaver and can be switched off in the options
 menu (SELECT). *Quake II*, *Diablo* and *ColecoVision* do not take part, and
@@ -45,6 +44,34 @@ past the console's title screen and menu, and Videopac cartridges past their
 
 Attract mode needs the new versions of the emulators, the arcade games, *Doom*
 and *Duke Nukem 3D* in the SD-card archive. Older versions are never picked.
+
+An application takes part only when its games or data are in the place listed
+below. An emulator also searches the folders inside its folder, but games at the
+root of the card or in other folders are not used. **updateAll** installs the
+arcade sets and the shareware versions of *Doom* and *Duke Nukem 3D* in the
+right place.
+
+| Application | Folder or file |
+|---|---|
+| Nintendo Entertainment System | `/roms/NES` |
+| Super Nintendo | `/roms/SNES` |
+| Sega Genesis/Mega Drive | `/roms/MD` |
+| Sega Master System/Game Gear | `/roms/SMS` |
+| PC Engine | `/roms/PCE` |
+| Game Boy | `/roms/GB` |
+| Videopac | `/roms/O2E` |
+| TI-99/4A | `/roms/TI99` |
+| Commodore 64/128 | `/roms/C64` |
+| OutRun | `/roms/ORUN` |
+| Phoenix | `/roms/arcade/PHOENIX` |
+| Moon Cresta | `/roms/arcade/MOONCRESTA` |
+| Galagino | the folders of its games under `/roms/arcade`, listed in the [pico-galagino README](https://github.com/PicoPlus-devel/pico-galagino#game-data) |
+| Dragon's Lair | `/roms/arcade/DLAIR` |
+| 1943 | `/roms/arcade/1943` or `/roms/arcade/1943KAI` |
+| Salamander | `/roms/arcade/SALAMAND` or `/roms/arcade/LIFEFRCE` |
+| Doom | `/roms/doom/doom1-whx-bootloader.uf2` |
+| Doom Full | `/roms/doom/doom.whd` |
+| Duke Nukem 3D | `/roms/duke3d/DUKE3D.GRP` |
 
 ### Changes
 
