@@ -3,31 +3,40 @@
 
 
 pico-bootLoader is a bootloader for RP2350 boards. Its primary purpose is to
-host a collection of retro-game emulators and native ports of *Doom*,
-*Duke Nukem 3D*, *Quake II* and *Diablo* on a single board and to let the user choose which one to run
+host [a collection of retro-game emulators, arcade games and native ports of *Doom*,
+*Duke Nukem 3D*, *Quake II* and *Diablo*](#Bootable-applications) on a single board and to let the user choose which one to run
 from an on-screen menu, without reconnecting the board to a computer.
 
 It runs on twelve board configurations, each with its own ready-made binary — see
 [Supported hardware](#supported-hardware) for the file names:
 
-- Raspberry Pi Pico 2 / Pico 2 W, or a Pimoroni Pico Plus 2, with an Adafruit DVI
-  breakout and a microSD breakout — or the [PicoNES PCB](#picones-pcb-hw_config-2)
-  that replaces that wiring
-- Raspberry Pi Pico 2 / Pico 2 W on a Pimoroni Pico DV Demo Base
-- Adafruit Fruit Jam
-- Adafruit Metro RP2350
-- Adafruit Feather RP2350 with a TLV320DAC3100
-- Waveshare RP2350-Zero with the [PicoNES Mini PCB](#picones-mini-pcb-hw_config-6)
-- Waveshare RP2350-PiZero
-- Waveshare RP2350-USB-A, optionally on the
-  [PicoNES Micro PCB](#picones-micro-pcb-hw_config-9)
-- Murmulator M2, or an RP2350 Plus on the
+- [Raspberry Pi Pico 2 / Pico 2 W](https://www.raspberrypi.com/products/raspberry-pi-pico-2/),
+  or a [Pimoroni Pico Plus 2](https://shop.pimoroni.com/products/pimoroni-pico-plus-2),
+  with an [Adafruit DVI breakout](https://www.adafruit.com/product/4984) and a
+  [microSD breakout](https://www.adafruit.com/product/4682) — or the
+  [PicoNES PCB](#picones-pcb-hw_config-2) that replaces that wiring
+- [Adafruit Fruit Jam](https://www.adafruit.com/product/6200)
+- [Adafruit Metro RP2350](https://www.adafruit.com/product/6003)
+- [Adafruit Feather RP2350](https://www.adafruit.com/product/6000) with a
+  [TLV320DAC3100](https://www.adafruit.com/product/6309)
+- [Waveshare RP2350-Zero](https://www.waveshare.com/rp2350-zero.htm) with the
+  [PicoNES Mini PCB](#picones-mini-pcb-hw_config-6)
+- [Waveshare RP2350-PiZero](https://www.waveshare.com/rp2350-pizero.htm)
+- [Waveshare RP2350-USB-A](https://www.waveshare.com/rp2350-usb-a.htm), optionally
+  on the [PicoNES Micro PCB](#picones-micro-pcb-hw_config-9)
+- [Murmulator M2](https://murmulator.ru/nextgen), or an
+  [RP2350 Plus](https://www.waveshare.com/rp2350-plus.htm) on the
   [PicoSNES PCB](#picosnes-pcb-hw_config-13), which uses the same pin map
-- [Olimex RP2040-PICO-PC](#olimex-rp2040-pico-pc-hw_config-15) with a Raspberry
-  Pi Pico 2
-- Waveshare RP2350-PiZero on the
+- [Olimex RP2040-PICO-PC](https://www.olimex.com/Products/RaspberryPi/PICO/RP2040-PICO-PC/)
+  with a [Raspberry Pi Pico 2](https://www.raspberrypi.com/products/raspberry-pi-pico-2/)
+  (see [below](#olimex-rp2040-pico-pc-hw_config-15))
+- [Waveshare RP2350-PiZero](https://www.waveshare.com/rp2350-pizero.htm) on the
   [PCB by Liu Szuping](#pcb-for-the-waveshare-rp2350-pizero-hw_config-18)
 - [Pico Computer 3](#pico-computer-3-hw_config-17)
+- [Raspberry Pi Pico 2 / Pico 2 W](https://www.raspberrypi.com/products/raspberry-pi-pico-2/),
+  or a [Pimoroni Pico Plus 2](https://shop.pimoroni.com/products/pimoroni-pico-plus-2),
+  on a [Pimoroni Pico DV Demo Base](https://shop.pimoroni.com/products/pimoroni-pico-dv-demo-base).
+  The Demo Base is discontinued and may be hard to obtain.
 
 Every one of them outputs video over DVI/HDMI and reads its applications from an
 SD card. RP2040 boards are not supported: the flash layout and the UF2 checks are
@@ -144,7 +153,6 @@ number names the SD-card folder the loader reads applications from
 
 | HW_CONFIG | Board | Bootloader binary |
 |---|---|---|
-| 1 | Pimoroni Pico DV Demo Base (Pico 2 / Pico 2 W) | `pico-bootLoader_PimoroniDVI_pico2_arm.uf2` |
 | 2 | Adafruit DVI + microSD breakout, or the [PicoNES PCB](#picones-pcb-hw_config-2) (Pico 2 / Pico 2 W / Pimoroni Pico Plus 2) | `pico-bootLoader_AdafruitDVISD_pico2_arm.uf2` |
 | 5 | Adafruit Metro RP2350 | `pico-bootLoader_AdafruitMetroRP2350_arm.uf2` |
 | 6 | Waveshare RP2350-Zero with the [PicoNES Mini PCB](#picones-mini-pcb-hw_config-6) | `pico-bootLoader_WaveShareRP2350ZeroWithPCB_arm.uf2` |
@@ -156,6 +164,7 @@ number names the SD-card folder the loader reads applications from
 | 15 | Olimex RP2040-PICO-PC with a Raspberry Pi Pico 2 | `pico-bootLoader_OlimexPicoPC_arm.uf2` |
 | 17 | [Pico Computer 3](#pico-computer-3-hw_config-17) | `pico-bootLoader_PicoComputer3_arm.uf2` |
 | 18 | Waveshare RP2350-PiZero on the [PCB by Liu Szuping](#pcb-for-the-waveshare-rp2350-pizero-hw_config-18) | `pico-bootLoader_WaveShareRP2350PiZeroLiuPCB_arm_piousb.uf2` |
+| 1 | (Discontinued) Pimoroni Pico DV Demo Base (Pico 2 / Pico 2 W, Pimoroni Pico Plus 2) | `pico-bootLoader_PimoroniDVI_pico2_arm.uf2` |
 
 Video output is DVI/HDMI on all boards. Boards whose video connector is wired
 to the RP2350 HSTX pins — HW_CONFIG 2, 5, 8, 13, 14, 15, 17 and 18 — drive it through the
